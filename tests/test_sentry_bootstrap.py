@@ -1,9 +1,9 @@
-from lite_bootstrap.sentry_bootstrap import SentryBootstrap
+from lite_bootstrap.instruments.sentry_instrument import SentryInstrument
 
 
 def test_sentry_bootstrap() -> None:
-    SentryBootstrap(sentry_dsn="https://testdsn@test.sentry.com/1", tags={"tag": "value"}).start_tracing()
+    SentryInstrument(dsn="https://testdsn@test.sentry.com/1", tags={"tag": "value"}).bootstrap()
 
 
 def test_sentry_bootstrap_empty_dsn() -> None:
-    SentryBootstrap(sentry_dsn="").start_tracing()
+    SentryInstrument(dsn="").bootstrap()
