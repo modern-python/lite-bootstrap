@@ -1,14 +1,16 @@
+import contextlib
 import dataclasses
 import typing
 
-import pydantic
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-from opentelemetry.instrumentation.instrumentor import BaseInstrumentor  # type: ignore[attr-defined]
-from opentelemetry.sdk import resources
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-
 from lite_bootstrap.instruments.base import BaseInstrument
+
+
+with contextlib.suppress(ImportError):
+    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+    from opentelemetry.instrumentation.instrumentor import BaseInstrumentor  # type: ignore[attr-defined]
+    from opentelemetry.sdk import resources
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
@@ -24,7 +26,7 @@ class OpenTelemetryInstrument(BaseInstrument):
     container_name: str | None = None
     endpoint: str | None = None
     namespace: str | None = None
-    insecure: bool = pydantic.Field(default=True)
+    insecure: bool = True
     instrumentors: list[InstrumentorWithParams | BaseInstrumentor] = dataclasses.field(default_factory=list)
 
     tracer_provider: TracerProvider = dataclasses.field(init=False)
