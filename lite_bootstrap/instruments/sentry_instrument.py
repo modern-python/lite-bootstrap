@@ -1,17 +1,19 @@
+import contextlib
 import dataclasses
 import typing
 
-import pydantic
-import sentry_sdk
-from sentry_sdk.integrations import Integration
-
 from lite_bootstrap.instruments.base import BaseInstrument
+
+
+with contextlib.suppress(ImportError):
+    import sentry_sdk
+    from sentry_sdk.integrations import Integration
 
 
 @dataclasses.dataclass(kw_only=True, slots=True)
 class SentryInstrument(BaseInstrument):
     dsn: str | None = None
-    sample_rate: float = pydantic.Field(default=1.0, le=1.0, ge=0.0)
+    sample_rate: float = dataclasses.field(default=1.0)
     traces_sample_rate: float | None = None
     environment: str | None = None
     max_breadcrumbs: int = 15
