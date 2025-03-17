@@ -1,9 +1,10 @@
 import typing
 
 import pytest
-from fastapi import APIRouter, FastAPI
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI
 from opentelemetry.instrumentation.instrumentor import BaseInstrumentor  # type: ignore[attr-defined]
+
+from lite_bootstrap.service_config import ServiceConfig
 
 
 class CustomInstrumentor(BaseInstrumentor):  # type: ignore[misc]
@@ -16,12 +17,13 @@ class CustomInstrumentor(BaseInstrumentor):  # type: ignore[misc]
 
 @pytest.fixture
 def fastapi_app() -> FastAPI:
-    app: typing.Final = FastAPI()
-    router: typing.Final = APIRouter()
+    return FastAPI()
 
-    @router.get("/test")
-    async def for_test_endpoint() -> JSONResponse:
-        return JSONResponse(content={"key": "value"})
 
-    app.include_router(router)
-    return app
+@pytest.fixture
+def service_config() -> ServiceConfig:
+    return ServiceConfig(
+        service_name="microservice",
+        service_version="2.0.0",
+        service_environment="test",
+    )
