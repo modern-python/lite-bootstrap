@@ -1,12 +1,13 @@
 import abc
 
+from lite_bootstrap.service_config import ServiceConfig
+from lite_bootstrap.types import ApplicationT
+
 
 class BaseInstrument(abc.ABC):
-    @abc.abstractmethod
-    def bootstrap(self) -> None: ...
+    def bootstrap(self, service_config: ServiceConfig, application: ApplicationT | None = None) -> None: ...  # noqa: B027
 
-    @abc.abstractmethod
-    def teardown(self) -> None: ...
+    def teardown(self, application: ApplicationT | None = None) -> None: ...  # noqa: B027
 
     @abc.abstractmethod
     def is_ready(self) -> bool: ...
