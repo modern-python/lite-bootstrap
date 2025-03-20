@@ -13,10 +13,10 @@ class BaseBootstrap(abc.ABC, typing.Generic[ApplicationT]):
 
     def bootstrap(self) -> None:
         for one_instrument in self.instruments:
-            if one_instrument.is_ready():
+            if one_instrument.is_ready(self.service_config):
                 one_instrument.bootstrap(self.service_config, self.application)
 
     def teardown(self) -> None:
         for one_instrument in self.instruments:
-            if one_instrument.is_ready():
+            if one_instrument.is_ready(self.service_config):
                 one_instrument.teardown(self.application)

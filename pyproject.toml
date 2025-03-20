@@ -43,11 +43,17 @@ otl = [
     "opentelemetry-exporter-otlp",
     "opentelemetry-instrumentation",
 ]
+logging = [
+    "structlog",
+]
 fastapi = [
     "fastapi",
 ]
 fastapi-otl = [
     "opentelemetry-instrumentation-fastapi",
+]
+fastapi-all = [
+    "lite-bootstrap[sentry,otl,logging,fastapi,fastapi-otl]"
 ]
 
 [dependency-groups]

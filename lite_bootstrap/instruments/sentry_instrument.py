@@ -24,7 +24,7 @@ class SentryInstrument(BaseInstrument):
     additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     tags: dict[str, str] | None = None
 
-    def is_ready(self) -> bool:
+    def is_ready(self, _: ServiceConfig) -> bool:
         return bool(self.dsn)
 
     def bootstrap(self, service_config: ServiceConfig, _: ApplicationT | None = None) -> None:

@@ -5,6 +5,7 @@ import fastapi
 
 from lite_bootstrap.bootstraps.base import BaseBootstrap
 from lite_bootstrap.bootstraps.fastapi_bootstrap.healthchecks_instrument import FastAPIHealthChecksInstrument
+from lite_bootstrap.bootstraps.fastapi_bootstrap.logging_instrument import FastAPILoggingInstrument
 from lite_bootstrap.bootstraps.fastapi_bootstrap.opentelemetry_instrument import FastAPIOpenTelemetryInstrument
 from lite_bootstrap.bootstraps.fastapi_bootstrap.sentry_instrument import FastAPISentryInstrument
 
@@ -12,6 +13,7 @@ from lite_bootstrap.bootstraps.fastapi_bootstrap.sentry_instrument import FastAP
 __all__ = [
     "FastAPIBootstrap",
     "FastAPIHealthChecksInstrument",
+    "FastAPILoggingInstrument",
     "FastAPIOpenTelemetryInstrument",
     "FastAPISentryInstrument",
 ]
@@ -23,6 +25,9 @@ from lite_bootstrap.service_config import ServiceConfig
 class FastAPIBootstrap(BaseBootstrap[fastapi.FastAPI]):
     application: fastapi.FastAPI
     instruments: typing.Sequence[
-        FastAPIOpenTelemetryInstrument | FastAPISentryInstrument | FastAPIHealthChecksInstrument
+        FastAPIOpenTelemetryInstrument
+        | FastAPISentryInstrument
+        | FastAPIHealthChecksInstrument
+        | FastAPILoggingInstrument
     ]
     service_config: ServiceConfig

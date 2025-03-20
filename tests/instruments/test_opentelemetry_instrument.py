@@ -6,7 +6,7 @@ from tests.conftest import CustomInstrumentor
 
 
 def test_opentelemetry_instrument(service_config: ServiceConfig) -> None:
-    opentelemetry = OpenTelemetryInstrument(
+    opentelemetry_instrument = OpenTelemetryInstrument(
         endpoint="otl",
         instrumentors=[
             InstrumentorWithParams(instrumentor=CustomInstrumentor(), additional_params={"key": "value"}),
@@ -15,17 +15,17 @@ def test_opentelemetry_instrument(service_config: ServiceConfig) -> None:
         span_exporter=ConsoleSpanExporter(),
     )
     try:
-        opentelemetry.bootstrap(service_config)
+        opentelemetry_instrument.bootstrap(service_config)
     finally:
-        opentelemetry.teardown()
+        opentelemetry_instrument.teardown()
 
 
 def test_opentelemetry_instrument_empty_instruments(service_config: ServiceConfig) -> None:
-    opentelemetry = OpenTelemetryInstrument(
+    opentelemetry_instrument = OpenTelemetryInstrument(
         endpoint="otl",
         span_exporter=ConsoleSpanExporter(),
     )
     try:
-        opentelemetry.bootstrap(service_config)
+        opentelemetry_instrument.bootstrap(service_config)
     finally:
-        opentelemetry.teardown()
+        opentelemetry_instrument.teardown()
