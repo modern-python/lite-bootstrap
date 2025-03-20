@@ -18,7 +18,7 @@ class HealthChecksInstrument(BaseInstrument):
     path: str = "/health/"
     include_in_schema: bool = False
 
-    def is_ready(self) -> bool:
+    def is_ready(self, _: ServiceConfig) -> bool:
         return self.enabled
 
     @staticmethod

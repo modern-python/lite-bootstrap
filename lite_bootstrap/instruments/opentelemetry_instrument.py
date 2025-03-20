@@ -2,6 +2,8 @@ import contextlib
 import dataclasses
 import typing
 
+from opentelemetry.trace import set_tracer_provider
+
 from lite_bootstrap.instruments.base import BaseInstrument
 from lite_bootstrap.service_config import ServiceConfig
 from lite_bootstrap.types import ApplicationT
@@ -21,7 +23,7 @@ class InstrumentorWithParams:
     additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
 
 
-@dataclasses.dataclass(kw_only=True, slots=True)
+@dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class OpenTelemetryInstrument(BaseInstrument):
     container_name: str | None = None
     endpoint: str | None = None
@@ -30,9 +32,7 @@ class OpenTelemetryInstrument(BaseInstrument):
     instrumentors: list[InstrumentorWithParams | BaseInstrumentor] = dataclasses.field(default_factory=list)
     span_exporter: SpanExporter | None = None
 
-    tracer_provider: TracerProvider = dataclasses.field(init=False)
-
-    def is_ready(self) -> bool:
+    def is_ready(self, _: ServiceConfig) -> bool:
         return bool(self.endpoint)
 
     def bootstrap(self, service_config: ServiceConfig, _: ApplicationT | None = None) -> None:
@@ -46,8 +46,8 @@ class OpenTelemetryInstrument(BaseInstrument):
         resource: typing.Final = resources.Resource.create(
             attributes={k: v for k, v in attributes.items() if v},
         )
-        self.tracer_provider = TracerProvider(resource=resource)
-        self.tracer_provider.add_span_processor(
+        tracer_provider = TracerProvider(resource=resource)
+        tracer_provider.add_span_processor(
             BatchSpanProcessor(
                 self.span_exporter
                 or OTLPSpanExporter(
@@ -59,11 +59,12 @@ class OpenTelemetryInstrument(BaseInstrument):
         for one_instrumentor in self.instrumentors:
             if isinstance(one_instrumentor, InstrumentorWithParams):
                 one_instrumentor.instrumentor.instrument(
-                    tracer_provider=self.tracer_provider,
+                    tracer_provider=tracer_provider,
                     **one_instrumentor.additional_params,
                 )
             else:
-                one_instrumentor.instrument(tracer_provider=self.tracer_provider)
+                one_instrumentor.instrument(tracer_provider=tracer_provider)
+        set_tracer_provider(tracer_provider)
 
     def teardown(self, _: ApplicationT | None = None) -> None:
         for one_instrumentor in self.instrumentors:

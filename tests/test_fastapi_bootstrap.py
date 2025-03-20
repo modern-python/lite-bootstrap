@@ -1,3 +1,4 @@
+import structlog
 from fastapi import FastAPI
 from opentelemetry.sdk.trace.export import ConsoleSpanExporter
 from starlette import status
@@ -6,11 +7,15 @@ from starlette.testclient import TestClient
 from lite_bootstrap.bootstraps.fastapi_bootstrap import (
     FastAPIBootstrap,
     FastAPIHealthChecksInstrument,
+    FastAPILoggingInstrument,
     FastAPIOpenTelemetryInstrument,
     FastAPISentryInstrument,
 )
 from lite_bootstrap.service_config import ServiceConfig
 from tests.conftest import CustomInstrumentor
+
+
+logger = structlog.getLogger(__name__)
 
 
 def test_fastapi_bootstrap(fastapi_app: FastAPI, service_config: ServiceConfig) -> None:
@@ -29,9 +34,11 @@ def test_fastapi_bootstrap(fastapi_app: FastAPI, service_config: ServiceConfig) 
             FastAPIHealthChecksInstrument(
                 path="/health/",
             ),
+            FastAPILoggingInstrument(logging_buffer_capacity=0),
         ],
     )
     fastapi_bootstrap.bootstrap()
+    logger.info("testing logging", key="value")
 
     try:
         response = TestClient(fastapi_app).get("/health/")
