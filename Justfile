@@ -21,9 +21,3 @@ publish:
     rm -rf dist
     uv build
     uv publish --token $PYPI_TOKEN
-
-hook:
-    uv run pre-commit install
-
-unhook:
-    uv run pre-commit uninstall
