@@ -4,14 +4,14 @@ from opentelemetry.sdk.trace.export import ConsoleSpanExporter
 from starlette import status
 from starlette.testclient import TestClient
 
-from lite_bootstrap.bootstrappers.fastapi_bootstrapper import (
+from lite_bootstrap import (
     FastAPIBootstrapper,
     FastAPIHealthChecksInstrument,
     FastAPILoggingInstrument,
     FastAPIOpenTelemetryInstrument,
     FastAPISentryInstrument,
+    ServiceConfig,
 )
-from lite_bootstrap.service_config import ServiceConfig
 from tests.conftest import CustomInstrumentor
 
 

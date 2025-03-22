@@ -5,7 +5,7 @@ import pytest
 from fastapi import FastAPI
 from opentelemetry.instrumentation.instrumentor import BaseInstrumentor  # type: ignore[attr-defined]
 
-from lite_bootstrap.service_config import ServiceConfig
+from lite_bootstrap import ServiceConfig
 
 
 class CustomInstrumentor(BaseInstrumentor):  # type: ignore[misc]

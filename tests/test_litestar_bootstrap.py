@@ -4,14 +4,14 @@ from litestar.config.app import AppConfig
 from litestar.testing import TestClient
 from opentelemetry.sdk.trace.export import ConsoleSpanExporter
 
-from lite_bootstrap.bootstrappers.litestar_bootstrapper import (
+from lite_bootstrap import (
     LitestarBootstrapper,
     LitestarHealthChecksInstrument,
     LitestarLoggingInstrument,
     LitestarOpenTelemetryInstrument,
     LitestarSentryInstrument,
+    ServiceConfig,
 )
-from lite_bootstrap.service_config import ServiceConfig
 from tests.conftest import CustomInstrumentor
 
 
