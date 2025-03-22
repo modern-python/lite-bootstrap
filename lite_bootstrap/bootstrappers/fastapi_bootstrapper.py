@@ -2,7 +2,7 @@ import contextlib
 import dataclasses
 import typing
 
-from lite_bootstrap.bootstraps.base import BaseBootstrap
+from lite_bootstrap.bootstrappers.base import BaseBootstrapper
 from lite_bootstrap.instruments.healthchecks_instrument import HealthChecksInstrument, HealthCheckTypedDict
 from lite_bootstrap.instruments.logging_instrument import LoggingInstrument
 from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryInstrument
@@ -66,8 +66,8 @@ class FastAPISentryInstrument(SentryInstrument): ...
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
-class FastAPIBootstrap(BaseBootstrap[fastapi.FastAPI]):
-    application: fastapi.FastAPI
+class FastAPIBootstrapper(BaseBootstrapper[fastapi.FastAPI, fastapi.FastAPI]):
+    bootstrap_object: fastapi.FastAPI
     instruments: typing.Sequence[
         FastAPIOpenTelemetryInstrument
         | FastAPISentryInstrument
@@ -75,3 +75,6 @@ class FastAPIBootstrap(BaseBootstrap[fastapi.FastAPI]):
         | FastAPILoggingInstrument
     ]
     service_config: ServiceConfig
+
+    def _prepare_application(self) -> fastapi.FastAPI:
+        return self.bootstrap_object

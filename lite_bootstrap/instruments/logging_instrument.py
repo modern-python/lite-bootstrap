@@ -6,7 +6,7 @@ import typing
 
 from lite_bootstrap.instruments.base import BaseInstrument
 from lite_bootstrap.service_config import ServiceConfig
-from lite_bootstrap.types import ApplicationT
+from lite_bootstrap.types import BootstrapObjectT
 
 
 if typing.TYPE_CHECKING:
@@ -109,7 +109,7 @@ class LoggingInstrument(BaseInstrument):
     def is_ready(self, service_config: ServiceConfig) -> bool:
         return not service_config.service_debug
 
-    def bootstrap(self, _: ServiceConfig, __: ApplicationT | None = None) -> None:
+    def bootstrap(self, _: ServiceConfig, __: BootstrapObjectT | None = None) -> None:
         for unset_handlers_logger in self.logging_unset_handlers:
             logging.getLogger(unset_handlers_logger).handlers = []
 
@@ -129,5 +129,5 @@ class LoggingInstrument(BaseInstrument):
             cache_logger_on_first_use=True,
         )
 
-    def teardown(self, _: ApplicationT | None = None) -> None:
+    def teardown(self, _: BootstrapObjectT | None = None) -> None:
         structlog.reset_defaults()

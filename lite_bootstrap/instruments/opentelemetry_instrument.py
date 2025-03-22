@@ -6,7 +6,7 @@ from opentelemetry.trace import set_tracer_provider
 
 from lite_bootstrap.instruments.base import BaseInstrument
 from lite_bootstrap.service_config import ServiceConfig
-from lite_bootstrap.types import ApplicationT
+from lite_bootstrap.types import BootstrapObjectT
 
 
 with contextlib.suppress(ImportError):
@@ -35,7 +35,7 @@ class OpenTelemetryInstrument(BaseInstrument):
     def is_ready(self, _: ServiceConfig) -> bool:
         return bool(self.endpoint)
 
-    def bootstrap(self, service_config: ServiceConfig, _: ApplicationT | None = None) -> None:
+    def bootstrap(self, service_config: ServiceConfig, _: BootstrapObjectT | None = None) -> None:
         attributes = {
             resources.SERVICE_NAME: service_config.service_name,
             resources.TELEMETRY_SDK_LANGUAGE: "python",
@@ -66,7 +66,7 @@ class OpenTelemetryInstrument(BaseInstrument):
                 one_instrumentor.instrument(tracer_provider=tracer_provider)
         set_tracer_provider(tracer_provider)
 
-    def teardown(self, _: ApplicationT | None = None) -> None:
+    def teardown(self, _: BootstrapObjectT | None = None) -> None:
         for one_instrumentor in self.instrumentors:
             if isinstance(one_instrumentor, InstrumentorWithParams):
                 one_instrumentor.instrumentor.uninstrument(**one_instrumentor.additional_params)
