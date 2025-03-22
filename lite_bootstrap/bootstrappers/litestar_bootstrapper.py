@@ -2,7 +2,7 @@ import contextlib
 import dataclasses
 import typing
 
-from lite_bootstrap.bootstraps.base import BaseBootstrap
+from lite_bootstrap.bootstrappers.base import BaseBootstrapper
 from lite_bootstrap.instruments.healthchecks_instrument import HealthChecksInstrument, HealthCheckTypedDict
 from lite_bootstrap.instruments.logging_instrument import LoggingInstrument
 from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryInstrument
@@ -64,8 +64,8 @@ class LitestarSentryInstrument(SentryInstrument): ...
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
-class LitestarBootstrap(BaseBootstrap[AppConfig]):
-    application: AppConfig
+class LitestarBootstrapper(BaseBootstrapper[AppConfig, litestar.Litestar]):
+    bootstrap_object: AppConfig
     instruments: typing.Sequence[
         LitestarOpenTelemetryInstrument
         | LitestarSentryInstrument
@@ -73,3 +73,6 @@ class LitestarBootstrap(BaseBootstrap[AppConfig]):
         | LitestarLoggingInstrument
     ]
     service_config: ServiceConfig
+
+    def _prepare_application(self) -> litestar.Litestar:
+        return litestar.Litestar.from_config(self.bootstrap_object)

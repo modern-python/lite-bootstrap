@@ -4,7 +4,7 @@ import typing
 
 from lite_bootstrap.instruments.base import BaseInstrument
 from lite_bootstrap.service_config import ServiceConfig
-from lite_bootstrap.types import ApplicationT
+from lite_bootstrap.types import BootstrapObjectT
 
 
 with contextlib.suppress(ImportError):
@@ -27,7 +27,7 @@ class SentryInstrument(BaseInstrument):
     def is_ready(self, _: ServiceConfig) -> bool:
         return bool(self.dsn)
 
-    def bootstrap(self, service_config: ServiceConfig, _: ApplicationT | None = None) -> None:
+    def bootstrap(self, service_config: ServiceConfig, _: BootstrapObjectT | None = None) -> None:
         sentry_sdk.init(
             dsn=self.dsn,
             sample_rate=self.sample_rate,
@@ -42,4 +42,4 @@ class SentryInstrument(BaseInstrument):
         tags: dict[str, str] = self.tags or {}
         sentry_sdk.set_tags(tags)
 
-    def teardown(self, application: ApplicationT | None = None) -> None: ...
+    def teardown(self, bootstrap_object: BootstrapObjectT | None = None) -> None: ...

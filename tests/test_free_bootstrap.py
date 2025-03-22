@@ -1,7 +1,7 @@
 import structlog
 from opentelemetry.sdk.trace.export import ConsoleSpanExporter
 
-from lite_bootstrap.bootstraps.free_bootstrap import FreeBootstrap
+from lite_bootstrap.bootstrappers.free_bootstrapper import FreeBootstrapper
 from lite_bootstrap.instruments.logging_instrument import LoggingInstrument
 from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryInstrument
 from lite_bootstrap.instruments.sentry_instrument import SentryInstrument
@@ -13,7 +13,7 @@ logger = structlog.getLogger(__name__)
 
 
 def test_free_bootstrap(service_config: ServiceConfig) -> None:
-    free_bootstrap = FreeBootstrap(
+    bootstrapper = FreeBootstrapper(
         service_config=service_config,
         instruments=[
             OpenTelemetryInstrument(
@@ -27,5 +27,8 @@ def test_free_bootstrap(service_config: ServiceConfig) -> None:
             LoggingInstrument(logging_buffer_capacity=0),
         ],
     )
-    free_bootstrap.bootstrap()
-    logger.info("testing logging", key="value")
+    bootstrapper.bootstrap()
+    try:
+        logger.info("testing logging", key="value")
+    finally:
+        bootstrapper.teardown()

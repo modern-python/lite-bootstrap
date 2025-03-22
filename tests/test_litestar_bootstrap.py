@@ -1,12 +1,11 @@
-import litestar
 import structlog
 from litestar import status_codes
 from litestar.config.app import AppConfig
 from litestar.testing import TestClient
 from opentelemetry.sdk.trace.export import ConsoleSpanExporter
 
-from lite_bootstrap.bootstraps.litestar_bootstrap import (
-    LitestarBootstrap,
+from lite_bootstrap.bootstrappers.litestar_bootstrapper import (
+    LitestarBootstrapper,
     LitestarHealthChecksInstrument,
     LitestarLoggingInstrument,
     LitestarOpenTelemetryInstrument,
@@ -21,8 +20,8 @@ logger = structlog.getLogger(__name__)
 
 def test_litestar_bootstrap(service_config: ServiceConfig) -> None:
     app_config = AppConfig()
-    litestar_bootstrap = LitestarBootstrap(
-        application=app_config,
+    bootstrapper = LitestarBootstrapper(
+        bootstrap_object=app_config,
         service_config=service_config,
         instruments=[
             LitestarOpenTelemetryInstrument(
@@ -39,8 +38,7 @@ def test_litestar_bootstrap(service_config: ServiceConfig) -> None:
             LitestarLoggingInstrument(logging_buffer_capacity=0),
         ],
     )
-    litestar_bootstrap.bootstrap()
-    application = litestar.Litestar.from_config(app_config)
+    application = bootstrapper.bootstrap()
     logger.info("testing logging", key="value")
 
     try:
@@ -53,4 +51,4 @@ def test_litestar_bootstrap(service_config: ServiceConfig) -> None:
                 "service_version": "2.0.0",
             }
     finally:
-        litestar_bootstrap.teardown()
+        bootstrapper.teardown()
