@@ -42,8 +42,8 @@ def test_litestar_bootstrap(service_config: ServiceConfig) -> None:
     logger.info("testing logging", key="value")
 
     try:
-        with TestClient(app=application) as async_client:
-            response = async_client.get("/health/")
+        with TestClient(app=application) as test_client:
+            response = test_client.get("/health/")
             assert response.status_code == status_codes.HTTP_200_OK
             assert response.json() == {
                 "health_status": True,
