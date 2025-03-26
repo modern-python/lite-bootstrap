@@ -9,6 +9,7 @@ from lite_bootstrap import (
     LitestarHealthChecksInstrument,
     LitestarLoggingInstrument,
     LitestarOpenTelemetryInstrument,
+    LitestarPrometheusInstrument,
     LitestarSentryInstrument,
     ServiceConfig,
 )
@@ -36,6 +37,7 @@ def test_litestar_bootstrap(service_config: ServiceConfig) -> None:
                 path="/health/",
             ),
             LitestarLoggingInstrument(logging_buffer_capacity=0),
+            LitestarPrometheusInstrument(),
         ],
     )
     application = bootstrapper.bootstrap()
@@ -52,3 +54,19 @@ def test_litestar_bootstrap(service_config: ServiceConfig) -> None:
             }
     finally:
         bootstrapper.teardown()
+
+
+def test_litestar_prometheus_bootstrap(service_config: ServiceConfig) -> None:
+    app_config = AppConfig()
+    prometheus_instrument = LitestarPrometheusInstrument(metrics_path="/custom-metrics-path")
+    bootstrapper = LitestarBootstrapper(
+        bootstrap_object=app_config,
+        service_config=service_config,
+        instruments=[prometheus_instrument],
+    )
+    application = bootstrapper.bootstrap()
+
+    with TestClient(app=application) as test_client:
+        response = test_client.get(prometheus_instrument.metrics_path)
+        assert response.status_code == status_codes.HTTP_200_OK
+        assert response.text
