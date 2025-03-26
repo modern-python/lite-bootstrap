@@ -3,6 +3,7 @@ from lite_bootstrap.bootstrappers.fastapi_bootstrapper import (
     FastAPIHealthChecksInstrument,
     FastAPILoggingInstrument,
     FastAPIOpenTelemetryInstrument,
+    FastAPIPrometheusInstrument,
     FastAPISentryInstrument,
 )
 from lite_bootstrap.bootstrappers.free_bootstrapper import FreeBootstrapper
@@ -11,6 +12,7 @@ from lite_bootstrap.bootstrappers.litestar_bootstrapper import (
     LitestarHealthChecksInstrument,
     LitestarLoggingInstrument,
     LitestarOpenTelemetryInstrument,
+    LitestarPrometheusInstrument,
     LitestarSentryInstrument,
 )
 from lite_bootstrap.instruments.healthchecks_instrument import HealthChecksInstrument
@@ -25,6 +27,7 @@ __all__ = [
     "FastAPIHealthChecksInstrument",
     "FastAPILoggingInstrument",
     "FastAPIOpenTelemetryInstrument",
+    "FastAPIPrometheusInstrument",
     "FastAPISentryInstrument",
     "FreeBootstrapper",
     "HealthChecksInstrument",
@@ -32,6 +35,7 @@ __all__ = [
     "LitestarHealthChecksInstrument",
     "LitestarLoggingInstrument",
     "LitestarOpenTelemetryInstrument",
+    "LitestarPrometheusInstrument",
     "LitestarSentryInstrument",
     "LoggingInstrument",
     "OpenTelemetryInstrument",

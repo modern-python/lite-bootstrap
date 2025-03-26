@@ -2,10 +2,13 @@ import contextlib
 import dataclasses
 import typing
 
+from prometheus_fastapi_instrumentator import Instrumentator
+
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
 from lite_bootstrap.instruments.healthchecks_instrument import HealthChecksInstrument, HealthCheckTypedDict
 from lite_bootstrap.instruments.logging_instrument import LoggingInstrument
 from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryInstrument
+from lite_bootstrap.instruments.prometheus_instrument import PrometheusInstrument
 from lite_bootstrap.instruments.sentry_instrument import SentryInstrument
 from lite_bootstrap.service_config import ServiceConfig
 
@@ -65,6 +68,27 @@ class FastAPIOpenTelemetryInstrument(OpenTelemetryInstrument):
 class FastAPISentryInstrument(SentryInstrument): ...
 
 
+@dataclasses.dataclass(kw_only=True, frozen=True)
+class FastAPIPrometheusInstrument(PrometheusInstrument):
+    metrics_path: str = "/metrics"
+    metrics_include_in_schema: bool = False
+    instrumentator_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
+    instrument_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
+    expose_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
+
+    def bootstrap(self, _: ServiceConfig, application: fastapi.FastAPI | None = None) -> None:
+        if application:
+            Instrumentator(**self.instrumentator_params).instrument(
+                application,
+                **self.instrument_params,
+            ).expose(
+                application,
+                endpoint=self.metrics_path,
+                include_in_schema=self.metrics_include_in_schema,
+                **self.expose_params,
+            )
+
+
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class FastAPIBootstrapper(BaseBootstrapper[fastapi.FastAPI, fastapi.FastAPI]):
     bootstrap_object: fastapi.FastAPI
@@ -73,6 +97,7 @@ class FastAPIBootstrapper(BaseBootstrapper[fastapi.FastAPI, fastapi.FastAPI]):
         | FastAPISentryInstrument
         | FastAPIHealthChecksInstrument
         | FastAPILoggingInstrument
+        | FastAPIPrometheusInstrument
     ]
     service_config: ServiceConfig
 

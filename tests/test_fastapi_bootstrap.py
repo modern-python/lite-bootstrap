@@ -9,6 +9,7 @@ from lite_bootstrap import (
     FastAPIHealthChecksInstrument,
     FastAPILoggingInstrument,
     FastAPIOpenTelemetryInstrument,
+    FastAPIPrometheusInstrument,
     FastAPISentryInstrument,
     ServiceConfig,
 )
@@ -35,6 +36,7 @@ def test_fastapi_bootstrap(fastapi_app: FastAPI, service_config: ServiceConfig) 
                 path="/health/",
             ),
             FastAPILoggingInstrument(logging_buffer_capacity=0),
+            FastAPIPrometheusInstrument(),
         ],
     )
     bootstrapper.bootstrap()
@@ -46,3 +48,12 @@ def test_fastapi_bootstrap(fastapi_app: FastAPI, service_config: ServiceConfig) 
         assert response.json() == {"health_status": True, "service_name": "microservice", "service_version": "2.0.0"}
     finally:
         bootstrapper.teardown()
+
+
+def test_fastapi_prometheus_instrument(fastapi_app: FastAPI, service_config: ServiceConfig) -> None:
+    prometheus_instrument = FastAPIPrometheusInstrument(metrics_path="/custom-metrics-path")
+    prometheus_instrument.bootstrap(service_config, fastapi_app)
+
+    response = TestClient(fastapi_app).get(prometheus_instrument.metrics_path)
+    assert response.status_code == status.HTTP_200_OK
+    assert response.text
