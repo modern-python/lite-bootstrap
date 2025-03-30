@@ -1,44 +1,13 @@
-from lite_bootstrap.bootstrappers.fastapi_bootstrapper import (
-    FastAPIBootstrapper,
-    FastAPIHealthChecksInstrument,
-    FastAPILoggingInstrument,
-    FastAPIOpenTelemetryInstrument,
-    FastAPIPrometheusInstrument,
-    FastAPISentryInstrument,
-)
-from lite_bootstrap.bootstrappers.free_bootstrapper import FreeBootstrapper
-from lite_bootstrap.bootstrappers.litestar_bootstrapper import (
-    LitestarBootstrapper,
-    LitestarHealthChecksInstrument,
-    LitestarLoggingInstrument,
-    LitestarOpenTelemetryInstrument,
-    LitestarPrometheusInstrument,
-    LitestarSentryInstrument,
-)
-from lite_bootstrap.instruments.healthchecks_instrument import HealthChecksInstrument
-from lite_bootstrap.instruments.logging_instrument import LoggingInstrument
-from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryInstrument
-from lite_bootstrap.instruments.sentry_instrument import SentryInstrument
-from lite_bootstrap.service_config import ServiceConfig
+from lite_bootstrap.bootstrappers.fastapi_bootstrapper import FastAPIBootstrapper, FastAPIConfig
+from lite_bootstrap.bootstrappers.free_bootstrapper import FreeBootstrapper, FreeBootstrapperConfig
+from lite_bootstrap.bootstrappers.litestar_bootstrapper import LitestarBootstrapper, LitestarConfig
 
 
 __all__ = [
     "FastAPIBootstrapper",
-    "FastAPIHealthChecksInstrument",
-    "FastAPILoggingInstrument",
-    "FastAPIOpenTelemetryInstrument",
-    "FastAPIPrometheusInstrument",
-    "FastAPISentryInstrument",
+    "FastAPIConfig",
     "FreeBootstrapper",
-    "HealthChecksInstrument",
+    "FreeBootstrapperConfig",
     "LitestarBootstrapper",
-    "LitestarHealthChecksInstrument",
-    "LitestarLoggingInstrument",
-    "LitestarOpenTelemetryInstrument",
-    "LitestarPrometheusInstrument",
-    "LitestarSentryInstrument",
-    "LoggingInstrument",
-    "OpenTelemetryInstrument",
-    "SentryInstrument",
-    "ServiceConfig",
+    "LitestarConfig",
 ]

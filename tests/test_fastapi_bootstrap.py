@@ -1,45 +1,31 @@
 import structlog
-from fastapi import FastAPI
 from opentelemetry.sdk.trace.export import ConsoleSpanExporter
 from starlette import status
 from starlette.testclient import TestClient
 
-from lite_bootstrap import (
-    FastAPIBootstrapper,
-    FastAPIHealthChecksInstrument,
-    FastAPILoggingInstrument,
-    FastAPIOpenTelemetryInstrument,
-    FastAPIPrometheusInstrument,
-    FastAPISentryInstrument,
-    ServiceConfig,
-)
+from lite_bootstrap import FastAPIBootstrapper, FastAPIConfig
 from tests.conftest import CustomInstrumentor
 
 
 logger = structlog.getLogger(__name__)
 
 
-def test_fastapi_bootstrap(fastapi_app: FastAPI, service_config: ServiceConfig) -> None:
+def test_fastapi_bootstrap() -> None:
     bootstrapper = FastAPIBootstrapper(
-        bootstrap_object=fastapi_app,
-        service_config=service_config,
-        instruments=[
-            FastAPIOpenTelemetryInstrument(
-                endpoint="otl",
-                instrumentors=[CustomInstrumentor()],
-                span_exporter=ConsoleSpanExporter(),
-            ),
-            FastAPISentryInstrument(
-                dsn="https://testdsn@localhost/1",
-            ),
-            FastAPIHealthChecksInstrument(
-                path="/health/",
-            ),
-            FastAPILoggingInstrument(logging_buffer_capacity=0),
-            FastAPIPrometheusInstrument(),
-        ],
+        bootstrap_config=FastAPIConfig(
+            service_name="microservice",
+            service_version="2.0.0",
+            service_environment="test",
+            service_debug=False,
+            opentelemetry_endpoint="otl",
+            opentelemetry_instrumentors=[CustomInstrumentor()],
+            opentelemetry_span_exporter=ConsoleSpanExporter(),
+            sentry_dsn="https://testdsn@localhost/1",
+            health_checks_path="/health/",
+            logging_buffer_capacity=0,
+        ),
     )
-    bootstrapper.bootstrap()
+    fastapi_app = bootstrapper.bootstrap()
     logger.info("testing logging", key="value")
 
     try:
@@ -50,10 +36,15 @@ def test_fastapi_bootstrap(fastapi_app: FastAPI, service_config: ServiceConfig) 
         bootstrapper.teardown()
 
 
-def test_fastapi_prometheus_instrument(fastapi_app: FastAPI, service_config: ServiceConfig) -> None:
-    prometheus_instrument = FastAPIPrometheusInstrument(metrics_path="/custom-metrics-path")
-    prometheus_instrument.bootstrap(service_config, fastapi_app)
+def test_fastapi_prometheus_instrument() -> None:
+    prometheus_metrics_path = "/custom-metrics-path"
+    bootstrapper = FastAPIBootstrapper(
+        bootstrap_config=FastAPIConfig(
+            prometheus_metrics_path=prometheus_metrics_path,
+        ),
+    )
+    fastapi_app = bootstrapper.bootstrap()
 
-    response = TestClient(fastapi_app).get(prometheus_instrument.metrics_path)
+    response = TestClient(fastapi_app).get(prometheus_metrics_path)
     assert response.status_code == status.HTTP_200_OK
     assert response.text
