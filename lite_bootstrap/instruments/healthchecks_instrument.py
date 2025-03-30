@@ -2,8 +2,7 @@ import dataclasses
 
 import typing_extensions
 
-from lite_bootstrap.instruments.base import BaseInstrument
-from lite_bootstrap.service_config import ServiceConfig
+from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 
 
 class HealthCheckTypedDict(typing_extensions.TypedDict, total=False):
@@ -12,19 +11,23 @@ class HealthCheckTypedDict(typing_extensions.TypedDict, total=False):
     health_status: bool
 
 
+@dataclasses.dataclass(kw_only=True, frozen=True)
+class HealthChecksConfig(BaseConfig):
+    health_checks_enabled: bool = True
+    health_checks_path: str = "/health/"
+    health_checks_include_in_schema: bool = False
+
+
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class HealthChecksInstrument(BaseInstrument):
-    enabled: bool = True
-    path: str = "/health/"
-    include_in_schema: bool = False
+    bootstrap_config: HealthChecksConfig
 
-    def is_ready(self, _: ServiceConfig) -> bool:
-        return self.enabled
+    def is_ready(self) -> bool:
+        return self.bootstrap_config.health_checks_enabled
 
-    @staticmethod
-    def render_health_check_data(service_config: ServiceConfig) -> HealthCheckTypedDict:
+    def render_health_check_data(self) -> HealthCheckTypedDict:
         return {
-            "service_version": service_config.service_version,
-            "service_name": service_config.service_name,
+            "service_version": self.bootstrap_config.service_version,
+            "service_name": self.bootstrap_config.service_name,
             "health_status": True,
         }

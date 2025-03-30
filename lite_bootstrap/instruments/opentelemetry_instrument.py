@@ -4,9 +4,7 @@ import typing
 
 from opentelemetry.trace import set_tracer_provider
 
-from lite_bootstrap.instruments.base import BaseInstrument
-from lite_bootstrap.service_config import ServiceConfig
-from lite_bootstrap.types import BootstrapObjectT
+from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 
 
 with contextlib.suppress(ImportError):
@@ -23,25 +21,34 @@ class InstrumentorWithParams:
     additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
 
 
+@dataclasses.dataclass(kw_only=True, frozen=True)
+class OpentelemetryConfig(BaseConfig):
+    opentelemetry_service_name: str | None = None
+    opentelemetry_container_name: str | None = None
+    opentelemetry_endpoint: str | None = None
+    opentelemetry_namespace: str | None = None
+    opentelemetry_insecure: bool = True
+    opentelemetry_instrumentors: list[InstrumentorWithParams | BaseInstrumentor] = dataclasses.field(
+        default_factory=list
+    )
+    opentelemetry_span_exporter: SpanExporter | None = None
+
+
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class OpenTelemetryInstrument(BaseInstrument):
-    container_name: str | None = None
-    endpoint: str | None = None
-    namespace: str | None = None
-    insecure: bool = True
-    instrumentors: list[InstrumentorWithParams | BaseInstrumentor] = dataclasses.field(default_factory=list)
-    span_exporter: SpanExporter | None = None
+    bootstrap_config: OpentelemetryConfig
 
-    def is_ready(self, _: ServiceConfig) -> bool:
-        return bool(self.endpoint)
+    def is_ready(self) -> bool:
+        return bool(self.bootstrap_config.opentelemetry_endpoint)
 
-    def bootstrap(self, service_config: ServiceConfig, _: BootstrapObjectT | None = None) -> None:
+    def bootstrap(self) -> None:
         attributes = {
-            resources.SERVICE_NAME: service_config.service_name,
+            resources.SERVICE_NAME: self.bootstrap_config.service_name
+            or self.bootstrap_config.opentelemetry_service_name,
             resources.TELEMETRY_SDK_LANGUAGE: "python",
-            resources.SERVICE_NAMESPACE: self.namespace,
-            resources.SERVICE_VERSION: service_config.service_version,
-            resources.CONTAINER_NAME: self.container_name,
+            resources.SERVICE_NAMESPACE: self.bootstrap_config.opentelemetry_namespace,
+            resources.SERVICE_VERSION: self.bootstrap_config.service_version,
+            resources.CONTAINER_NAME: self.bootstrap_config.opentelemetry_container_name,
         }
         resource: typing.Final = resources.Resource.create(
             attributes={k: v for k, v in attributes.items() if v},
@@ -49,14 +56,14 @@ class OpenTelemetryInstrument(BaseInstrument):
         tracer_provider = TracerProvider(resource=resource)
         tracer_provider.add_span_processor(
             BatchSpanProcessor(
-                self.span_exporter
+                self.bootstrap_config.opentelemetry_span_exporter
                 or OTLPSpanExporter(
-                    endpoint=self.endpoint,
-                    insecure=self.insecure,
+                    endpoint=self.bootstrap_config.opentelemetry_endpoint,
+                    insecure=self.bootstrap_config.opentelemetry_insecure,
                 ),
             ),
         )
-        for one_instrumentor in self.instrumentors:
+        for one_instrumentor in self.bootstrap_config.opentelemetry_instrumentors:
             if isinstance(one_instrumentor, InstrumentorWithParams):
                 one_instrumentor.instrumentor.instrument(
                     tracer_provider=tracer_provider,
@@ -66,8 +73,8 @@ class OpenTelemetryInstrument(BaseInstrument):
                 one_instrumentor.instrument(tracer_provider=tracer_provider)
         set_tracer_provider(tracer_provider)
 
-    def teardown(self, _: BootstrapObjectT | None = None) -> None:
-        for one_instrumentor in self.instrumentors:
+    def teardown(self) -> None:
+        for one_instrumentor in self.bootstrap_config.opentelemetry_instrumentors:
             if isinstance(one_instrumentor, InstrumentorWithParams):
                 one_instrumentor.instrumentor.uninstrument(**one_instrumentor.additional_params)
             else:

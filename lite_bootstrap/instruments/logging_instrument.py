@@ -4,9 +4,7 @@ import logging
 import logging.handlers
 import typing
 
-from lite_bootstrap.instruments.base import BaseInstrument
-from lite_bootstrap.service_config import ServiceConfig
-from lite_bootstrap.types import BootstrapObjectT
+from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 
 
 if typing.TYPE_CHECKING:
@@ -96,8 +94,8 @@ class MemoryLoggerFactory(structlog.stdlib.LoggerFactory):
         return logger
 
 
-@dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
-class LoggingInstrument(BaseInstrument):
+@dataclasses.dataclass(kw_only=True, frozen=True)
+class LoggingConfig(BaseConfig):
     logging_log_level: int = logging.INFO
     logging_flush_level: int = logging.ERROR
     logging_buffer_capacity: int = 10
@@ -106,28 +104,33 @@ class LoggingInstrument(BaseInstrument):
         default_factory=list,
     )
 
-    def is_ready(self, service_config: ServiceConfig) -> bool:
-        return not service_config.service_debug
 
-    def bootstrap(self, _: ServiceConfig, __: BootstrapObjectT | None = None) -> None:
-        for unset_handlers_logger in self.logging_unset_handlers:
+@dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
+class LoggingInstrument(BaseInstrument):
+    bootstrap_config: LoggingConfig
+
+    def is_ready(self) -> bool:
+        return not self.bootstrap_config.service_debug
+
+    def bootstrap(self) -> None:
+        for unset_handlers_logger in self.bootstrap_config.logging_unset_handlers:
             logging.getLogger(unset_handlers_logger).handlers = []
 
         structlog.configure(
             processors=[
                 *DEFAULT_STRUCTLOG_PROCESSORS,
-                *self.logging_extra_processors,
+                *self.bootstrap_config.logging_extra_processors,
                 DEFAULT_STRUCTLOG_FORMATTER_PROCESSOR,
             ],
             context_class=dict,
             logger_factory=MemoryLoggerFactory(
-                logging_buffer_capacity=self.logging_buffer_capacity,
-                logging_flush_level=self.logging_flush_level,
-                logging_log_level=self.logging_log_level,
+                logging_buffer_capacity=self.bootstrap_config.logging_buffer_capacity,
+                logging_flush_level=self.bootstrap_config.logging_flush_level,
+                logging_log_level=self.bootstrap_config.logging_log_level,
             ),
             wrapper_class=structlog.stdlib.BoundLogger,
             cache_logger_on_first_use=True,
         )
 
-    def teardown(self, _: BootstrapObjectT | None = None) -> None:
+    def teardown(self) -> None:
         structlog.reset_defaults()

@@ -5,32 +5,37 @@ import structlog
 from opentelemetry.sdk.trace.export import ConsoleSpanExporter
 from opentelemetry.trace import get_tracer
 
-from lite_bootstrap.instruments.logging_instrument import LoggingInstrument, MemoryLoggerFactory
-from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryInstrument
-from lite_bootstrap.service_config import ServiceConfig
+from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument, MemoryLoggerFactory
+from lite_bootstrap.instruments.opentelemetry_instrument import OpentelemetryConfig, OpenTelemetryInstrument
 
 
 logger = structlog.getLogger(__name__)
 
 
-def test_logging_instrument(service_config: ServiceConfig) -> None:
-    logging_instrument = LoggingInstrument(logging_unset_handlers=["uvicorn"], logging_buffer_capacity=0)
+def test_logging_instrument() -> None:
+    logging_instrument = LoggingInstrument(
+        bootstrap_config=LoggingConfig(logging_unset_handlers=["uvicorn"], logging_buffer_capacity=0)
+    )
     try:
-        logging_instrument.bootstrap(service_config)
+        logging_instrument.bootstrap()
         logger.info("testing logging", key="value")
     finally:
         logging_instrument.teardown()
 
 
-def test_logging_instrument_tracer_injection(service_config: ServiceConfig) -> None:
-    logging_instrument = LoggingInstrument(logging_unset_handlers=["uvicorn"], logging_buffer_capacity=0)
+def test_logging_instrument_tracer_injection() -> None:
+    logging_instrument = LoggingInstrument(
+        bootstrap_config=LoggingConfig(logging_unset_handlers=["uvicorn"], logging_buffer_capacity=0)
+    )
     opentelemetry_instrument = OpenTelemetryInstrument(
-        endpoint="otl",
-        span_exporter=ConsoleSpanExporter(),
+        bootstrap_config=OpentelemetryConfig(
+            opentelemetry_endpoint="otl",
+            opentelemetry_span_exporter=ConsoleSpanExporter(),
+        )
     )
     try:
-        logging_instrument.bootstrap(service_config)
-        opentelemetry_instrument.bootstrap(service_config)
+        logging_instrument.bootstrap()
+        opentelemetry_instrument.bootstrap()
         tracer = get_tracer(__name__)
         logger.info("testing tracer injection without spans")
         with tracer.start_as_current_span("my_fake_span") as span:

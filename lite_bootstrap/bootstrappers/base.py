@@ -1,26 +1,34 @@
 import abc
 import typing
 
-from lite_bootstrap.instruments.base import BaseInstrument
-from lite_bootstrap.service_config import ServiceConfig
-from lite_bootstrap.types import ApplicationT, BootstrapObjectT
+from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
+from lite_bootstrap.types import ApplicationT
 
 
-class BaseBootstrapper(abc.ABC, typing.Generic[BootstrapObjectT, ApplicationT]):
-    bootstrap_object: BootstrapObjectT
-    instruments: typing.Sequence[BaseInstrument]
-    service_config: ServiceConfig
+InstrumentT = typing.TypeVar("InstrumentT", bound=BaseInstrument)
+
+
+class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
+    instruments_types: typing.ClassVar[list[type[BaseInstrument]]]
+    instruments: list[BaseInstrument]
+    bootstrap_config: BaseConfig
+
+    def __init__(self, bootstrap_config: BaseConfig) -> None:
+        self.bootstrap_config = bootstrap_config
+        self.instruments = []
+        for instrument_type in self.instruments_types:
+            instrument = instrument_type(bootstrap_config=bootstrap_config)
+            if instrument.is_ready():
+                self.instruments.append(instrument)
 
     @abc.abstractmethod
     def _prepare_application(self) -> ApplicationT: ...
 
     def bootstrap(self) -> ApplicationT:
         for one_instrument in self.instruments:
-            if one_instrument.is_ready(self.service_config):
-                one_instrument.bootstrap(self.service_config, self.bootstrap_object)
+            one_instrument.bootstrap()
         return self._prepare_application()
 
     def teardown(self) -> None:
         for one_instrument in self.instruments:
-            if one_instrument.is_ready(self.service_config):
-                one_instrument.teardown(self.bootstrap_object)
+            one_instrument.teardown()

@@ -1,13 +1,22 @@
 import abc
-
-from lite_bootstrap.service_config import ServiceConfig
-from lite_bootstrap.types import BootstrapObjectT
+import dataclasses
 
 
+@dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
+class BaseConfig:
+    service_name: str = "micro-service"
+    service_version: str = "1.0.0"
+    service_environment: str | None = None
+    service_debug: bool = True
+
+
+@dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class BaseInstrument(abc.ABC):
-    def bootstrap(self, service_config: ServiceConfig, bootstrap_object: BootstrapObjectT | None = None) -> None: ...  # noqa: B027
+    bootstrap_config: BaseConfig
 
-    def teardown(self, bootstrap_object: BootstrapObjectT | None = None) -> None: ...  # noqa: B027
+    def bootstrap(self) -> None: ...  # noqa: B027
+
+    def teardown(self) -> None: ...  # noqa: B027
 
     @abc.abstractmethod
-    def is_ready(self, service_config: ServiceConfig) -> bool: ...
+    def is_ready(self) -> bool: ...
