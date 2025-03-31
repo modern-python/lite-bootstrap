@@ -66,12 +66,19 @@ class LitestarLoggingInstrument(LoggingInstrument):
 class LitestarOpenTelemetryInstrument(OpenTelemetryInstrument):
     bootstrap_config: LitestarConfig
 
+    def _build_excluded_urls(self) -> list[str]:
+        excluded_urls = [*self.bootstrap_config.opentelemetry_excluded_urls]
+        for one_url in (self.bootstrap_config.health_checks_path, self.bootstrap_config.prometheus_metrics_path):
+            if one_url and one_url not in excluded_urls:
+                excluded_urls.append(one_url)
+        return excluded_urls
+
     def bootstrap(self) -> None:
         super().bootstrap()
         self.bootstrap_config.application_config.middleware.append(
             OpenTelemetryConfig(
                 tracer_provider=get_tracer_provider(),
-                exclude=self.bootstrap_config.opentelemetry_excluded_urls,
+                exclude=self._build_excluded_urls(),
             ).middleware,
         )
 
