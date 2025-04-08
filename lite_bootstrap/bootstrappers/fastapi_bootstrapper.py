@@ -112,8 +112,5 @@ class FastAPIBootstrapper(BaseBootstrapper[fastapi.FastAPI]):
     bootstrap_config: FastAPIConfig
     __slots__ = "bootstrap_config", "instruments"
 
-    def __init__(self, bootstrap_config: FastAPIConfig) -> None:
-        super().__init__(bootstrap_config)
-
     def _prepare_application(self) -> fastapi.FastAPI:
         return self.bootstrap_config.application
