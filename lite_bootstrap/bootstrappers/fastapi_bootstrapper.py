@@ -2,8 +2,6 @@ import contextlib
 import dataclasses
 import typing
 
-from prometheus_fastapi_instrumentator import Instrumentator
-
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
 from lite_bootstrap.instruments.healthchecks_instrument import (
     HealthChecksConfig,
@@ -20,6 +18,7 @@ with contextlib.suppress(ImportError):
     import fastapi
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
     from opentelemetry.trace import get_tracer_provider
+    from prometheus_fastapi_instrumentator import Instrumentator
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
