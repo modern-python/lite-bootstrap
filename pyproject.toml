@@ -51,35 +51,61 @@ logging = [
 fastapi = [
     "fastapi",
 ]
+fastapi-sentry = [
+    "lite-bootstrap[fastapi,sentry]",
+]
 fastapi-otl = [
+    "lite-bootstrap[fastapi,otl]",
     "opentelemetry-instrumentation-fastapi",
 ]
+fastapi-logging = [
+    "lite-bootstrap[fastapi,logging]",
+]
 fastapi-metrics = [
+    "lite-bootstrap[fastapi]",
     "prometheus-fastapi-instrumentator>=6.1",
 ]
 fastapi-all = [
-    "lite-bootstrap[sentry,otl,logging,fastapi,fastapi-otl,fastapi-metrics]"
+    "lite-bootstrap[fastapi-sentry,fastapi-otl,fastapi-logging,fastapi-metrics]",
 ]
 litestar = [
     "litestar>=2.9",
-    "prometheus-client>=0.20",
+]
+litestar-sentry = [
+    "lite-bootstrap[litestar,sentry]",
 ]
 litestar-otl = [
+    "lite-bootstrap[litestar,otl]",
     "opentelemetry-instrumentation-asgi>=0.46b0",
 ]
+litestar-logging = [
+    "lite-bootstrap[litestar,logging]",
+]
 litestar-metrics = [
+    "lite-bootstrap[litestar]",
     "prometheus-client>=0.20",
 ]
 litestar-all = [
-    "lite-bootstrap[sentry,otl,logging,litestar,litestar-otl,litestar-metrics]"
+    "lite-bootstrap[litestar-sentry,litestar-otl,litestar-logging,litestar-metrics]",
 ]
 faststream = [
     "faststream",
 ]
+faststream-sentry = [
+    "lite-bootstrap[faststream,sentry]",
+]
+faststream-otl = [
+    "lite-bootstrap[faststream,otl]",
+]
+faststream-logging = [
+    "lite-bootstrap[faststream,logging]",
+]
 faststream-metrics = [
+    "lite-bootstrap[faststream]",
     "prometheus-client>=0.20",
 ]
 faststream-all = [
+    "lite-bootstrap[faststream-sentry,faststream-otl,faststream-logging,faststream-metrics]",
     "lite-bootstrap[sentry,otl,logging,faststream,faststream-metrics]"
 ]
 
