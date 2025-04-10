@@ -2,8 +2,6 @@ import contextlib
 import dataclasses
 import typing
 
-from opentelemetry.trace import set_tracer_provider
-
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 
 
@@ -13,6 +11,7 @@ with contextlib.suppress(ImportError):
     from opentelemetry.sdk import resources
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter
+    from opentelemetry.trace import set_tracer_provider
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
