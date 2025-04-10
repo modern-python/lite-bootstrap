@@ -67,15 +67,29 @@ litestar = [
 litestar-otl = [
     "opentelemetry-instrumentation-asgi>=0.46b0",
 ]
+litestar-metrics = [
+    "prometheus-client>=0.20",
+]
 litestar-all = [
-    "lite-bootstrap[sentry,otl,logging,litestar,litestar-otl]"
+    "lite-bootstrap[sentry,otl,logging,litestar,litestar-otl,litestar-metrics]"
+]
+faststream = [
+    "faststream",
+]
+faststream-metrics = [
+    "prometheus-client>=0.20",
+]
+faststream-all = [
+    "lite-bootstrap[sentry,otl,logging,faststream,faststream-metrics]"
 ]
 
 [dependency-groups]
 dev = [
     "pytest",
     "pytest-cov",
+    "pytest-asyncio",
     "httpx",  # for test client
+    "redis>=5.2.1",
     "mypy",
     "ruff",
 ]
@@ -117,6 +131,8 @@ isort.no-lines-before = ["standard-library", "local-folder"]
 
 [tool.pytest.ini_options]
 addopts = "--cov=. --cov-report term-missing"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.coverage.report]
 exclude_also = ["if typing.TYPE_CHECKING:"]
