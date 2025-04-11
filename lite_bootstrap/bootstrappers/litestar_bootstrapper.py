@@ -112,7 +112,7 @@ class LitestarPrometheusInstrument(PrometheusInstrument):
         self.bootstrap_config.application_config.middleware.append(litestar_prometheus_config.middleware)
 
 
-class LitestarBootstrapper(BaseBootstrapper[litestar.Litestar]):
+class LitestarBootstrapper(BaseBootstrapper["litestar.Litestar"]):
     __slots__ = "bootstrap_config", "instruments"
 
     instruments_types: typing.ClassVar = [
@@ -131,5 +131,5 @@ class LitestarBootstrapper(BaseBootstrapper[litestar.Litestar]):
     def __init__(self, bootstrap_config: LitestarConfig) -> None:
         super().__init__(bootstrap_config)
 
-    def _prepare_application(self) -> litestar.Litestar:
+    def _prepare_application(self) -> "litestar.Litestar":
         return litestar.Litestar.from_config(self.bootstrap_config.application_config)

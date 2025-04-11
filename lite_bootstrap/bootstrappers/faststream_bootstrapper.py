@@ -1,4 +1,3 @@
-from __future__ import annotations
 import dataclasses
 import json
 import typing
@@ -53,8 +52,8 @@ class FastStreamPrometheusMiddlewareProtocol(typing.Protocol):
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class FastStreamConfig(HealthChecksConfig, LoggingConfig, OpentelemetryConfig, PrometheusConfig, SentryConfig):
-    application: AsgiFastStream = dataclasses.field(default_factory=AsgiFastStream)
-    broker: BrokerUsecase[typing.Any, typing.Any] | None = None
+    application: "AsgiFastStream" = dataclasses.field(default_factory=AsgiFastStream)
+    broker: typing.Optional["BrokerUsecase[typing.Any, typing.Any]"] = None
     opentelemetry_middleware_cls: type[FastStreamTelemetryMiddlewareProtocol] | None = None
     prometheus_middleware_cls: type[FastStreamPrometheusMiddlewareProtocol] | None = None
 
@@ -65,7 +64,7 @@ class FastStreamHealthChecksInstrument(HealthChecksInstrument):
 
     def bootstrap(self) -> None:
         @handle_get
-        async def check_health(_: object) -> AsgiResponse:
+        async def check_health(_: object) -> "AsgiResponse":
             return (
                 AsgiResponse(
                     json.dumps(self.render_health_check_data()).encode(), 200, headers={"content-type": "text/plain"}
@@ -137,7 +136,7 @@ class FastStreamPrometheusInstrument(PrometheusInstrument):
             )
 
 
-class FastStreamBootstrapper(BaseBootstrapper[AsgiFastStream]):
+class FastStreamBootstrapper(BaseBootstrapper["AsgiFastStream"]):
     __slots__ = "bootstrap_config", "instruments"
 
     instruments_types: typing.ClassVar = [
@@ -158,5 +157,5 @@ class FastStreamBootstrapper(BaseBootstrapper[AsgiFastStream]):
         if self.bootstrap_config.broker:
             self.bootstrap_config.application.broker = self.bootstrap_config.broker
 
-    def _prepare_application(self) -> AsgiFastStream:
+    def _prepare_application(self) -> "AsgiFastStream":
         return self.bootstrap_config.application

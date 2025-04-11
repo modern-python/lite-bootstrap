@@ -110,7 +110,7 @@ class FastAPIPrometheusInstrument(PrometheusInstrument):
         )
 
 
-class FastAPIBootstrapper(BaseBootstrapper[fastapi.FastAPI]):
+class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI"]):
     __slots__ = "bootstrap_config", "instruments"
 
     instruments_types: typing.ClassVar = [
