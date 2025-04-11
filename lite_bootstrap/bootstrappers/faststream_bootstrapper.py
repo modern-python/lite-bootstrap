@@ -30,11 +30,11 @@ class FastStreamTelemetryMiddlewareProtocol(typing.Protocol):
     def __init__(
         self,
         *,
-        tracer_provider: TracerProvider | None = None,
-        meter_provider: MeterProvider | None = None,
-        meter: Meter | None = None,
+        tracer_provider: typing.Optional["TracerProvider"] = None,
+        meter_provider: typing.Optional["MeterProvider"] = None,
+        meter: typing.Optional["Meter"] = None,
     ) -> None: ...
-    def __call__(self, msg: typing.Any | None) -> faststream.BaseMiddleware: ...  # noqa: ANN401
+    def __call__(self, msg: typing.Any | None) -> "faststream.BaseMiddleware": ...  # noqa: ANN401
 
 
 @typing.runtime_checkable
@@ -42,12 +42,12 @@ class FastStreamPrometheusMiddlewareProtocol(typing.Protocol):
     def __init__(
         self,
         *,
-        registry: prometheus_client.CollectorRegistry,
+        registry: "prometheus_client.CollectorRegistry",
         app_name: str = ...,
         metrics_prefix: str = "faststream",
         received_messages_size_buckets: typing.Sequence[float] | None = None,
     ) -> None: ...
-    def __call__(self, msg: typing.Any | None) -> faststream.BaseMiddleware: ...  # noqa: ANN401
+    def __call__(self, msg: typing.Any | None) -> "faststream.BaseMiddleware": ...  # noqa: ANN401
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
