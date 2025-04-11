@@ -1,9 +1,9 @@
 from __future__ import annotations
-import contextlib
 import dataclasses
 import json
 import typing
 
+from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
 from lite_bootstrap.instruments.healthchecks_instrument import HealthChecksConfig, HealthChecksInstrument
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument
@@ -12,12 +12,16 @@ from lite_bootstrap.instruments.prometheus_instrument import PrometheusConfig, P
 from lite_bootstrap.instruments.sentry_instrument import SentryConfig, SentryInstrument
 
 
-with contextlib.suppress(ImportError):
+if import_checker.is_faststream_installed:
     import faststream
-    import prometheus_client
     from faststream.asgi import AsgiFastStream, AsgiResponse
     from faststream.asgi import get as handle_get
     from faststream.broker.core.usecase import BrokerUsecase
+
+if import_checker.is_prometheus_client_installed:
+    import prometheus_client
+
+if import_checker.is_opentelemetry_installed:
     from opentelemetry.metrics import Meter, MeterProvider
     from opentelemetry.trace import TracerProvider, get_tracer_provider
 
@@ -87,9 +91,10 @@ class FastStreamLoggingInstrument(LoggingInstrument):
 @dataclasses.dataclass(kw_only=True, frozen=True)
 class FastStreamOpenTelemetryInstrument(OpenTelemetryInstrument):
     bootstrap_config: FastStreamConfig
+    not_ready_message = OpenTelemetryInstrument.not_ready_message + " or opentelemetry_middleware_cls is empty"
 
     def is_ready(self) -> bool:
-        return bool(self.bootstrap_config.opentelemetry_middleware_cls and super().is_ready())
+        return super().is_ready() and bool(self.bootstrap_config.opentelemetry_middleware_cls)
 
     def bootstrap(self) -> None:
         if self.bootstrap_config.opentelemetry_middleware_cls and self.bootstrap_config.application.broker:
@@ -109,9 +114,18 @@ class FastStreamPrometheusInstrument(PrometheusInstrument):
     collector_registry: prometheus_client.CollectorRegistry = dataclasses.field(
         default_factory=prometheus_client.CollectorRegistry, init=False
     )
+    not_ready_message = (
+        PrometheusInstrument.not_ready_message
+        + " or prometheus_middleware_cls is missing or prometheus_client is not installed"
+    )
 
     def is_ready(self) -> bool:
-        return bool(self.bootstrap_config.prometheus_middleware_cls and super().is_ready())
+        return (
+            super().is_ready()
+            and import_checker.is_prometheus_client_installed
+            and bool(self.bootstrap_config.prometheus_middleware_cls)
+            and import_checker.is_prometheus_client_installed
+        )
 
     def bootstrap(self) -> None:
         self.bootstrap_config.application.mount(
@@ -124,6 +138,8 @@ class FastStreamPrometheusInstrument(PrometheusInstrument):
 
 
 class FastStreamBootstrapper(BaseBootstrapper[AsgiFastStream]):
+    __slots__ = "bootstrap_config", "instruments"
+
     instruments_types: typing.ClassVar = [
         FastStreamOpenTelemetryInstrument,
         FastStreamSentryInstrument,
@@ -132,7 +148,10 @@ class FastStreamBootstrapper(BaseBootstrapper[AsgiFastStream]):
         FastStreamPrometheusInstrument,
     ]
     bootstrap_config: FastStreamConfig
-    __slots__ = "bootstrap_config", "instruments"
+    not_ready_message = "faststream is not installed"
+
+    def is_ready(self) -> bool:
+        return import_checker.is_faststream_installed
 
     def __init__(self, bootstrap_config: FastStreamConfig) -> None:
         super().__init__(bootstrap_config)

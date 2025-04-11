@@ -1,9 +1,10 @@
-import contextlib
 import dataclasses
 import logging
 import logging.handlers
+import sys
 import typing
 
+from lite_bootstrap import import_checker
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 
 
@@ -11,7 +12,7 @@ if typing.TYPE_CHECKING:
     from structlog.typing import EventDict, WrappedLogger
 
 
-with contextlib.suppress(ImportError):
+if import_checker.is_structlog_installed:
     import structlog
 
 
@@ -46,20 +47,6 @@ def tracer_injection(_: "WrappedLogger", __: str, event_dict: "EventDict") -> "E
         "trace_id": trace.format_trace_id(current_span_context.trace_id),
     }
     return event_dict
-
-
-DEFAULT_STRUCTLOG_PROCESSORS: typing.Final[list[typing.Any]] = [
-    structlog.stdlib.filter_by_level,
-    structlog.stdlib.add_log_level,
-    structlog.stdlib.add_logger_name,
-    tracer_injection,
-    structlog.stdlib.PositionalArgumentsFormatter(),
-    structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S"),
-    structlog.processors.StackInfoRenderer(),
-    structlog.processors.format_exc_info,
-    structlog.processors.UnicodeDecoder(),
-]
-DEFAULT_STRUCTLOG_FORMATTER_PROCESSOR: typing.Final = structlog.processors.JSONRenderer()
 
 
 class MemoryLoggerFactory(structlog.stdlib.LoggerFactory):
@@ -106,19 +93,35 @@ class LoggingConfig(BaseConfig):
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class LoggingInstrument(BaseInstrument):
     bootstrap_config: LoggingConfig
+    not_ready_message = "service_debug is True or structlog is not installed"
 
     def is_ready(self) -> bool:
-        return not self.bootstrap_config.service_debug
+        return not self.bootstrap_config.service_debug and import_checker.is_structlog_installed
 
     def bootstrap(self) -> None:
+        # Configure basic logging to allow structlog to catch its events
+        logging.basicConfig(
+            format="%(message)s",
+            stream=sys.stdout,
+            level=logging.INFO,
+        )
+
         for unset_handlers_logger in self.bootstrap_config.logging_unset_handlers:
             logging.getLogger(unset_handlers_logger).handlers = []
 
         structlog.configure(
             processors=[
-                *DEFAULT_STRUCTLOG_PROCESSORS,
+                structlog.stdlib.filter_by_level,
+                structlog.stdlib.add_log_level,
+                structlog.stdlib.add_logger_name,
+                tracer_injection,
+                structlog.stdlib.PositionalArgumentsFormatter(),
+                structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S"),
+                structlog.processors.StackInfoRenderer(),
+                structlog.processors.format_exc_info,
+                structlog.processors.UnicodeDecoder(),
                 *self.bootstrap_config.logging_extra_processors,
-                DEFAULT_STRUCTLOG_FORMATTER_PROCESSOR,
+                structlog.processors.JSONRenderer(),
             ],
             context_class=dict,
             logger_factory=MemoryLoggerFactory(

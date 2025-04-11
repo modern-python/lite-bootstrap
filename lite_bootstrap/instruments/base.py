@@ -14,6 +14,10 @@ class BaseConfig:
 class BaseInstrument(abc.ABC):
     bootstrap_config: BaseConfig
 
+    @property
+    @abc.abstractmethod
+    def not_ready_message(self) -> str: ...
+
     def bootstrap(self) -> None: ...  # noqa: B027
 
     def teardown(self) -> None: ...  # noqa: B027

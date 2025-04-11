@@ -12,13 +12,18 @@ class FreeBootstrapperConfig(LoggingConfig, OpentelemetryConfig, SentryConfig): 
 
 
 class FreeBootstrapper(BaseBootstrapper[None]):
+    __slots__ = "bootstrap_config", "instruments"
+
     instruments_types: typing.ClassVar = [
         OpenTelemetryInstrument,
         SentryInstrument,
         LoggingInstrument,
     ]
     bootstrap_config: FreeBootstrapperConfig
-    __slots__ = "bootstrap_config", "instruments"
+    not_ready_message = ""
+
+    def is_ready(self) -> bool:
+        return True
 
     def __init__(self, bootstrap_config: FreeBootstrapperConfig) -> None:
         super().__init__(bootstrap_config)
