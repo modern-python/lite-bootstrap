@@ -21,6 +21,7 @@ class HealthChecksConfig(BaseConfig):
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class HealthChecksInstrument(BaseInstrument):
     bootstrap_config: HealthChecksConfig
+    not_ready_message = "health_checks_enabled is False"
 
     def is_ready(self) -> bool:
         return self.bootstrap_config.health_checks_enabled

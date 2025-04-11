@@ -1,22 +1,26 @@
-import contextlib
 import dataclasses
 import typing
 
+from lite_bootstrap import import_checker
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 
 
-with contextlib.suppress(ImportError):
-    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+if typing.TYPE_CHECKING:
     from opentelemetry.instrumentation.instrumentor import BaseInstrumentor  # type: ignore[attr-defined]
+    from opentelemetry.sdk.trace.export import SpanExporter
+
+
+if import_checker.is_opentelemetry_installed:
+    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
     from opentelemetry.sdk import resources
     from opentelemetry.sdk.trace import TracerProvider
-    from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
     from opentelemetry.trace import set_tracer_provider
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class InstrumentorWithParams:
-    instrumentor: BaseInstrumentor
+    instrumentor: "BaseInstrumentor"
     additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
 
 
@@ -27,18 +31,19 @@ class OpentelemetryConfig(BaseConfig):
     opentelemetry_endpoint: str | None = None
     opentelemetry_namespace: str | None = None
     opentelemetry_insecure: bool = True
-    opentelemetry_instrumentors: list[InstrumentorWithParams | BaseInstrumentor] = dataclasses.field(
+    opentelemetry_instrumentors: list[typing.Union[InstrumentorWithParams, "BaseInstrumentor"]] = dataclasses.field(
         default_factory=list
     )
-    opentelemetry_span_exporter: SpanExporter | None = None
+    opentelemetry_span_exporter: typing.Optional["SpanExporter"] = None
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class OpenTelemetryInstrument(BaseInstrument):
     bootstrap_config: OpentelemetryConfig
+    not_ready_message = "opentelemetry_endpoint is empty or opentelemetry is not installed"
 
     def is_ready(self) -> bool:
-        return bool(self.bootstrap_config.opentelemetry_endpoint)
+        return bool(self.bootstrap_config.opentelemetry_endpoint) and import_checker.is_opentelemetry_installed
 
     def bootstrap(self) -> None:
         attributes = {

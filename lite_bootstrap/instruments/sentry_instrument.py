@@ -1,13 +1,16 @@
-import contextlib
 import dataclasses
 import typing
 
+from lite_bootstrap import import_checker
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 
 
-with contextlib.suppress(ImportError):
-    import sentry_sdk
+if typing.TYPE_CHECKING:
     from sentry_sdk.integrations import Integration
+
+
+if import_checker.is_sentry_installed:
+    import sentry_sdk
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
@@ -18,7 +21,7 @@ class SentryConfig(BaseConfig):
     sentry_max_breadcrumbs: int = 15
     sentry_max_value_length: int = 16384
     sentry_attach_stacktrace: bool = True
-    sentry_integrations: list[Integration] = dataclasses.field(default_factory=list)
+    sentry_integrations: list["Integration"] = dataclasses.field(default_factory=list)
     sentry_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     sentry_tags: dict[str, str] | None = None
 
@@ -26,9 +29,10 @@ class SentryConfig(BaseConfig):
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class SentryInstrument(BaseInstrument):
     bootstrap_config: SentryConfig
+    not_ready_message = "sentry_dsn is empty or sentry_sdk is not installed"
 
     def is_ready(self) -> bool:
-        return bool(self.bootstrap_config.sentry_dsn)
+        return bool(self.bootstrap_config.sentry_dsn) and import_checker.is_sentry_installed
 
     def bootstrap(self) -> None:
         sentry_sdk.init(

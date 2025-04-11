@@ -1,9 +1,7 @@
-import contextlib
 import dataclasses
 import typing
 
-from litestar.plugins.prometheus import PrometheusConfig, PrometheusController
-
+from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
 from lite_bootstrap.instruments.healthchecks_instrument import (
     HealthChecksConfig,
@@ -21,10 +19,13 @@ from lite_bootstrap.instruments.prometheus_instrument import (
 from lite_bootstrap.instruments.sentry_instrument import SentryConfig, SentryInstrument
 
 
-with contextlib.suppress(ImportError):
+if import_checker.is_litestar_installed:
     import litestar
     from litestar.config.app import AppConfig
     from litestar.contrib.opentelemetry import OpenTelemetryConfig
+    from litestar.plugins.prometheus import PrometheusConfig, PrometheusController
+
+if import_checker.is_opentelemetry_installed:
     from opentelemetry.trace import get_tracer_provider
 
 
@@ -32,7 +33,7 @@ with contextlib.suppress(ImportError):
 class LitestarConfig(
     HealthChecksConfig, LoggingConfig, OpentelemetryConfig, PrometheusBootstrapperConfig, SentryConfig
 ):
-    application_config: AppConfig = dataclasses.field(default_factory=AppConfig)
+    application_config: "AppConfig" = dataclasses.field(default_factory=AppConfig)
     opentelemetry_excluded_urls: list[str] = dataclasses.field(default_factory=list)
     prometheus_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
 
@@ -41,7 +42,7 @@ class LitestarConfig(
 class LitestarHealthChecksInstrument(HealthChecksInstrument):
     bootstrap_config: LitestarConfig
 
-    def build_litestar_health_check_router(self) -> litestar.Router:
+    def build_litestar_health_check_router(self) -> "litestar.Router":
         @litestar.get(media_type=litestar.MediaType.JSON)
         async def health_check_handler() -> HealthCheckTypedDict:
             return self.render_health_check_data()
@@ -91,6 +92,10 @@ class LitestarSentryInstrument(SentryInstrument):
 @dataclasses.dataclass(kw_only=True, frozen=True)
 class LitestarPrometheusInstrument(PrometheusInstrument):
     bootstrap_config: LitestarConfig
+    not_ready_message = PrometheusInstrument.not_ready_message + " or prometheus_client is not installed"
+
+    def is_ready(self) -> bool:
+        return super().is_ready() and import_checker.is_prometheus_client_installed
 
     def bootstrap(self) -> None:
         class LitestarPrometheusController(PrometheusController):
@@ -108,6 +113,8 @@ class LitestarPrometheusInstrument(PrometheusInstrument):
 
 
 class LitestarBootstrapper(BaseBootstrapper[litestar.Litestar]):
+    __slots__ = "bootstrap_config", "instruments"
+
     instruments_types: typing.ClassVar = [
         LitestarOpenTelemetryInstrument,
         LitestarSentryInstrument,
@@ -116,7 +123,10 @@ class LitestarBootstrapper(BaseBootstrapper[litestar.Litestar]):
         LitestarPrometheusInstrument,
     ]
     bootstrap_config: LitestarConfig
-    __slots__ = "bootstrap_config", "instruments"
+    not_ready_message = "litestar is not installed"
+
+    def is_ready(self) -> bool:
+        return import_checker.is_litestar_installed
 
     def __init__(self, bootstrap_config: LitestarConfig) -> None:
         super().__init__(bootstrap_config)

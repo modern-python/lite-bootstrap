@@ -1,7 +1,7 @@
-import contextlib
 import dataclasses
 import typing
 
+from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
 from lite_bootstrap.instruments.healthchecks_instrument import (
     HealthChecksConfig,
@@ -14,16 +14,20 @@ from lite_bootstrap.instruments.prometheus_instrument import PrometheusConfig, P
 from lite_bootstrap.instruments.sentry_instrument import SentryConfig, SentryInstrument
 
 
-with contextlib.suppress(ImportError):
+if import_checker.is_fastapi_installed:
     import fastapi
+
+if import_checker.is_opentelemetry_installed:
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
     from opentelemetry.trace import get_tracer_provider
+
+if import_checker.is_prometheus_fastapi_instrumentator_installed:
     from prometheus_fastapi_instrumentator import Instrumentator
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class FastAPIConfig(HealthChecksConfig, LoggingConfig, OpentelemetryConfig, PrometheusConfig, SentryConfig):
-    application: fastapi.FastAPI = dataclasses.field(default_factory=fastapi.FastAPI)
+    application: "fastapi.FastAPI" = dataclasses.field(default_factory=fastapi.FastAPI)
     opentelemetry_excluded_urls: list[str] = dataclasses.field(default_factory=list)
     prometheus_instrumentator_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     prometheus_instrument_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
@@ -34,7 +38,7 @@ class FastAPIConfig(HealthChecksConfig, LoggingConfig, OpentelemetryConfig, Prom
 class FastAPIHealthChecksInstrument(HealthChecksInstrument):
     bootstrap_config: FastAPIConfig
 
-    def build_fastapi_health_check_router(self) -> fastapi.APIRouter:
+    def build_fastapi_health_check_router(self) -> "fastapi.APIRouter":
         fastapi_router = fastapi.APIRouter(
             tags=["probes"],
             include_in_schema=self.bootstrap_config.health_checks_include_in_schema,
@@ -87,6 +91,12 @@ class FastAPISentryInstrument(SentryInstrument):
 @dataclasses.dataclass(kw_only=True, frozen=True)
 class FastAPIPrometheusInstrument(PrometheusInstrument):
     bootstrap_config: FastAPIConfig
+    not_ready_message = (
+        PrometheusInstrument.not_ready_message + " or prometheus_fastapi_instrumentator is not installed"
+    )
+
+    def is_ready(self) -> bool:
+        return super().is_ready() and import_checker.is_prometheus_fastapi_instrumentator_installed
 
     def bootstrap(self) -> None:
         Instrumentator(**self.bootstrap_config.prometheus_instrument_params).instrument(
@@ -101,6 +111,8 @@ class FastAPIPrometheusInstrument(PrometheusInstrument):
 
 
 class FastAPIBootstrapper(BaseBootstrapper[fastapi.FastAPI]):
+    __slots__ = "bootstrap_config", "instruments"
+
     instruments_types: typing.ClassVar = [
         FastAPIOpenTelemetryInstrument,
         FastAPISentryInstrument,
@@ -109,7 +121,10 @@ class FastAPIBootstrapper(BaseBootstrapper[fastapi.FastAPI]):
         FastAPIPrometheusInstrument,
     ]
     bootstrap_config: FastAPIConfig
-    __slots__ = "bootstrap_config", "instruments"
+    not_ready_message = "fastapi is not installed"
+
+    def is_ready(self) -> bool:
+        return import_checker.is_fastapi_installed
 
     def _prepare_application(self) -> fastapi.FastAPI:
         return self.bootstrap_config.application
