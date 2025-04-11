@@ -110,8 +110,8 @@ class FastStreamSentryInstrument(SentryInstrument):
 @dataclasses.dataclass(kw_only=True, frozen=True)
 class FastStreamPrometheusInstrument(PrometheusInstrument):
     bootstrap_config: FastStreamConfig
-    collector_registry: prometheus_client.CollectorRegistry = dataclasses.field(
-        default_factory=prometheus_client.CollectorRegistry, init=False
+    collector_registry: "prometheus_client.CollectorRegistry" = dataclasses.field(
+        default_factory=lambda: prometheus_client.CollectorRegistry(), init=False
     )
     not_ready_message = (
         PrometheusInstrument.not_ready_message
