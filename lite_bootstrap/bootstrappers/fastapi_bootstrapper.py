@@ -27,7 +27,7 @@ if import_checker.is_prometheus_fastapi_instrumentator_installed:
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class FastAPIConfig(HealthChecksConfig, LoggingConfig, OpentelemetryConfig, PrometheusConfig, SentryConfig):
-    application: "fastapi.FastAPI" = dataclasses.field(default_factory=fastapi.FastAPI)
+    application: "fastapi.FastAPI" = dataclasses.field(default_factory=lambda: fastapi.FastAPI())
     opentelemetry_excluded_urls: list[str] = dataclasses.field(default_factory=list)
     prometheus_instrumentator_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     prometheus_instrument_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)

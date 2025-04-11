@@ -33,7 +33,7 @@ if import_checker.is_opentelemetry_installed:
 class LitestarConfig(
     HealthChecksConfig, LoggingConfig, OpentelemetryConfig, PrometheusBootstrapperConfig, SentryConfig
 ):
-    application_config: "AppConfig" = dataclasses.field(default_factory=AppConfig)
+    application_config: "AppConfig" = dataclasses.field(default_factory=lambda: AppConfig())
     opentelemetry_excluded_urls: list[str] = dataclasses.field(default_factory=list)
     prometheus_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
 
