@@ -123,6 +123,12 @@ class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI"]):
     bootstrap_config: FastAPIConfig
     not_ready_message = "fastapi is not installed"
 
+    def __init__(self, bootstrap_config: FastAPIConfig) -> None:
+        super().__init__(bootstrap_config)
+        self.bootstrap_config.application.title = bootstrap_config.service_name
+        self.bootstrap_config.application.debug = bootstrap_config.service_debug
+        self.bootstrap_config.application.version = bootstrap_config.service_version
+
     def is_ready(self) -> bool:
         return import_checker.is_fastapi_installed
 

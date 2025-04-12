@@ -128,8 +128,5 @@ class LitestarBootstrapper(BaseBootstrapper["litestar.Litestar"]):
     def is_ready(self) -> bool:
         return import_checker.is_litestar_installed
 
-    def __init__(self, bootstrap_config: LitestarConfig) -> None:
-        super().__init__(bootstrap_config)
-
     def _prepare_application(self) -> "litestar.Litestar":
         return litestar.Litestar.from_config(self.bootstrap_config.application_config)
