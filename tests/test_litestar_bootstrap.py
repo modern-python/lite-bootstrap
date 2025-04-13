@@ -19,12 +19,13 @@ def litestar_config() -> LitestarConfig:
         service_environment="test",
         service_debug=False,
         cors_allowed_origins=["http://test"],
+        health_checks_path="/custom-health/",
         opentelemetry_endpoint="otl",
         opentelemetry_instrumentors=[CustomInstrumentor()],
         opentelemetry_span_exporter=ConsoleSpanExporter(),
         prometheus_metrics_path="/custom-metrics/",
         sentry_dsn="https://testdsn@localhost/1",
-        health_checks_path="/custom-health/",
+        swagger_offline_docs=True,
         logging_buffer_capacity=0,
     )
 
@@ -51,6 +52,11 @@ def test_litestar_bootstrap(litestar_config: LitestarConfig) -> None:
             response = test_client.get(litestar_config.prometheus_metrics_path)
             assert response.status_code == status_codes.HTTP_200_OK
             assert response.text
+
+            response = test_client.get(litestar_config.swagger_path)
+            assert response.status_code == status_codes.HTTP_200_OK
+            response = test_client.get(f"{litestar_config.service_static_path}/swagger-ui.css")
+            assert response.status_code == status_codes.HTTP_200_OK
     finally:
         bootstrapper.teardown()
 

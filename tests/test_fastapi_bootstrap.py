@@ -19,13 +19,14 @@ def fastapi_config() -> FastAPIConfig:
         service_environment="test",
         service_debug=False,
         cors_allowed_origins=["http://test"],
+        health_checks_path="/custom-health/",
+        logging_buffer_capacity=0,
         opentelemetry_endpoint="otl",
         opentelemetry_instrumentors=[CustomInstrumentor()],
         opentelemetry_span_exporter=ConsoleSpanExporter(),
         prometheus_metrics_path="/custom-metrics/",
         sentry_dsn="https://testdsn@localhost/1",
-        health_checks_path="/custom-health/",
-        logging_buffer_capacity=0,
+        swagger_offline_docs=True,
     )
 
 
@@ -42,6 +43,14 @@ def test_fastapi_bootstrap(fastapi_config: FastAPIConfig) -> None:
         assert response.json() == {"health_status": True, "service_name": "microservice", "service_version": "2.0.0"}
 
         response = test_client.get(fastapi_config.prometheus_metrics_path)
+        assert response.status_code == status.HTTP_200_OK
+        assert response.text
+
+        response = test_client.get(fastapi_config.swagger_path)
+        assert response.status_code == status.HTTP_200_OK
+        assert response.text
+
+        response = test_client.get(str(application.redoc_url))
         assert response.status_code == status.HTTP_200_OK
         assert response.text
     finally:

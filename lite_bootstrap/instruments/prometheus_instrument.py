@@ -1,15 +1,7 @@
 import dataclasses
-import re
-import typing
 
+from lite_bootstrap.helpers import is_valid_path
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
-
-
-VALID_PATH_PATTERN: typing.Final = re.compile(r"^(/[a-zA-Z0-9_-]+)+/?$")
-
-
-def _is_valid_path(maybe_path: str) -> bool:
-    return bool(re.fullmatch(VALID_PATH_PATTERN, maybe_path))
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
@@ -24,6 +16,6 @@ class PrometheusInstrument(BaseInstrument):
     not_ready_message = "prometheus_metrics_path is empty or not valid"
 
     def is_ready(self) -> bool:
-        return bool(self.bootstrap_config.prometheus_metrics_path) and _is_valid_path(
+        return bool(self.bootstrap_config.prometheus_metrics_path) and is_valid_path(
             self.bootstrap_config.prometheus_metrics_path
         )

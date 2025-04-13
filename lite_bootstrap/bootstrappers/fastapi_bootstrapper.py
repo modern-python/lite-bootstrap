@@ -3,6 +3,7 @@ import typing
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
+from lite_bootstrap.fastapi_offline_docs.main import enable_offline_docs
 from lite_bootstrap.instruments.cors_instrument import CorsConfig, CorsInstrument
 from lite_bootstrap.instruments.healthchecks_instrument import (
     HealthChecksConfig,
@@ -13,6 +14,7 @@ from lite_bootstrap.instruments.logging_instrument import LoggingConfig, Logging
 from lite_bootstrap.instruments.opentelemetry_instrument import OpentelemetryConfig, OpenTelemetryInstrument
 from lite_bootstrap.instruments.prometheus_instrument import PrometheusConfig, PrometheusInstrument
 from lite_bootstrap.instruments.sentry_instrument import SentryConfig, SentryInstrument
+from lite_bootstrap.instruments.swagger_instrument import SwaggerConfig, SwaggerInstrument
 
 
 if import_checker.is_fastapi_installed:
@@ -28,7 +30,9 @@ if import_checker.is_prometheus_fastapi_instrumentator_installed:
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
-class FastAPIConfig(CorsConfig, HealthChecksConfig, LoggingConfig, OpentelemetryConfig, PrometheusConfig, SentryConfig):
+class FastAPIConfig(
+    CorsConfig, HealthChecksConfig, LoggingConfig, OpentelemetryConfig, PrometheusConfig, SentryConfig, SwaggerConfig
+):
     application: "fastapi.FastAPI" = dataclasses.field(default_factory=lambda: fastapi.FastAPI())
     opentelemetry_excluded_urls: list[str] = dataclasses.field(default_factory=list)
     prometheus_instrumentator_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
@@ -129,6 +133,18 @@ class FastAPIPrometheusInstrument(PrometheusInstrument):
         )
 
 
+@dataclasses.dataclass(kw_only=True, frozen=True)
+class FastApiSwaggerInstrument(SwaggerInstrument):
+    bootstrap_config: FastAPIConfig
+
+    def bootstrap(self) -> None:
+        self.bootstrap_config.application.docs_url = self.bootstrap_config.swagger_path
+        if self.bootstrap_config.swagger_offline_docs:
+            enable_offline_docs(
+                self.bootstrap_config.application, static_files_handler=self.bootstrap_config.service_static_path
+            )
+
+
 class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI"]):
     __slots__ = "bootstrap_config", "instruments"
 
@@ -139,6 +155,7 @@ class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI"]):
         FastAPIHealthChecksInstrument,
         FastAPILoggingInstrument,
         FastAPIPrometheusInstrument,
+        FastApiSwaggerInstrument,
     ]
     bootstrap_config: FastAPIConfig
     not_ready_message = "fastapi is not installed"
