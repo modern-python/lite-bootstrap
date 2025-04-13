@@ -1,4 +1,3 @@
-from __future__ import annotations
 import dataclasses
 
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
