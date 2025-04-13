@@ -1,4 +1,5 @@
 import dataclasses
+import pathlib
 import typing
 
 from lite_bootstrap import import_checker
@@ -18,6 +19,7 @@ from lite_bootstrap.instruments.prometheus_instrument import (
     PrometheusInstrument,
 )
 from lite_bootstrap.instruments.sentry_instrument import SentryConfig, SentryInstrument
+from lite_bootstrap.instruments.swagger_instrument import SwaggerConfig, SwaggerInstrument
 
 
 if import_checker.is_litestar_installed:
@@ -25,7 +27,10 @@ if import_checker.is_litestar_installed:
     from litestar.config.app import AppConfig
     from litestar.config.cors import CORSConfig
     from litestar.contrib.opentelemetry import OpenTelemetryConfig
+    from litestar.openapi import OpenAPIConfig
+    from litestar.openapi.plugins import SwaggerRenderPlugin
     from litestar.plugins.prometheus import PrometheusConfig, PrometheusController
+    from litestar.static_files import create_static_files_router
 
 if import_checker.is_opentelemetry_installed:
     from opentelemetry.trace import get_tracer_provider
@@ -33,7 +38,13 @@ if import_checker.is_opentelemetry_installed:
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class LitestarConfig(
-    CorsConfig, HealthChecksConfig, LoggingConfig, OpentelemetryConfig, PrometheusBootstrapperConfig, SentryConfig
+    CorsConfig,
+    HealthChecksConfig,
+    LoggingConfig,
+    OpentelemetryConfig,
+    PrometheusBootstrapperConfig,
+    SentryConfig,
+    SwaggerConfig,
 ):
     application_config: "AppConfig" = dataclasses.field(default_factory=lambda: AppConfig())
     opentelemetry_excluded_urls: list[str] = dataclasses.field(default_factory=list)
@@ -130,6 +141,41 @@ class LitestarPrometheusInstrument(PrometheusInstrument):
         self.bootstrap_config.application_config.middleware.append(litestar_prometheus_config.middleware)
 
 
+@dataclasses.dataclass(kw_only=True, frozen=True)
+class LitestarSwaggerInstrument(SwaggerInstrument):
+    bootstrap_config: LitestarConfig
+
+    def bootstrap(self) -> None:
+        render_plugins: typing.Final = (
+            (
+                SwaggerRenderPlugin(
+                    js_url=f"{self.bootstrap_config.service_static_path}/swagger-ui-bundle.js",
+                    css_url=f"{self.bootstrap_config.service_static_path}/swagger-ui.css",
+                    standalone_preset_js_url=(
+                        f"{self.bootstrap_config.service_static_path}/swagger-ui-standalone-preset.js"
+                    ),
+                ),
+            )
+            if self.bootstrap_config.swagger_offline_docs
+            else (SwaggerRenderPlugin(),)
+        )
+        self.bootstrap_config.application_config.openapi_config = OpenAPIConfig(
+            path=self.bootstrap_config.swagger_path,
+            title=self.bootstrap_config.service_name,
+            version=self.bootstrap_config.service_version,
+            description=self.bootstrap_config.service_description,
+            render_plugins=render_plugins,
+            **self.bootstrap_config.swagger_extra_params,
+        )
+        if self.bootstrap_config.swagger_offline_docs:
+            static_dir_path = pathlib.Path(__file__).parent.parent / "litestar_swagger_static"
+            self.bootstrap_config.application_config.route_handlers.append(
+                create_static_files_router(
+                    path=self.bootstrap_config.service_static_path, directories=[static_dir_path]
+                )
+            )
+
+
 class LitestarBootstrapper(BaseBootstrapper["litestar.Litestar"]):
     __slots__ = "bootstrap_config", "instruments"
 
@@ -140,6 +186,7 @@ class LitestarBootstrapper(BaseBootstrapper["litestar.Litestar"]):
         LitestarHealthChecksInstrument,
         LitestarLoggingInstrument,
         LitestarPrometheusInstrument,
+        LitestarSwaggerInstrument,
     ]
     bootstrap_config: LitestarConfig
     not_ready_message = "litestar is not installed"
