@@ -3,6 +3,7 @@ import typing
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
+from lite_bootstrap.instruments.cors_instrument import CorsConfig, CorsInstrument
 from lite_bootstrap.instruments.healthchecks_instrument import (
     HealthChecksConfig,
     HealthChecksInstrument,
@@ -16,6 +17,7 @@ from lite_bootstrap.instruments.sentry_instrument import SentryConfig, SentryIns
 
 if import_checker.is_fastapi_installed:
     import fastapi
+    from fastapi.middleware.cors import CORSMiddleware
 
 if import_checker.is_opentelemetry_installed:
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
@@ -26,12 +28,29 @@ if import_checker.is_prometheus_fastapi_instrumentator_installed:
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
-class FastAPIConfig(HealthChecksConfig, LoggingConfig, OpentelemetryConfig, PrometheusConfig, SentryConfig):
+class FastAPIConfig(CorsConfig, HealthChecksConfig, LoggingConfig, OpentelemetryConfig, PrometheusConfig, SentryConfig):
     application: "fastapi.FastAPI" = dataclasses.field(default_factory=lambda: fastapi.FastAPI())
     opentelemetry_excluded_urls: list[str] = dataclasses.field(default_factory=list)
     prometheus_instrumentator_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     prometheus_instrument_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     prometheus_expose_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
+
+
+@dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
+class FastApiCorsInstrument(CorsInstrument):
+    bootstrap_config: FastAPIConfig
+
+    def bootstrap(self) -> None:
+        self.bootstrap_config.application.add_middleware(
+            CORSMiddleware,
+            allow_origins=self.bootstrap_config.cors_allowed_origins,
+            allow_methods=self.bootstrap_config.cors_allowed_methods,
+            allow_headers=self.bootstrap_config.cors_allowed_headers,
+            allow_credentials=self.bootstrap_config.cors_allowed_credentials,
+            allow_origin_regex=self.bootstrap_config.cors_allowed_origin_regex,
+            expose_headers=self.bootstrap_config.cors_exposed_headers,
+            max_age=self.bootstrap_config.cors_max_age,
+        )
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
@@ -114,6 +133,7 @@ class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI"]):
     __slots__ = "bootstrap_config", "instruments"
 
     instruments_types: typing.ClassVar = [
+        FastApiCorsInstrument,
         FastAPIOpenTelemetryInstrument,
         FastAPISentryInstrument,
         FastAPIHealthChecksInstrument,

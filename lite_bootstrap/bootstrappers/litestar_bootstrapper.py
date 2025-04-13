@@ -3,6 +3,7 @@ import typing
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
+from lite_bootstrap.instruments.cors_instrument import CorsConfig, CorsInstrument
 from lite_bootstrap.instruments.healthchecks_instrument import (
     HealthChecksConfig,
     HealthChecksInstrument,
@@ -22,6 +23,7 @@ from lite_bootstrap.instruments.sentry_instrument import SentryConfig, SentryIns
 if import_checker.is_litestar_installed:
     import litestar
     from litestar.config.app import AppConfig
+    from litestar.config.cors import CORSConfig
     from litestar.contrib.opentelemetry import OpenTelemetryConfig
     from litestar.plugins.prometheus import PrometheusConfig, PrometheusController
 
@@ -31,11 +33,27 @@ if import_checker.is_opentelemetry_installed:
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class LitestarConfig(
-    HealthChecksConfig, LoggingConfig, OpentelemetryConfig, PrometheusBootstrapperConfig, SentryConfig
+    CorsConfig, HealthChecksConfig, LoggingConfig, OpentelemetryConfig, PrometheusBootstrapperConfig, SentryConfig
 ):
     application_config: "AppConfig" = dataclasses.field(default_factory=lambda: AppConfig())
     opentelemetry_excluded_urls: list[str] = dataclasses.field(default_factory=list)
     prometheus_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
+
+
+@dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
+class LitestarCorsInstrument(CorsInstrument):
+    bootstrap_config: LitestarConfig
+
+    def bootstrap(self) -> None:
+        self.bootstrap_config.application_config.cors_config = CORSConfig(
+            allow_origins=self.bootstrap_config.cors_allowed_origins,
+            allow_methods=self.bootstrap_config.cors_allowed_methods,  # type: ignore[arg-type]
+            allow_headers=self.bootstrap_config.cors_allowed_headers,
+            allow_credentials=self.bootstrap_config.cors_allowed_credentials,
+            allow_origin_regex=self.bootstrap_config.cors_allowed_origin_regex,
+            expose_headers=self.bootstrap_config.cors_exposed_headers,
+            max_age=self.bootstrap_config.cors_max_age,
+        )
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
@@ -116,6 +134,7 @@ class LitestarBootstrapper(BaseBootstrapper["litestar.Litestar"]):
     __slots__ = "bootstrap_config", "instruments"
 
     instruments_types: typing.ClassVar = [
+        LitestarCorsInstrument,
         LitestarOpenTelemetryInstrument,
         LitestarSentryInstrument,
         LitestarHealthChecksInstrument,

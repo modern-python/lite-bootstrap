@@ -18,6 +18,7 @@ def fastapi_config() -> FastAPIConfig:
         service_version="2.0.0",
         service_environment="test",
         service_debug=False,
+        cors_allowed_origins=["http://test"],
         opentelemetry_endpoint="otl",
         opentelemetry_instrumentors=[CustomInstrumentor()],
         opentelemetry_span_exporter=ConsoleSpanExporter(),
