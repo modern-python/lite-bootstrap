@@ -18,6 +18,7 @@ def litestar_config() -> LitestarConfig:
         service_version="2.0.0",
         service_environment="test",
         service_debug=False,
+        cors_allowed_origins=["http://test"],
         opentelemetry_endpoint="otl",
         opentelemetry_instrumentors=[CustomInstrumentor()],
         opentelemetry_span_exporter=ConsoleSpanExporter(),
@@ -34,6 +35,9 @@ def test_litestar_bootstrap(litestar_config: LitestarConfig) -> None:
 
     try:
         logger.info("testing logging", key="value")
+
+        assert application.cors_config
+        assert application.cors_config.allow_origins == litestar_config.cors_allowed_origins
 
         with TestClient(app=application) as test_client:
             response = test_client.get(litestar_config.health_checks_path)
