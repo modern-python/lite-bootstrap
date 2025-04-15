@@ -1,3 +1,9 @@
+import asyncio
+import contextlib
+import dataclasses
+import typing
+
+import fastapi
 import pytest
 import structlog
 from opentelemetry.sdk.trace.export import ConsoleSpanExporter
@@ -76,3 +82,21 @@ def test_fastapi_bootstrapper_with_missing_instrument_dependency(
 ) -> None:
     with emulate_package_missing(package_name), pytest.warns(UserWarning, match=package_name):
         FastAPIBootstrapper(bootstrap_config=fastapi_config)
+
+
+def test_fastapi_bootstrap_lifespan(fastapi_config: FastAPIConfig) -> None:
+    @contextlib.asynccontextmanager
+    async def lifespan_manager(_: fastapi.FastAPI) -> typing.AsyncIterator[dict[str, typing.Any]]:
+        try:
+            yield {}
+        finally:
+            await asyncio.sleep(0)
+
+    fastapi_config = dataclasses.replace(fastapi_config, application=fastapi.FastAPI(lifespan=lifespan_manager))
+    bootstrapper = FastAPIBootstrapper(bootstrap_config=fastapi_config)
+    application = bootstrapper.bootstrap()
+
+    with TestClient(application) as test_client:
+        response = test_client.get(fastapi_config.health_checks_path)
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json() == {"health_status": True, "service_name": "microservice", "service_version": "2.0.0"}

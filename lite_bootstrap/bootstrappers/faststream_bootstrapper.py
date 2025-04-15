@@ -156,6 +156,7 @@ class FastStreamBootstrapper(BaseBootstrapper["AsgiFastStream"]):
         super().__init__(bootstrap_config)
         if self.bootstrap_config.broker:
             self.bootstrap_config.application.broker = self.bootstrap_config.broker
+        self.bootstrap_config.application.on_shutdown(self.teardown)
 
     def _prepare_application(self) -> "AsgiFastStream":
         return self.bootstrap_config.application

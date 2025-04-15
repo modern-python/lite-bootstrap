@@ -30,14 +30,17 @@ def test_fastapi_offline_docs() -> None:
 
 
 def test_fastapi_offline_docs_root_path() -> None:
-    app: FastAPI = FastAPI(title="Tests", root_path="/some-root-path")
+    app: FastAPI = FastAPI(title="Tests", root_path="/some-root-path", docs_url="/custom_docs")
     enable_offline_docs(app)
 
     with TestClient(app, root_path="/some-root-path") as client:
-        resp = client.get("/docs")
-        assert resp.status_code == HTTPStatus.OK
-        assert "/some-root-path/static/swagger-ui.css" in resp.text
-        assert "/some-root-path/static/swagger-ui-bundle.js" in resp.text
+        response = client.get("/custom_docs")
+        assert response.status_code == HTTPStatus.OK
+        assert "/some-root-path/static/swagger-ui.css" in response.text
+        assert "/some-root-path/static/swagger-ui-bundle.js" in response.text
+
+        response = client.get("/some-root-path/static/swagger-ui.css")
+        assert response.status_code == HTTPStatus.OK
 
 
 def test_fastapi_offline_docs_raises_without_openapi_url() -> None:

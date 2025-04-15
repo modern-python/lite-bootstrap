@@ -191,6 +191,10 @@ class LitestarBootstrapper(BaseBootstrapper["litestar.Litestar"]):
     bootstrap_config: LitestarConfig
     not_ready_message = "litestar is not installed"
 
+    def __init__(self, bootstrap_config: LitestarConfig) -> None:
+        super().__init__(bootstrap_config)
+        self.bootstrap_config.application_config.on_shutdown.append(self.teardown)
+
     def is_ready(self) -> bool:
         return import_checker.is_litestar_installed
 

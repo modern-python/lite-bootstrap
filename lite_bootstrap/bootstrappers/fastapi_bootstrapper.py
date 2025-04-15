@@ -1,3 +1,4 @@
+import contextlib
 import dataclasses
 import typing
 
@@ -20,6 +21,7 @@ from lite_bootstrap.instruments.swagger_instrument import SwaggerConfig, Swagger
 if import_checker.is_fastapi_installed:
     import fastapi
     from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.routing import _merge_lifespan_context
 
 if import_checker.is_opentelemetry_installed:
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
@@ -160,11 +162,24 @@ class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI"]):
     bootstrap_config: FastAPIConfig
     not_ready_message = "fastapi is not installed"
 
+    @contextlib.asynccontextmanager
+    async def lifespan_manager(self, _: fastapi.FastAPI) -> typing.AsyncIterator[dict[str, typing.Any]]:
+        try:
+            yield {}
+        finally:
+            self.teardown()
+
     def __init__(self, bootstrap_config: FastAPIConfig) -> None:
         super().__init__(bootstrap_config)
         self.bootstrap_config.application.title = bootstrap_config.service_name
         self.bootstrap_config.application.debug = bootstrap_config.service_debug
         self.bootstrap_config.application.version = bootstrap_config.service_version
+
+        old_lifespan_manager = self.bootstrap_config.application.router.lifespan_context
+        self.bootstrap_config.application.router.lifespan_context = _merge_lifespan_context(
+            old_lifespan_manager,
+            self.lifespan_manager,
+        )
 
     def is_ready(self) -> bool:
         return import_checker.is_fastapi_installed
