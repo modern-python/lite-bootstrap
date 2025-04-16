@@ -33,32 +33,30 @@ def litestar_config() -> LitestarConfig:
 def test_litestar_bootstrap(litestar_config: LitestarConfig) -> None:
     bootstrapper = LitestarBootstrapper(bootstrap_config=litestar_config)
     application = bootstrapper.bootstrap()
+    assert bootstrapper.is_bootstrapped
+    logger.info("testing logging", key="value")
+    assert application.cors_config
+    assert application.cors_config.allow_origins == litestar_config.cors_allowed_origins
 
-    try:
-        logger.info("testing logging", key="value")
+    with TestClient(app=application) as test_client:
+        response = test_client.get(litestar_config.health_checks_path)
+        assert response.status_code == status_codes.HTTP_200_OK
+        assert response.json() == {
+            "health_status": True,
+            "service_name": "microservice",
+            "service_version": "2.0.0",
+        }
 
-        assert application.cors_config
-        assert application.cors_config.allow_origins == litestar_config.cors_allowed_origins
+        response = test_client.get(litestar_config.prometheus_metrics_path)
+        assert response.status_code == status_codes.HTTP_200_OK
+        assert response.text
 
-        with TestClient(app=application) as test_client:
-            response = test_client.get(litestar_config.health_checks_path)
-            assert response.status_code == status_codes.HTTP_200_OK
-            assert response.json() == {
-                "health_status": True,
-                "service_name": "microservice",
-                "service_version": "2.0.0",
-            }
+        response = test_client.get(litestar_config.swagger_path)
+        assert response.status_code == status_codes.HTTP_200_OK
+        response = test_client.get(f"{litestar_config.service_static_path}/swagger-ui.css")
+        assert response.status_code == status_codes.HTTP_200_OK
 
-            response = test_client.get(litestar_config.prometheus_metrics_path)
-            assert response.status_code == status_codes.HTTP_200_OK
-            assert response.text
-
-            response = test_client.get(litestar_config.swagger_path)
-            assert response.status_code == status_codes.HTTP_200_OK
-            response = test_client.get(f"{litestar_config.service_static_path}/swagger-ui.css")
-            assert response.status_code == status_codes.HTTP_200_OK
-    finally:
-        bootstrapper.teardown()
+    assert not bootstrapper.is_bootstrapped
 
 
 def test_litestar_bootstrapper_not_ready() -> None:

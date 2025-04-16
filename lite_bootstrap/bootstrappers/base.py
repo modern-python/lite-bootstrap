@@ -10,11 +10,13 @@ InstrumentT = typing.TypeVar("InstrumentT", bound=BaseInstrument)
 
 
 class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
+    SLOTS = "bootstrap_config", "instruments", "is_bootstrapped"
     instruments_types: typing.ClassVar[list[type[BaseInstrument]]]
     instruments: list[BaseInstrument]
     bootstrap_config: BaseConfig
 
     def __init__(self, bootstrap_config: BaseConfig) -> None:
+        self.is_bootstrapped = False
         if not self.is_ready():
             raise RuntimeError(self.not_ready_message)
 
@@ -38,10 +40,12 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
     def is_ready(self) -> bool: ...
 
     def bootstrap(self) -> ApplicationT:
+        self.is_bootstrapped = True
         for one_instrument in self.instruments:
             one_instrument.bootstrap()
         return self._prepare_application()
 
     def teardown(self) -> None:
+        self.is_bootstrapped = False
         for one_instrument in self.instruments:
             one_instrument.teardown()

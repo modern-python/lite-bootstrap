@@ -45,17 +45,23 @@ async def test_faststream_bootstrap(broker: RedisBroker) -> None:
     bootstrap_config = build_faststream_config(broker=broker)
     bootstrapper = FastStreamBootstrapper(bootstrap_config=bootstrap_config)
     application = bootstrapper.bootstrap()
-    test_client = TestClient(app=application)
-
+    assert bootstrapper.is_bootstrapped
     logger.info("testing logging", key="value")
 
-    async with TestRedisBroker(broker):
-        response = test_client.get(bootstrap_config.health_checks_path)
-        assert response.status_code == status.HTTP_200_OK
-        assert response.json() == {"health_status": True, "service_name": "microservice", "service_version": "2.0.0"}
+    with TestClient(app=application) as test_client:
+        async with TestRedisBroker(broker):
+            response = test_client.get(bootstrap_config.health_checks_path)
+            assert response.status_code == status.HTTP_200_OK
+            assert response.json() == {
+                "health_status": True,
+                "service_name": "microservice",
+                "service_version": "2.0.0",
+            }
 
-        response = test_client.get(bootstrap_config.prometheus_metrics_path)
-        assert response.status_code == status.HTTP_200_OK
+            response = test_client.get(bootstrap_config.prometheus_metrics_path)
+            assert response.status_code == status.HTTP_200_OK
+
+    assert not bootstrapper.is_bootstrapped
 
 
 async def test_faststream_bootstrap_health_check_wo_broker() -> None:
