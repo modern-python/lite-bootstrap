@@ -14,18 +14,15 @@ class BaseConfig:
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class BaseInstrument(abc.ABC):
     bootstrap_config: BaseConfig
+    not_ready_message = ""
     missing_dependency_message = ""
-
-    @property
-    @abc.abstractmethod
-    def not_ready_message(self) -> str: ...
 
     def bootstrap(self) -> None: ...  # noqa: B027
 
     def teardown(self) -> None: ...  # noqa: B027
 
-    @abc.abstractmethod
-    def is_ready(self) -> bool: ...
+    def is_ready(self) -> bool:
+        return True
 
     @staticmethod
     def check_dependencies() -> bool:

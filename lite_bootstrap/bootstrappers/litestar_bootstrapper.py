@@ -1,9 +1,9 @@
 import dataclasses
-import pathlib
 import typing
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
+from lite_bootstrap.helpers.path import is_valid_path
 from lite_bootstrap.instruments.cors_instrument import CorsConfig, CorsInstrument
 from lite_bootstrap.instruments.healthchecks_instrument import (
     HealthChecksConfig,
@@ -49,6 +49,7 @@ class LitestarConfig(
     application_config: "AppConfig" = dataclasses.field(default_factory=lambda: AppConfig())
     opentelemetry_excluded_urls: list[str] = dataclasses.field(default_factory=list)
     prometheus_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
+    swagger_path: str = "/docs"
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
@@ -145,15 +146,19 @@ class LitestarPrometheusInstrument(PrometheusInstrument):
 @dataclasses.dataclass(kw_only=True, frozen=True)
 class LitestarSwaggerInstrument(SwaggerInstrument):
     bootstrap_config: LitestarConfig
+    not_ready_message = "swagger_path is empty or not valid"
+
+    def is_ready(self) -> bool:
+        return bool(self.bootstrap_config.swagger_path) and is_valid_path(self.bootstrap_config.swagger_path)
 
     def bootstrap(self) -> None:
         render_plugins: typing.Final = (
             (
                 SwaggerRenderPlugin(
-                    js_url=f"{self.bootstrap_config.service_static_path}/swagger-ui-bundle.js",
-                    css_url=f"{self.bootstrap_config.service_static_path}/swagger-ui.css",
+                    js_url=f"{self.bootstrap_config.swagger_static_path}/swagger-ui-bundle.js",
+                    css_url=f"{self.bootstrap_config.swagger_static_path}/swagger-ui.css",
                     standalone_preset_js_url=(
-                        f"{self.bootstrap_config.service_static_path}/swagger-ui-standalone-preset.js"
+                        f"{self.bootstrap_config.swagger_static_path}/swagger-ui-standalone-preset.js"
                     ),
                 ),
             )
@@ -169,10 +174,9 @@ class LitestarSwaggerInstrument(SwaggerInstrument):
             **self.bootstrap_config.swagger_extra_params,
         )
         if self.bootstrap_config.swagger_offline_docs:
-            static_dir_path = pathlib.Path(__file__).parent.parent / "litestar_swagger_static"
             self.bootstrap_config.application_config.route_handlers.append(
                 create_static_files_router(
-                    path=self.bootstrap_config.service_static_path, directories=[static_dir_path]
+                    path=self.bootstrap_config.swagger_static_path, directories=["lite_bootstrap/static/litestar_docs"]
                 )
             )
 
