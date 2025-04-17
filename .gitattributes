@@ -1,1 +1,1 @@
-lite_bootstrap/static/* linguist-vendored
+lite_bootstrap/static/**/* linguist-vendored
