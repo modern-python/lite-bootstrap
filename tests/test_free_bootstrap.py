@@ -1,6 +1,7 @@
 import pytest
 import structlog
 from opentelemetry.sdk.trace.export import ConsoleSpanExporter
+from structlog.typing import EventDict
 
 from lite_bootstrap import FreeBootstrapper, FreeBootstrapperConfig
 from tests.conftest import CustomInstrumentor, emulate_package_missing
@@ -30,15 +31,18 @@ def test_free_bootstrap(free_bootstrapper_config: FreeBootstrapperConfig) -> Non
         bootstrapper.teardown()
 
 
-def test_free_bootstrap_logging_not_ready() -> None:
-    with pytest.warns(UserWarning, match="service_debug is True or structlog is not installed"):
-        FreeBootstrapper(
-            bootstrap_config=FreeBootstrapperConfig(
-                service_debug=True,
-                opentelemetry_endpoint="otl",
-                sentry_dsn="https://testdsn@localhost/1",
-            ),
-        )
+def test_free_bootstrap_logging_not_ready(log_output: list[EventDict]) -> None:
+    FreeBootstrapper(
+        bootstrap_config=FreeBootstrapperConfig(
+            service_debug=True,
+            opentelemetry_endpoint="otl",
+            opentelemetry_instrumentors=[CustomInstrumentor()],
+            opentelemetry_span_exporter=ConsoleSpanExporter(),
+            sentry_dsn="https://testdsn@localhost/1",
+            logging_buffer_capacity=0,
+        ),
+    )
+    assert log_output == [{"event": "service_debug is True", "log_level": "info"}]
 
 
 @pytest.mark.parametrize(

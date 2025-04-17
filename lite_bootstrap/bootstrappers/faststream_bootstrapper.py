@@ -113,18 +113,19 @@ class FastStreamPrometheusInstrument(PrometheusInstrument):
     collector_registry: "prometheus_client.CollectorRegistry" = dataclasses.field(
         default_factory=lambda: prometheus_client.CollectorRegistry(), init=False
     )
-    not_ready_message = (
-        PrometheusInstrument.not_ready_message
-        + " or prometheus_middleware_cls is missing or prometheus_client is not installed"
-    )
+    not_ready_message = PrometheusInstrument.not_ready_message + " or prometheus_middleware_cls is missing"
+    missing_dependency_message = "prometheus_client is not installed"
 
     def is_ready(self) -> bool:
         return (
             super().is_ready()
             and import_checker.is_prometheus_client_installed
             and bool(self.bootstrap_config.prometheus_middleware_cls)
-            and import_checker.is_prometheus_client_installed
         )
+
+    @staticmethod
+    def check_dependencies() -> bool:
+        return import_checker.is_prometheus_client_installed
 
     def bootstrap(self) -> None:
         self.bootstrap_config.application.mount(

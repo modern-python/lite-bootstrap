@@ -121,10 +121,11 @@ class LitestarSentryInstrument(SentryInstrument):
 @dataclasses.dataclass(kw_only=True, frozen=True)
 class LitestarPrometheusInstrument(PrometheusInstrument):
     bootstrap_config: LitestarConfig
-    not_ready_message = PrometheusInstrument.not_ready_message + " or prometheus_client is not installed"
+    missing_dependency_message = "prometheus_client is not installed"
 
-    def is_ready(self) -> bool:
-        return super().is_ready() and import_checker.is_prometheus_client_installed
+    @staticmethod
+    def check_dependencies() -> bool:
+        return import_checker.is_prometheus_client_installed
 
     def bootstrap(self) -> None:
         class LitestarPrometheusController(PrometheusController):

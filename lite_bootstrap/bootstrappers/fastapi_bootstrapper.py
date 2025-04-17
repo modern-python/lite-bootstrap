@@ -116,12 +116,11 @@ class FastAPISentryInstrument(SentryInstrument):
 @dataclasses.dataclass(kw_only=True, frozen=True)
 class FastAPIPrometheusInstrument(PrometheusInstrument):
     bootstrap_config: FastAPIConfig
-    not_ready_message = (
-        PrometheusInstrument.not_ready_message + " or prometheus_fastapi_instrumentator is not installed"
-    )
+    missing_dependency_message = "prometheus_fastapi_instrumentator is not installed"
 
-    def is_ready(self) -> bool:
-        return super().is_ready() and import_checker.is_prometheus_fastapi_instrumentator_installed
+    @staticmethod
+    def check_dependencies() -> bool:
+        return import_checker.is_prometheus_fastapi_instrumentator_installed
 
     def bootstrap(self) -> None:
         Instrumentator(**self.bootstrap_config.prometheus_instrument_params).instrument(
