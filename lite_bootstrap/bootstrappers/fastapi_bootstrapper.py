@@ -1,6 +1,7 @@
 import contextlib
 import dataclasses
 import typing
+import warnings
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
@@ -35,11 +36,15 @@ if import_checker.is_prometheus_fastapi_instrumentator_installed:
 class FastAPIConfig(
     CorsConfig, HealthChecksConfig, LoggingConfig, OpentelemetryConfig, PrometheusConfig, SentryConfig, SwaggerConfig
 ):
-    application: "fastapi.FastAPI" = dataclasses.field(default_factory=lambda: fastapi.FastAPI())
+    application: "fastapi.FastAPI" = dataclasses.field(default=None)  # type: ignore[assignment]
     opentelemetry_excluded_urls: list[str] = dataclasses.field(default_factory=list)
     prometheus_instrumentator_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     prometheus_instrument_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     prometheus_expose_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self.application:
+            object.__setattr__(self, "application", fastapi.FastAPI(docs_url=self.swagger_path))
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
@@ -139,6 +144,12 @@ class FastApiSwaggerInstrument(SwaggerInstrument):
     bootstrap_config: FastAPIConfig
 
     def bootstrap(self) -> None:
+        if self.bootstrap_config.swagger_path != self.bootstrap_config.application.docs_url:
+            warnings.warn(
+                f"swagger_path is differ from docs_url, "
+                f"{self.bootstrap_config.application.docs_url} will be used for docs path",
+                stacklevel=2,
+            )
         if self.bootstrap_config.swagger_offline_docs:
             enable_offline_docs(
                 self.bootstrap_config.application, static_path=self.bootstrap_config.swagger_static_path
