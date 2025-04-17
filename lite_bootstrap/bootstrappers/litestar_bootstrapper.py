@@ -1,4 +1,5 @@
 import dataclasses
+import pathlib
 import typing
 
 from lite_bootstrap import import_checker
@@ -174,9 +175,10 @@ class LitestarSwaggerInstrument(SwaggerInstrument):
             **self.bootstrap_config.swagger_extra_params,
         )
         if self.bootstrap_config.swagger_offline_docs:
+            static_dir_path = pathlib.Path(__file__).parent.parent / "static/litestar_docs"
             self.bootstrap_config.application_config.route_handlers.append(
                 create_static_files_router(
-                    path=self.bootstrap_config.swagger_static_path, directories=["lite_bootstrap/static/litestar_docs"]
+                    path=self.bootstrap_config.swagger_static_path, directories=[static_dir_path]
                 )
             )
 

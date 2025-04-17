@@ -1,3 +1,4 @@
+import pathlib
 import typing
 
 from lite_bootstrap import import_checker
@@ -29,7 +30,8 @@ def enable_offline_docs(
         if typing.cast(Route, route).path not in (docs_url, redoc_url, swagger_ui_oauth2_redirect_url)
     ]
 
-    app.mount(static_path, StaticFiles(directory="lite_bootstrap/static/fastapi_docs"), name="static")
+    static_dir_path = pathlib.Path(__file__).parent.parent / "static/fastapi_docs"
+    app.mount(static_path, StaticFiles(directory=static_dir_path), name="static")
 
     @app.get(docs_url, include_in_schema=False)
     async def custom_swagger_ui_html(request: Request) -> HTMLResponse:
