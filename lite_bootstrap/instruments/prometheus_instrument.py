@@ -1,6 +1,6 @@
 import dataclasses
 
-from lite_bootstrap.helpers import is_valid_path
+from lite_bootstrap.helpers.path import is_valid_path
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 
 

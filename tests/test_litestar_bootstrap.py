@@ -53,7 +53,7 @@ def test_litestar_bootstrap(litestar_config: LitestarConfig) -> None:
 
         response = test_client.get(litestar_config.swagger_path)
         assert response.status_code == status_codes.HTTP_200_OK
-        response = test_client.get(f"{litestar_config.service_static_path}/swagger-ui.css")
+        response = test_client.get(f"{litestar_config.swagger_static_path}/swagger-ui.css")
         assert response.status_code == status_codes.HTTP_200_OK
 
     assert not bootstrapper.is_bootstrapped

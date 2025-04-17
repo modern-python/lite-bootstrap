@@ -45,7 +45,7 @@ def test_fastapi_bootstrap(fastapi_config: FastAPIConfig) -> None:
         assert response.status_code == status.HTTP_200_OK
         assert response.text
 
-        response = test_client.get(fastapi_config.swagger_path)
+        response = test_client.get(str(application.docs_url))
         assert response.status_code == status.HTTP_200_OK
         assert response.text
 

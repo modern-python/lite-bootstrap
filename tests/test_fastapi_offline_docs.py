@@ -4,7 +4,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from lite_bootstrap.fastapi_offline_docs.main import enable_offline_docs
+from lite_bootstrap.helpers.fastapi_helpers import enable_offline_docs
 
 
 def test_fastapi_offline_docs() -> None:
@@ -13,7 +13,7 @@ def test_fastapi_offline_docs() -> None:
     static_files_handler = "/static2"
 
     app = FastAPI(title="Tests", docs_url=docs_url, redoc_url=redoc_url)
-    enable_offline_docs(app, static_files_handler=static_files_handler)
+    enable_offline_docs(app, static_path=static_files_handler)
 
     with TestClient(app) as client:
         resp = client.get(docs_url)
@@ -31,7 +31,7 @@ def test_fastapi_offline_docs() -> None:
 
 def test_fastapi_offline_docs_root_path() -> None:
     app: FastAPI = FastAPI(title="Tests", root_path="/some-root-path", docs_url="/custom_docs")
-    enable_offline_docs(app)
+    enable_offline_docs(app, static_path="/static")
 
     with TestClient(app, root_path="/some-root-path") as client:
         response = client.get("/custom_docs")
@@ -47,4 +47,4 @@ def test_fastapi_offline_docs_raises_without_openapi_url() -> None:
     app = FastAPI(openapi_url=None)
 
     with pytest.raises(RuntimeError, match="No app.openapi_url specified"):
-        enable_offline_docs(app)
+        enable_offline_docs(app, static_path="/static")

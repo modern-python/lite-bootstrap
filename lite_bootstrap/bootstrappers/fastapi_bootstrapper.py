@@ -4,7 +4,7 @@ import typing
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
-from lite_bootstrap.fastapi_offline_docs.main import enable_offline_docs
+from lite_bootstrap.helpers.fastapi_helpers import enable_offline_docs
 from lite_bootstrap.instruments.cors_instrument import CorsConfig, CorsInstrument
 from lite_bootstrap.instruments.healthchecks_instrument import (
     HealthChecksConfig,
@@ -139,10 +139,9 @@ class FastApiSwaggerInstrument(SwaggerInstrument):
     bootstrap_config: FastAPIConfig
 
     def bootstrap(self) -> None:
-        self.bootstrap_config.application.docs_url = self.bootstrap_config.swagger_path
         if self.bootstrap_config.swagger_offline_docs:
             enable_offline_docs(
-                self.bootstrap_config.application, static_files_handler=self.bootstrap_config.service_static_path
+                self.bootstrap_config.application, static_path=self.bootstrap_config.swagger_static_path
             )
 
 
