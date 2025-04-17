@@ -1,2 +1,1 @@
-lite_bootstrap/litestar_swagger_static/* linguist-vendored
-lite_bootstrap/fastapi_offline_docs/static/* linguist-vendored
+lite_bootstrap/static/* linguist-vendored
