@@ -40,10 +40,15 @@ class OpentelemetryConfig(BaseConfig):
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class OpenTelemetryInstrument(BaseInstrument):
     bootstrap_config: OpentelemetryConfig
-    not_ready_message = "opentelemetry_endpoint is empty or opentelemetry is not installed"
+    not_ready_message = "opentelemetry_endpoint is empty"
+    missing_dependency_message = "opentelemetry is not installed"
 
     def is_ready(self) -> bool:
         return bool(self.bootstrap_config.opentelemetry_endpoint) and import_checker.is_opentelemetry_installed
+
+    @staticmethod
+    def check_dependencies() -> bool:
+        return import_checker.is_opentelemetry_installed
 
     def bootstrap(self) -> None:
         attributes = {

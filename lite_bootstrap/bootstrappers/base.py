@@ -1,9 +1,18 @@
 import abc
+import logging
 import typing
 import warnings
 
+import structlog
+
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 from lite_bootstrap.types import ApplicationT
+
+
+try:
+    logger = structlog.getLogger(__name__)
+except ImportError:
+    logger = logging.getLogger(__name__)
 
 
 InstrumentT = typing.TypeVar("InstrumentT", bound=BaseInstrument)
@@ -24,10 +33,15 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
         self.instruments = []
         for instrument_type in self.instruments_types:
             instrument = instrument_type(bootstrap_config=bootstrap_config)
-            if instrument.is_ready():
-                self.instruments.append(instrument)
-            else:
-                warnings.warn(instrument.not_ready_message, stacklevel=2)
+            if not instrument.check_dependencies():
+                warnings.warn(instrument.missing_dependency_message, stacklevel=2)
+                continue
+
+            if not instrument.is_ready():
+                logger.info(instrument.not_ready_message)
+                continue
+
+            self.instruments.append(instrument)
 
     @property
     @abc.abstractmethod

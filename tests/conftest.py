@@ -6,6 +6,8 @@ from unittest.mock import Mock
 
 import pytest
 from opentelemetry.instrumentation.instrumentor import BaseInstrumentor  # type: ignore[attr-defined]
+from structlog.testing import capture_logs
+from structlog.typing import EventDict
 
 from lite_bootstrap import import_checker
 
@@ -33,3 +35,9 @@ def emulate_package_missing(package_name: str) -> typing.Iterator[None]:
     finally:
         sys.modules[package_name] = old_module
         reload(import_checker)
+
+
+@pytest.fixture(name="log_output")
+def fixture_log_output() -> typing.Iterator[list[EventDict]]:
+    with capture_logs() as cap_logs:
+        yield cap_logs

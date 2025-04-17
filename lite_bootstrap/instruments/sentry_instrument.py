@@ -29,10 +29,15 @@ class SentryConfig(BaseConfig):
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class SentryInstrument(BaseInstrument):
     bootstrap_config: SentryConfig
-    not_ready_message = "sentry_dsn is empty or sentry_sdk is not installed"
+    not_ready_message = "sentry_dsn is empty"
+    missing_dependency_message = "sentry_sdk is not installed"
 
     def is_ready(self) -> bool:
         return bool(self.bootstrap_config.sentry_dsn) and import_checker.is_sentry_installed
+
+    @staticmethod
+    def check_dependencies() -> bool:
+        return import_checker.is_sentry_installed
 
     def bootstrap(self) -> None:
         sentry_sdk.init(

@@ -15,9 +15,9 @@ class FreeBootstrapper(BaseBootstrapper[None]):
     __slots__ = "bootstrap_config", "instruments"
 
     instruments_types: typing.ClassVar = [
-        OpenTelemetryInstrument,
-        SentryInstrument,
         LoggingInstrument,
+        SentryInstrument,
+        OpenTelemetryInstrument,
     ]
     bootstrap_config: FreeBootstrapperConfig
     not_ready_message = ""

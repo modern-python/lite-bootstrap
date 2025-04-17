@@ -93,10 +93,15 @@ class LoggingConfig(BaseConfig):
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class LoggingInstrument(BaseInstrument):
     bootstrap_config: LoggingConfig
-    not_ready_message = "service_debug is True or structlog is not installed"
+    not_ready_message = "service_debug is True"
+    missing_dependency_message = "structlog is not installed"
 
     def is_ready(self) -> bool:
         return not self.bootstrap_config.service_debug and import_checker.is_structlog_installed
+
+    @staticmethod
+    def check_dependencies() -> bool:
+        return import_checker.is_structlog_installed
 
     def bootstrap(self) -> None:
         # Configure basic logging to allow structlog to catch its events

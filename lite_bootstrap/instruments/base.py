@@ -14,6 +14,7 @@ class BaseConfig:
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class BaseInstrument(abc.ABC):
     bootstrap_config: BaseConfig
+    missing_dependency_message = ""
 
     @property
     @abc.abstractmethod
@@ -25,3 +26,7 @@ class BaseInstrument(abc.ABC):
 
     @abc.abstractmethod
     def is_ready(self) -> bool: ...
+
+    @staticmethod
+    def check_dependencies() -> bool:
+        return True
