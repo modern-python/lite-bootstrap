@@ -174,7 +174,7 @@ class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI"]):
     not_ready_message = "fastapi is not installed"
 
     @contextlib.asynccontextmanager
-    async def lifespan_manager(self, _: fastapi.FastAPI) -> typing.AsyncIterator[dict[str, typing.Any]]:
+    async def lifespan_manager(self, _: "fastapi.FastAPI") -> typing.AsyncIterator[dict[str, typing.Any]]:
         try:
             yield {}
         finally:
@@ -195,5 +195,5 @@ class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI"]):
     def is_ready(self) -> bool:
         return import_checker.is_fastapi_installed
 
-    def _prepare_application(self) -> fastapi.FastAPI:
+    def _prepare_application(self) -> "fastapi.FastAPI":
         return self.bootstrap_config.application
