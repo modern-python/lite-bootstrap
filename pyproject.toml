@@ -48,6 +48,9 @@ otl = [
 logging = [
     "structlog",
 ]
+free-all = [
+    "lite-bootstrap[sentry,otl,logging]",
+]
 fastapi = [
     "fastapi",
 ]
