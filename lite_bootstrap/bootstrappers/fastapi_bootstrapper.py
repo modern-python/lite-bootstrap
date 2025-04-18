@@ -25,8 +25,10 @@ if import_checker.is_fastapi_installed:
     from fastapi.routing import _merge_lifespan_context
 
 if import_checker.is_opentelemetry_installed:
-    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
     from opentelemetry.trace import get_tracer_provider
+
+if import_checker.is_fastapi_opentelemetry_installed:
+    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 if import_checker.is_prometheus_fastapi_instrumentator_installed:
     from prometheus_fastapi_instrumentator import Instrumentator
