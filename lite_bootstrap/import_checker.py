@@ -9,4 +9,6 @@ is_fastapi_installed = find_spec("fastapi") is not None
 is_litestar_installed = find_spec("litestar") is not None
 is_faststream_installed = find_spec("faststream") is not None
 is_prometheus_fastapi_instrumentator_installed = find_spec("prometheus_fastapi_instrumentator") is not None
-is_fastapi_opentelemetry_installed = find_spec("opentelemetry.instrumentation.fastapi") is not None
+is_fastapi_opentelemetry_installed = (
+    is_opentelemetry_installed and find_spec("opentelemetry.instrumentation.fastapi") is not None
+)
