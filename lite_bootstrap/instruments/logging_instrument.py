@@ -49,34 +49,36 @@ def tracer_injection(_: "WrappedLogger", __: str, event_dict: "EventDict") -> "E
     return event_dict
 
 
-class MemoryLoggerFactory(structlog.stdlib.LoggerFactory):
-    def __init__(
-        self,
-        *args: typing.Any,  # noqa: ANN401
-        logging_buffer_capacity: int,
-        logging_flush_level: int,
-        logging_log_level: int,
-        log_stream: typing.Any = None,  # noqa: ANN401
-        **kwargs: typing.Any,  # noqa: ANN401
-    ) -> None:
-        super().__init__(*args, **kwargs)
-        self.logging_buffer_capacity = logging_buffer_capacity
-        self.logging_flush_level = logging_flush_level
-        self.logging_log_level = logging_log_level
-        self.log_stream = log_stream
+if import_checker.is_structlog_installed:
 
-    def __call__(self, *args: typing.Any) -> logging.Logger:  # noqa: ANN401
-        logger: typing.Final = super().__call__(*args)
-        stream_handler: typing.Final = logging.StreamHandler(stream=self.log_stream)
-        handler: typing.Final = logging.handlers.MemoryHandler(
-            capacity=self.logging_buffer_capacity,
-            flushLevel=self.logging_flush_level,
-            target=stream_handler,
-        )
-        logger.addHandler(handler)
-        logger.setLevel(self.logging_log_level)
-        logger.propagate = False
-        return logger
+    class MemoryLoggerFactory(structlog.stdlib.LoggerFactory):
+        def __init__(
+            self,
+            *args: typing.Any,  # noqa: ANN401
+            logging_buffer_capacity: int,
+            logging_flush_level: int,
+            logging_log_level: int,
+            log_stream: typing.Any = None,  # noqa: ANN401
+            **kwargs: typing.Any,  # noqa: ANN401
+        ) -> None:
+            super().__init__(*args, **kwargs)
+            self.logging_buffer_capacity = logging_buffer_capacity
+            self.logging_flush_level = logging_flush_level
+            self.logging_log_level = logging_log_level
+            self.log_stream = log_stream
+
+        def __call__(self, *args: typing.Any) -> logging.Logger:  # noqa: ANN401
+            logger: typing.Final = super().__call__(*args)
+            stream_handler: typing.Final = logging.StreamHandler(stream=self.log_stream)
+            handler: typing.Final = logging.handlers.MemoryHandler(
+                capacity=self.logging_buffer_capacity,
+                flushLevel=self.logging_flush_level,
+                target=stream_handler,
+            )
+            logger.addHandler(handler)
+            logger.setLevel(self.logging_log_level)
+            logger.propagate = False
+            return logger
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
