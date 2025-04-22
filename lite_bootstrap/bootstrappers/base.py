@@ -3,13 +3,13 @@ import logging
 import typing
 import warnings
 
-import structlog
-
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 from lite_bootstrap.types import ApplicationT
 
 
 try:
+    import structlog
+
     logger = structlog.getLogger(__name__)
 except ImportError:
     logger = logging.getLogger(__name__)
