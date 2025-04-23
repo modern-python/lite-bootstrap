@@ -1,4 +1,4 @@
-# Modern DI
+# Lite Bootstrap
 
 Welcome to the `lite-bootstrap` documentation!
 
