@@ -10,6 +10,7 @@ nav:
       - Litestar: integrations/litestar.md
       - FastStream: integrations/faststream.md
       - FastAPI: integrations/fastapi.md
+      - Free bootstrapper: integrations/free.md
 theme:
   name: material
   features:
