@@ -45,3 +45,5 @@ bootstrapper_config = FastAPIConfig(
 bootstrapper = FastAPIBootstrapper(bootstrapper_config)
 application = bootstrapper.bootstrap()
 ```
+
+Read more about available configuration options [here](../../introduction/configuration):

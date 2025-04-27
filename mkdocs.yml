@@ -5,6 +5,7 @@ edit_uri: edit/main/docs/
 nav:
   - Introduction:
       - Installation: introduction/installation.md
+      - Configuration: introduction/configuration.md
   - Integrations:
       - Litestar: integrations/litestar.md
       - FastStream: integrations/faststream.md

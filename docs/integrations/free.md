@@ -36,3 +36,5 @@ bootstrapper_config = FreeBootstrapperConfig(
 bootstrapper = FreeBootstrapper(bootstrapper_config)
 bootstrapper.bootstrap()
 ```
+
+Read more about available configuration options [here](../../introduction/configuration):

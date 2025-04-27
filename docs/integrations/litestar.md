@@ -45,3 +45,5 @@ bootstrapper_config = LitestarConfig(
 bootstrapper = LitestarBootstrapper(bootstrapper_config)
 application = bootstrapper.bootstrap()
 ```
+
+Read more about available configuration options [here](../../introduction/configuration):

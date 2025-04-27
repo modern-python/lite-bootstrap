@@ -130,7 +130,7 @@ class FastAPIPrometheusInstrument(PrometheusInstrument):
         return import_checker.is_prometheus_fastapi_instrumentator_installed
 
     def bootstrap(self) -> None:
-        Instrumentator(**self.bootstrap_config.prometheus_instrument_params).instrument(
+        Instrumentator(**self.bootstrap_config.prometheus_instrumentator_params).instrument(
             self.bootstrap_config.application,
             **self.bootstrap_config.prometheus_instrument_params,
         ).expose(

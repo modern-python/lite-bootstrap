@@ -49,3 +49,5 @@ bootstrapper_config = FastStreamConfig(
 bootstrapper = FastStreamBootstrapper(bootstrapper_config)
 application = bootstrapper.bootstrap()
 ```
+
+Read more about available configuration options [here](../../introduction/configuration):
