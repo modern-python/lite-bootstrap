@@ -19,10 +19,10 @@ With `lite-bootstrap`, you receive an application with lightweight built-in supp
 
 Those instruments can be bootstrapped for:
 
-1. LiteStar
-2. FastStream
-3. FastAPI
-4. services and scripts without frameworks
+- [LiteStar](https://lite-bootstrap.readthedocs.io/integrations/litestar)
+- [FastStream](https://lite-bootstrap.readthedocs.io/integrations/faststream)
+- [FastAPI](https://lite-bootstrap.readthedocs.io/integrations/fastapi)
+- [services and scripts without frameworks](https://lite-bootstrap.readthedocs.io/integrations/free)
 ---
 
 ## 📚 [Documentation](https://lite-bootstrap.readthedocs.io)
