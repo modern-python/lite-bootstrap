@@ -6,11 +6,27 @@ Lite-Bootstrap
 [![downloads](https://img.shields.io/pypi/dm/lite-bootstrap.svg)](https://pypistats.org/packages/lite-bootstrap)
 [![GitHub stars](https://img.shields.io/github/stars/modern-python/lite-bootstrap)](https://github.com/modern-python/lite-bootstrap/stargazers)
 
-This package helps to build new microservices
+`lite-bootstrap` assists you in creating applications with all the necessary instruments already set up.
 
-## Quickstart:
-### Installation
+With `lite-bootstrap`, you receive an application with lightweight built-in support for:
+- `sentry`
+- `prometheus`
+- `opentelemetry`
+- `structlog`
+- `cors`
+- `swagger` - with additional offline version support
+- `health-checks`
 
-```shell
-$ pip install lite-bootstrap
-```
+Those instruments can be bootstrapped for:
+
+1. LiteStar
+2. FastStream
+3. FastAPI
+4. services and scripts without frameworks
+---
+
+## 📚 [Documentation](https://lite-bootstrap.readthedocs.io)
+
+## 📦 [PyPi](https://pypi.org/project/lite-bootstrap)
+
+## 📝 [License](LICENSE)

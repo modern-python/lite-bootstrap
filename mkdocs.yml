@@ -3,8 +3,12 @@ repo_url: https://github.com/modern-python/lite-bootstrap
 docs_dir: docs
 edit_uri: edit/main/docs/
 nav:
-  - Quick-Start: index.md
-
+  - Introduction:
+      - Installation: introduction/installation.md
+  - Integrations:
+      - Litestar: integrations/litestar.md
+      - FastStream: integrations/faststream.md
+      - FastAPI: integrations/fastapi.md
 theme:
   name: material
   features:
