@@ -1,0 +1,72 @@
+site_name: lite-bootstrap
+repo_url: https://github.com/modern-python/lite-bootstrap
+docs_dir: docs
+edit_uri: edit/main/docs/
+nav:
+  - Introduction:
+      - Installation: introduction/installation.md
+      - Configuration: introduction/configuration.md
+  - Integrations:
+      - Litestar: integrations/litestar.md
+      - FastStream: integrations/faststream.md
+      - FastAPI: integrations/fastapi.md
+theme:
+  name: material
+  features:
+    - content.code.copy
+    - content.code.annotate
+    - content.action.edit
+    - content.action.view
+    - navigation.footer
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.instant
+    - header.autohide
+    - announce.dismiss
+  icon:
+    edit: material/pencil
+    view: material/eye
+    repo: fontawesome/brands/git-alt
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: black
+      accent: pink
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: pink
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+
+markdown_extensions:
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - def_list
+  - codehilite:
+      use_pygments: true
+  - attr_list
+  - md_in_html
+
+extra_css:
+  - css/code.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/modern-python/lite-bootstrap
+      name: GitHub
