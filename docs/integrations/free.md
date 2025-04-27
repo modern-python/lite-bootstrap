@@ -20,7 +20,7 @@
       poetry add lite-bootstrapp[free-all]
       ```
 
-Read more about available extras [here](../../introduction/installation):
+Read more about available extras [here](../../../introduction/installation):
 
 ## 2. Define bootstrapper config and build you application:
 
@@ -37,4 +37,4 @@ bootstrapper = FreeBootstrapper(bootstrapper_config)
 bootstrapper.bootstrap()
 ```
 
-Read more about available configuration options [here](../../introduction/configuration):
+Read more about available configuration options [here](../../../introduction/configuration):
