@@ -200,6 +200,7 @@ class LitestarBootstrapper(BaseBootstrapper["litestar.Litestar"]):
 
     def __init__(self, bootstrap_config: LitestarConfig) -> None:
         super().__init__(bootstrap_config)
+        self.bootstrap_config.application_config.debug = bootstrap_config.service_debug
         self.bootstrap_config.application_config.on_shutdown.append(self.teardown)
 
     def is_ready(self) -> bool:
