@@ -39,6 +39,7 @@ class FastAPIConfig(
     CorsConfig, HealthChecksConfig, LoggingConfig, OpentelemetryConfig, PrometheusConfig, SentryConfig, SwaggerConfig
 ):
     application: "fastapi.FastAPI" = dataclasses.field(default=None)  # type: ignore[assignment]
+    application_kwargs: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     opentelemetry_excluded_urls: list[str] = dataclasses.field(default_factory=list)
     prometheus_instrumentator_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     prometheus_instrument_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
@@ -46,7 +47,15 @@ class FastAPIConfig(
 
     def __post_init__(self) -> None:
         if not self.application:
-            object.__setattr__(self, "application", fastapi.FastAPI(docs_url=self.swagger_path))
+            object.__setattr__(
+                self, "application", fastapi.FastAPI(docs_url=self.swagger_path, **self.application_kwargs)
+            )
+        elif self.application_kwargs:
+            warnings.warn("application_kwargs must be used without application", stacklevel=2)
+
+        self.application.title = self.service_name
+        self.application.debug = self.service_debug
+        self.application.version = self.service_version
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
@@ -182,9 +191,6 @@ class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI"]):
 
     def __init__(self, bootstrap_config: FastAPIConfig) -> None:
         super().__init__(bootstrap_config)
-        self.bootstrap_config.application.title = bootstrap_config.service_name
-        self.bootstrap_config.application.debug = bootstrap_config.service_debug
-        self.bootstrap_config.application.version = bootstrap_config.service_version
 
         old_lifespan_manager = self.bootstrap_config.application.router.lifespan_context
         self.bootstrap_config.application.router.lifespan_context = _merge_lifespan_context(
