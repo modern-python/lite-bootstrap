@@ -10,15 +10,19 @@ from lite_bootstrap.instruments.opentelemetry_instrument import OpentelemetryCon
 
 
 logger = structlog.getLogger(__name__)
+std_logger = logging.getLogger(__name__)
 
 
-def test_logging_instrument() -> None:
+def test_logging_instrument_simple() -> None:
     logging_instrument = LoggingInstrument(
-        bootstrap_config=LoggingConfig(logging_unset_handlers=["uvicorn"], logging_buffer_capacity=0)
+        bootstrap_config=LoggingConfig(
+            logging_unset_handlers=["uvicorn"], logging_buffer_capacity=0, service_debug=False
+        )
     )
     try:
         logging_instrument.bootstrap()
-        logger.info("testing logging", key="value")
+        logger.info("testing structlog", key="value")
+        std_logger.info("testing std logger", extra={"key": "value"})
     finally:
         logging_instrument.teardown()
 

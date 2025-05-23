@@ -108,9 +108,10 @@ class LoggingInstrument(BaseInstrument):
     def bootstrap(self) -> None:
         # Configure basic logging to allow structlog to catch its events
         logging.basicConfig(
-            format="%(message)s",
+            format="%(levelname)s [%(asctime)s] %(module)s %(pathname)s - %(message)s",
             stream=sys.stdout,
-            level=logging.INFO,
+            datefmt="%Y-%m-%d %H:%M:%S",
+            level=self.bootstrap_config.logging_log_level,
         )
 
         for unset_handlers_logger in self.bootstrap_config.logging_unset_handlers:
