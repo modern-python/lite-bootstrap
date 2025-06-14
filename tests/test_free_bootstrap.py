@@ -42,7 +42,9 @@ def test_free_bootstrap_logging_not_ready(log_output: list[EventDict]) -> None:
             logging_buffer_capacity=0,
         ),
     )
-    assert log_output == [{"event": "service_debug is True", "log_level": "info"}]
+    assert log_output == [
+        {"event": "LoggingInstrument is not ready, because service_debug is True", "log_level": "info"}
+    ]
 
 
 @pytest.mark.parametrize(
