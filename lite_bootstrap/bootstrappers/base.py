@@ -27,7 +27,8 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
     def __init__(self, bootstrap_config: BaseConfig) -> None:
         self.is_bootstrapped = False
         if not self.is_ready():
-            raise RuntimeError(self.not_ready_message)
+            msg = f"{type(self).__name__} is not ready because {self.not_ready_message}"
+            raise RuntimeError(msg)
 
         self.bootstrap_config = bootstrap_config
         self.instruments = []
@@ -38,7 +39,7 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
                 continue
 
             if not instrument.is_ready():
-                logger.info(instrument.not_ready_message)
+                logger.info(f"{instrument_type.__name__} is not ready, because {instrument.not_ready_message}")
                 continue
 
             self.instruments.append(instrument)
