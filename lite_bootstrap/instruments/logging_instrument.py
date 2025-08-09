@@ -32,7 +32,7 @@ class RequestProtocol(typing.Protocol):
 
 def tracer_injection(_: "WrappedLogger", __: str, event_dict: "EventDict") -> "EventDict":
     try:
-        from opentelemetry import trace
+        from opentelemetry import trace  # noqa: PLC0415
     except ImportError:  # pragma: no cover
         return event_dict
 
