@@ -7,14 +7,12 @@ from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 
 if typing.TYPE_CHECKING:
     from opentelemetry.instrumentation.instrumentor import BaseInstrumentor  # type: ignore[attr-defined]
-    from opentelemetry.sdk.trace.export import SpanExporter
-
 
 if import_checker.is_opentelemetry_installed:
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
     from opentelemetry.sdk import resources
     from opentelemetry.sdk.trace import TracerProvider
-    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter, SimpleSpanProcessor
     from opentelemetry.trace import set_tracer_provider
 
 
@@ -34,17 +32,20 @@ class OpentelemetryConfig(BaseConfig):
     opentelemetry_instrumentors: list[typing.Union[InstrumentorWithParams, "BaseInstrumentor"]] = dataclasses.field(
         default_factory=list
     )
-    opentelemetry_span_exporter: typing.Optional["SpanExporter"] = None
+    opentelemetry_log_traces: bool = False
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class OpenTelemetryInstrument(BaseInstrument):
     bootstrap_config: OpentelemetryConfig
-    not_ready_message = "opentelemetry_endpoint is empty"
+    not_ready_message = "opentelemetry_endpoint is empty and opentelemetry_log_traces is False"
     missing_dependency_message = "opentelemetry is not installed"
 
     def is_ready(self) -> bool:
-        return bool(self.bootstrap_config.opentelemetry_endpoint) and import_checker.is_opentelemetry_installed
+        return (
+            bool(self.bootstrap_config.opentelemetry_endpoint or self.bootstrap_config.opentelemetry_log_traces)
+            and import_checker.is_opentelemetry_installed
+        )
 
     @staticmethod
     def check_dependencies() -> bool:
@@ -63,15 +64,17 @@ class OpenTelemetryInstrument(BaseInstrument):
             attributes={k: v for k, v in attributes.items() if v},
         )
         tracer_provider = TracerProvider(resource=resource)
-        tracer_provider.add_span_processor(
-            BatchSpanProcessor(
-                self.bootstrap_config.opentelemetry_span_exporter
-                or OTLPSpanExporter(
-                    endpoint=self.bootstrap_config.opentelemetry_endpoint,
-                    insecure=self.bootstrap_config.opentelemetry_insecure,
+        if self.bootstrap_config.opentelemetry_log_traces:
+            tracer_provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
+        if self.bootstrap_config.opentelemetry_endpoint:
+            tracer_provider.add_span_processor(
+                BatchSpanProcessor(
+                    OTLPSpanExporter(
+                        endpoint=self.bootstrap_config.opentelemetry_endpoint,
+                        insecure=self.bootstrap_config.opentelemetry_insecure,
+                    ),
                 ),
-            ),
-        )
+            )
         for one_instrumentor in self.bootstrap_config.opentelemetry_instrumentors:
             if isinstance(one_instrumentor, InstrumentorWithParams):
                 one_instrumentor.instrumentor.instrument(

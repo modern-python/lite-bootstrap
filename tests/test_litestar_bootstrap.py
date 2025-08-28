@@ -2,7 +2,6 @@ import pytest
 import structlog
 from litestar import status_codes
 from litestar.testing import TestClient
-from opentelemetry.sdk.trace.export import ConsoleSpanExporter
 
 from lite_bootstrap import LitestarBootstrapper, LitestarConfig
 from tests.conftest import CustomInstrumentor, emulate_package_missing
@@ -22,7 +21,7 @@ def litestar_config() -> LitestarConfig:
         health_checks_path="/custom-health/",
         opentelemetry_endpoint="otl",
         opentelemetry_instrumentors=[CustomInstrumentor()],
-        opentelemetry_span_exporter=ConsoleSpanExporter(),
+        opentelemetry_log_traces=True,
         prometheus_metrics_path="/custom-metrics/",
         sentry_dsn="https://testdsn@localhost/1",
         swagger_offline_docs=True,

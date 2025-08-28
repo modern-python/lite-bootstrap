@@ -6,7 +6,6 @@ from faststream.broker.core.usecase import BrokerUsecase
 from faststream.redis import RedisBroker, TestRedisBroker
 from faststream.redis.opentelemetry import RedisTelemetryMiddleware
 from faststream.redis.prometheus import RedisPrometheusMiddleware
-from opentelemetry.sdk.trace.export import ConsoleSpanExporter
 from starlette import status
 from starlette.testclient import TestClient
 
@@ -30,7 +29,7 @@ def build_faststream_config(broker: BrokerUsecase[typing.Any, typing.Any] | None
         service_debug=False,
         opentelemetry_endpoint="otl",
         opentelemetry_instrumentors=[CustomInstrumentor()],
-        opentelemetry_span_exporter=ConsoleSpanExporter(),
+        opentelemetry_log_traces=True,
         opentelemetry_middleware_cls=RedisTelemetryMiddleware,
         prometheus_metrics_path="/custom-metrics/",
         prometheus_middleware_cls=RedisPrometheusMiddleware,

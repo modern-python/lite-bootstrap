@@ -1,7 +1,5 @@
 import dataclasses
 
-from opentelemetry.sdk.trace.export import ConsoleSpanExporter
-
 from lite_bootstrap import FastAPIConfig
 from lite_bootstrap.instruments.base import BaseConfig
 from tests.conftest import CustomInstrumentor
@@ -17,8 +15,8 @@ def test_config_from_dict() -> None:
         "health_checks_path": "/custom-health/",
         "logging_buffer_capacity": 0,
         "opentelemetry_endpoint": "otl",
+        "opentelemetry_log_traces": True,
         "opentelemetry_instrumentors": [CustomInstrumentor()],
-        "opentelemetry_span_exporter": ConsoleSpanExporter(),
         "prometheus_metrics_path": "/custom-metrics/",
         "sentry_dsn": "https://testdsn@localhost/1",
         "swagger_offline_docs": True,
@@ -42,7 +40,7 @@ def test_config_from_object() -> None:
         logging_buffer_capacity=0,
         opentelemetry_endpoint="otl",
         opentelemetry_instrumentors=[CustomInstrumentor()],
-        opentelemetry_span_exporter=ConsoleSpanExporter(),
+        opentelemetry_log_traces=True,
         prometheus_metrics_path="/custom-metrics/",
         sentry_dsn="https://testdsn@localhost/1",
         swagger_offline_docs=True,
