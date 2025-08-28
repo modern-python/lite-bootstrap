@@ -3,7 +3,6 @@ import dataclasses
 import fastapi
 import pytest
 import structlog
-from opentelemetry.sdk.trace.export import ConsoleSpanExporter
 from starlette import status
 from starlette.testclient import TestClient
 
@@ -26,7 +25,7 @@ def fastapi_config() -> FastAPIConfig:
         logging_buffer_capacity=0,
         opentelemetry_endpoint="otl",
         opentelemetry_instrumentors=[CustomInstrumentor()],
-        opentelemetry_span_exporter=ConsoleSpanExporter(),
+        opentelemetry_log_traces=True,
         prometheus_metrics_path="/custom-metrics/",
         sentry_dsn="https://testdsn@localhost/1",
         swagger_offline_docs=True,

@@ -1,6 +1,5 @@
 import pytest
 import structlog
-from opentelemetry.sdk.trace.export import ConsoleSpanExporter
 from structlog.typing import EventDict
 
 from lite_bootstrap import FreeBootstrapper, FreeBootstrapperConfig
@@ -16,7 +15,7 @@ def free_bootstrapper_config() -> FreeBootstrapperConfig:
         service_debug=False,
         opentelemetry_endpoint="otl",
         opentelemetry_instrumentors=[CustomInstrumentor()],
-        opentelemetry_span_exporter=ConsoleSpanExporter(),
+        opentelemetry_log_traces=True,
         sentry_dsn="https://testdsn@localhost/1",
         logging_buffer_capacity=0,
     )
@@ -37,7 +36,7 @@ def test_free_bootstrap_logging_not_ready(log_output: list[EventDict]) -> None:
             service_debug=True,
             opentelemetry_endpoint="otl",
             opentelemetry_instrumentors=[CustomInstrumentor()],
-            opentelemetry_span_exporter=ConsoleSpanExporter(),
+            opentelemetry_log_traces=True,
             sentry_dsn="https://testdsn@localhost/1",
             logging_buffer_capacity=0,
         ),

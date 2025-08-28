@@ -73,7 +73,7 @@ Additional parameters:
 - `opentelemetry_namespace`
 - `opentelemetry_insecure`
 - `opentelemetry_instrumentors`
-- `opentelemetry_span_exporter`
+- `opentelemetry_log_traces`
 
 Additional parameters for Litestar and FastAPI:
 

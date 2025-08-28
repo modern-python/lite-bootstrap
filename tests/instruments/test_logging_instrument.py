@@ -2,7 +2,6 @@ import logging
 from io import StringIO
 
 import structlog
-from opentelemetry.sdk.trace.export import ConsoleSpanExporter
 from opentelemetry.trace import get_tracer
 
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument, MemoryLoggerFactory
@@ -34,7 +33,7 @@ def test_logging_instrument_tracer_injection() -> None:
     opentelemetry_instrument = OpenTelemetryInstrument(
         bootstrap_config=OpentelemetryConfig(
             opentelemetry_endpoint="otl",
-            opentelemetry_span_exporter=ConsoleSpanExporter(),
+            opentelemetry_log_traces=True,
         )
     )
     try:
