@@ -86,7 +86,7 @@ For FastStream you must provide additionally:
 
 ## Structlog
 
-To bootstrap Structlog, you must set `service_debug` to False
+To bootstrap Structlog, you must keep `logging_enabled` to True
 
 Additional parameters:
 

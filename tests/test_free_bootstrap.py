@@ -34,7 +34,7 @@ def test_free_bootstrap(free_bootstrapper_config: FreeBootstrapperConfig) -> Non
 def test_free_bootstrap_logging_not_ready(log_output: list[EventDict]) -> None:
     FreeBootstrapper(
         bootstrap_config=FreeBootstrapperConfig(
-            service_debug=True,
+            logging_enabled=False,
             opentelemetry_endpoint="otl",
             opentelemetry_instrumentors=[CustomInstrumentor()],
             opentelemetry_span_exporter=ConsoleSpanExporter(),
@@ -43,7 +43,7 @@ def test_free_bootstrap_logging_not_ready(log_output: list[EventDict]) -> None:
         ),
     )
     assert log_output == [
-        {"event": "LoggingInstrument is not ready, because service_debug is True", "log_level": "info"}
+        {"event": "LoggingInstrument is not ready, because logging_enabled is False", "log_level": "info"}
     ]
 
 
