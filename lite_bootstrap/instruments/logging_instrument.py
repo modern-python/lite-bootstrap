@@ -83,7 +83,6 @@ if import_checker.is_structlog_installed:
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
 class LoggingConfig(BaseConfig):
-    logging_enabled: bool = True
     logging_log_level: int = logging.INFO
     logging_flush_level: int = logging.ERROR
     logging_buffer_capacity: int = 10
@@ -96,11 +95,11 @@ class LoggingConfig(BaseConfig):
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class LoggingInstrument(BaseInstrument):
     bootstrap_config: LoggingConfig
-    not_ready_message = "logging_enabled is False"
+    not_ready_message = "service_debug is True"
     missing_dependency_message = "structlog is not installed"
 
     def is_ready(self) -> bool:
-        return self.bootstrap_config.logging_enabled and import_checker.is_structlog_installed
+        return not self.bootstrap_config.service_debug and import_checker.is_structlog_installed
 
     @staticmethod
     def check_dependencies() -> bool:
