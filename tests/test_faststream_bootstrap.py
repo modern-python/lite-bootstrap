@@ -21,7 +21,10 @@ def broker() -> RedisBroker:
     return RedisBroker()
 
 
-def build_faststream_config(broker: BrokerUsecase[typing.Any, typing.Any] | None = None) -> FastStreamConfig:
+def build_faststream_config(
+    broker: BrokerUsecase[typing.Any, typing.Any] | None = None,
+    health_checks_additional_checker: typing.Callable[[], typing.Coroutine[bool, typing.Any, typing.Any]] | None = None,
+) -> FastStreamConfig:
     return FastStreamConfig(
         service_name="microservice",
         service_version="2.0.0",
@@ -37,6 +40,7 @@ def build_faststream_config(broker: BrokerUsecase[typing.Any, typing.Any] | None
         health_checks_path="/custom-health/",
         logging_buffer_capacity=0,
         broker=broker,
+        health_checks_additional_checker=health_checks_additional_checker,
     )
 
 
@@ -65,6 +69,20 @@ async def test_faststream_bootstrap(broker: RedisBroker) -> None:
 
 async def test_faststream_bootstrap_health_check_wo_broker() -> None:
     bootstrap_config = build_faststream_config()
+    bootstrapper = FastStreamBootstrapper(bootstrap_config=bootstrap_config)
+    application = bootstrapper.bootstrap()
+    test_client = TestClient(app=application)
+
+    response = test_client.get(bootstrap_config.health_checks_path)
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert response.text == "Service is unhealthy"
+
+
+async def test_faststream_bootstrap_additional_health_checker(broker: RedisBroker) -> None:
+    async def custom_checker() -> bool:
+        return False
+
+    bootstrap_config = build_faststream_config(broker=broker, health_checks_additional_checker=custom_checker)
     bootstrapper = FastStreamBootstrapper(bootstrap_config=bootstrap_config)
     application = bootstrapper.bootstrap()
     test_client = TestClient(app=application)

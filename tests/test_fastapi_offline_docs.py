@@ -46,5 +46,5 @@ def test_fastapi_offline_docs_root_path() -> None:
 def test_fastapi_offline_docs_raises_without_openapi_url() -> None:
     app = FastAPI(openapi_url=None)
 
-    with pytest.raises(RuntimeError, match="No app.openapi_url specified"):
+    with pytest.raises(RuntimeError, match=r"No app.openapi_url specified"):
         enable_offline_docs(app, static_path="/static")
