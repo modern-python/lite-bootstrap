@@ -1,4 +1,5 @@
 import dataclasses
+import logging
 
 import fastapi
 import pytest
@@ -11,6 +12,7 @@ from tests.conftest import CustomInstrumentor, emulate_package_missing
 
 
 logger = structlog.getLogger(__name__)
+std_logger = logging.getLogger()
 
 
 @pytest.fixture
@@ -56,6 +58,24 @@ def test_fastapi_bootstrap(fastapi_config: FastAPIConfig) -> None:
         assert response.text
 
     assert not bootstrapper.is_bootstrapped
+
+
+def test_fastapi_bootstrap_std_logger(fastapi_config: FastAPIConfig, capsys: pytest.CaptureFixture[str]) -> None:
+    bootstrapper = FastAPIBootstrapper(bootstrap_config=fastapi_config)
+    application = bootstrapper.bootstrap()
+
+    @application.get("/")
+    async def home() -> str:
+        std_logger.info("std logger")
+        logger.info("structlog logger")
+        return ""
+
+    with TestClient(application) as test_client:
+        test_client.get("/")
+
+    stdout = capsys.readouterr().out
+    assert '"event": "std logger", "level": "info", "logger": "root"' in stdout
+    assert stdout.count("std logger") == 1
 
 
 def test_fastapi_bootstrapper_not_ready() -> None:
