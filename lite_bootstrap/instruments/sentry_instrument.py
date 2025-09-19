@@ -24,6 +24,7 @@ class SentryConfig(BaseConfig):
     sentry_integrations: list["Integration"] = dataclasses.field(default_factory=list)
     sentry_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     sentry_tags: dict[str, str] | None = None
+    sentry_default_integrations: bool = True
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)

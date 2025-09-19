@@ -98,6 +98,19 @@ class LoggingInstrument(BaseInstrument):
     not_ready_message = "service_debug is True"
     missing_dependency_message = "structlog is not installed"
 
+    @property
+    def structlog_pre_chain_processors(self) -> list[typing.Any]:
+        return [
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.add_logger_name,
+            tracer_injection,
+            structlog.stdlib.PositionalArgumentsFormatter(),
+            structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S"),
+            structlog.processors.StackInfoRenderer(),
+            structlog.processors.format_exc_info,
+            structlog.processors.UnicodeDecoder(),
+        ]
+
     def is_ready(self) -> bool:
         return not self.bootstrap_config.service_debug and import_checker.is_structlog_installed
 
@@ -105,29 +118,15 @@ class LoggingInstrument(BaseInstrument):
     def check_dependencies() -> bool:
         return import_checker.is_structlog_installed
 
-    def bootstrap(self) -> None:
-        # Configure basic logging to allow structlog to catch its events
-        logging.basicConfig(
-            format="%(levelname)s [%(asctime)s] %(module)s %(pathname)s - %(message)s",
-            stream=sys.stdout,
-            datefmt="%Y-%m-%d %H:%M:%S",
-            level=self.bootstrap_config.logging_log_level,
-        )
-
+    def _unset_handlers(self) -> None:
         for unset_handlers_logger in self.bootstrap_config.logging_unset_handlers:
             logging.getLogger(unset_handlers_logger).handlers = []
 
+    def _configure_structlog_loggers(self) -> None:
         structlog.configure(
             processors=[
                 structlog.stdlib.filter_by_level,
-                structlog.stdlib.add_log_level,
-                structlog.stdlib.add_logger_name,
-                tracer_injection,
-                structlog.stdlib.PositionalArgumentsFormatter(),
-                structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S"),
-                structlog.processors.StackInfoRenderer(),
-                structlog.processors.format_exc_info,
-                structlog.processors.UnicodeDecoder(),
+                *self.structlog_pre_chain_processors,
                 *self.bootstrap_config.logging_extra_processors,
                 structlog.processors.JSONRenderer(),
             ],
@@ -140,6 +139,27 @@ class LoggingInstrument(BaseInstrument):
             wrapper_class=structlog.stdlib.BoundLogger,
             cache_logger_on_first_use=True,
         )
+
+    def _configure_foreign_loggers(self) -> None:
+        root_logger: typing.Final = logging.getLogger()
+        stream_handler: typing.Final = logging.StreamHandler(sys.stdout)
+        stream_handler.setFormatter(
+            structlog.stdlib.ProcessorFormatter(
+                foreign_pre_chain=self.structlog_pre_chain_processors,
+                processors=[
+                    structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+                    structlog.processors.JSONRenderer(),
+                ],
+                logger=root_logger,
+            )
+        )
+        root_logger.addHandler(stream_handler)
+        root_logger.setLevel(self.bootstrap_config.logging_log_level)
+
+    def bootstrap(self) -> None:
+        self._unset_handlers()
+        self._configure_structlog_loggers()
+        self._configure_foreign_loggers()
 
     def teardown(self) -> None:
         structlog.reset_defaults()
