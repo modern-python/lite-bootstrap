@@ -26,7 +26,9 @@ class InstrumentorWithParams:
 @dataclasses.dataclass(kw_only=True, frozen=True)
 class OpentelemetryConfig(BaseConfig):
     opentelemetry_service_name: str | None = None
-    opentelemetry_container_name: str | None = dataclasses.field(default_factory=lambda: os.environ.get("HOSTNAME") or None)
+    opentelemetry_container_name: str | None = dataclasses.field(
+        default_factory=lambda: os.environ.get("HOSTNAME") or None
+    )
     opentelemetry_endpoint: str | None = None
     opentelemetry_namespace: str | None = None
     opentelemetry_insecure: bool = True
