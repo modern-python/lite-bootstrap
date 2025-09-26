@@ -12,3 +12,6 @@ is_prometheus_fastapi_instrumentator_installed = find_spec("prometheus_fastapi_i
 is_fastapi_opentelemetry_installed = (
     is_opentelemetry_installed and find_spec("opentelemetry.instrumentation.fastapi") is not None
 )
+is_litestar_opentelemetry_installed = (
+    is_opentelemetry_installed and is_litestar_installed and find_spec("opentelemetry.instrumentation.asgi") is not None
+)

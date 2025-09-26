@@ -27,11 +27,13 @@ if import_checker.is_litestar_installed:
     import litestar
     from litestar.config.app import AppConfig
     from litestar.config.cors import CORSConfig
-    from litestar.contrib.opentelemetry import OpenTelemetryConfig
     from litestar.openapi import OpenAPIConfig
     from litestar.openapi.plugins import SwaggerRenderPlugin
     from litestar.plugins.prometheus import PrometheusConfig, PrometheusController
     from litestar.static_files import create_static_files_router
+
+if import_checker.is_litestar_opentelemetry_installed:
+    from litestar.contrib.opentelemetry import OpenTelemetryConfig
 
 if import_checker.is_opentelemetry_installed:
     from opentelemetry.trace import get_tracer_provider
