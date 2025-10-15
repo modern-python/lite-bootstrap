@@ -2,7 +2,7 @@ import typing
 
 import pytest
 import structlog
-from faststream.broker.core.usecase import BrokerUsecase
+from faststream._internal.broker import BrokerUsecase
 from faststream.redis import RedisBroker, TestRedisBroker
 from faststream.redis.opentelemetry import RedisTelemetryMiddleware
 from faststream.redis.prometheus import RedisPrometheusMiddleware

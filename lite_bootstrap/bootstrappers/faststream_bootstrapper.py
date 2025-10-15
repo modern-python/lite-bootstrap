@@ -12,10 +12,9 @@ from lite_bootstrap.instruments.sentry_instrument import SentryConfig, SentryIns
 
 
 if import_checker.is_faststream_installed:
-    import faststream
+    from faststream._internal.broker import BrokerUsecase
     from faststream.asgi import AsgiFastStream, AsgiResponse
     from faststream.asgi import get as handle_get
-    from faststream.broker.core.usecase import BrokerUsecase
 
 if import_checker.is_prometheus_client_installed:
     import prometheus_client
@@ -33,8 +32,8 @@ class FastStreamTelemetryMiddlewareProtocol(typing.Protocol):
         tracer_provider: typing.Optional["TracerProvider"] = None,
         meter_provider: typing.Optional["MeterProvider"] = None,
         meter: typing.Optional["Meter"] = None,
+        include_messages_counters: bool = True,
     ) -> None: ...
-    def __call__(self, msg: typing.Any | None) -> "faststream.BaseMiddleware": ...  # noqa: ANN401
 
 
 @typing.runtime_checkable
@@ -47,7 +46,6 @@ class FastStreamPrometheusMiddlewareProtocol(typing.Protocol):
         metrics_prefix: str = "faststream",
         received_messages_size_buckets: typing.Sequence[float] | None = None,
     ) -> None: ...
-    def __call__(self, msg: typing.Any | None) -> "faststream.BaseMiddleware": ...  # noqa: ANN401
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
@@ -103,8 +101,9 @@ class FastStreamOpenTelemetryInstrument(OpenTelemetryInstrument):
 
     def bootstrap(self) -> None:
         if self.bootstrap_config.opentelemetry_middleware_cls and self.bootstrap_config.application.broker:
+            self.bootstrap_config.opentelemetry_middleware_cls(tracer_provider=get_tracer_provider())
             self.bootstrap_config.application.broker.add_middleware(
-                self.bootstrap_config.opentelemetry_middleware_cls(tracer_provider=get_tracer_provider())
+                self.bootstrap_config.opentelemetry_middleware_cls(tracer_provider=get_tracer_provider())  # type: ignore[arg-type]
             )
 
 
@@ -139,7 +138,7 @@ class FastStreamPrometheusInstrument(PrometheusInstrument):
         )
         if self.bootstrap_config.prometheus_middleware_cls and self.bootstrap_config.application.broker:
             self.bootstrap_config.application.broker.add_middleware(
-                self.bootstrap_config.prometheus_middleware_cls(registry=self.collector_registry)
+                self.bootstrap_config.prometheus_middleware_cls(registry=self.collector_registry)  # type: ignore[arg-type]
             )
 
 
@@ -162,7 +161,7 @@ class FastStreamBootstrapper(BaseBootstrapper["AsgiFastStream"]):
     def __init__(self, bootstrap_config: FastStreamConfig) -> None:
         super().__init__(bootstrap_config)
         if self.bootstrap_config.broker:
-            self.bootstrap_config.application.broker = self.bootstrap_config.broker
+            self.bootstrap_config.application.set_broker(self.bootstrap_config.broker)
         self.bootstrap_config.application.on_shutdown(self.teardown)
 
     def _prepare_application(self) -> "AsgiFastStream":
