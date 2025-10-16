@@ -12,7 +12,6 @@ from lite_bootstrap.instruments.sentry_instrument import SentryConfig, SentryIns
 
 
 if import_checker.is_faststream_installed:
-    from faststream._internal.broker import BrokerUsecase
     from faststream.asgi import AsgiFastStream, AsgiResponse
     from faststream.asgi import get as handle_get
 
@@ -50,8 +49,7 @@ class FastStreamPrometheusMiddlewareProtocol(typing.Protocol):
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class FastStreamConfig(HealthChecksConfig, LoggingConfig, OpentelemetryConfig, PrometheusConfig, SentryConfig):
-    application: "AsgiFastStream" = dataclasses.field(default_factory=lambda: AsgiFastStream())
-    broker: typing.Optional["BrokerUsecase[typing.Any, typing.Any]"] = None
+    application: "AsgiFastStream"
     opentelemetry_middleware_cls: type[FastStreamTelemetryMiddlewareProtocol] | None = None
     prometheus_middleware_cls: type[FastStreamPrometheusMiddlewareProtocol] | None = None
     health_checks_additional_checker: typing.Callable[[], typing.Coroutine[bool, typing.Any, typing.Any]] | None = None
@@ -160,8 +158,6 @@ class FastStreamBootstrapper(BaseBootstrapper["AsgiFastStream"]):
 
     def __init__(self, bootstrap_config: FastStreamConfig) -> None:
         super().__init__(bootstrap_config)
-        if self.bootstrap_config.broker:
-            self.bootstrap_config.application.set_broker(self.bootstrap_config.broker)
         self.bootstrap_config.application.on_shutdown(self.teardown)
 
     def _prepare_application(self) -> "AsgiFastStream":

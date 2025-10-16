@@ -1,5 +1,6 @@
 import typing
 
+import faststream.asgi
 import pytest
 import structlog
 from faststream._internal.broker import BrokerUsecase
@@ -39,8 +40,12 @@ def build_faststream_config(
         sentry_dsn="https://testdsn@localhost/1",
         health_checks_path="/custom-health/",
         logging_buffer_capacity=0,
-        broker=broker,
         health_checks_additional_checker=health_checks_additional_checker,
+        application=faststream.asgi.AsgiFastStream(
+            broker,
+            asyncapi_path=faststream.asgi.AsyncAPIRoute("/docs/"),
+            specification=faststream.AsyncAPI(),
+        ),
     )
 
 
@@ -62,6 +67,9 @@ async def test_faststream_bootstrap(broker: RedisBroker) -> None:
             }
 
             response = test_client.get(bootstrap_config.prometheus_metrics_path)
+            assert response.status_code == status.HTTP_200_OK
+
+            response = test_client.get("/docs/")
             assert response.status_code == status.HTTP_200_OK
 
     assert not bootstrapper.is_bootstrapped
@@ -94,7 +102,7 @@ async def test_faststream_bootstrap_additional_health_checker(broker: RedisBroke
 
 def test_faststream_bootstrapper_not_ready() -> None:
     with emulate_package_missing("faststream"), pytest.raises(RuntimeError, match="faststream is not installed"):
-        FastStreamBootstrapper(bootstrap_config=FastStreamConfig())
+        FastStreamBootstrapper(bootstrap_config=FastStreamConfig(application=faststream.asgi.AsgiFastStream()))
 
 
 @pytest.mark.parametrize(
