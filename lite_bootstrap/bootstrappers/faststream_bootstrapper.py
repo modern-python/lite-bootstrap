@@ -49,7 +49,7 @@ class FastStreamPrometheusMiddlewareProtocol(typing.Protocol):
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class FastStreamConfig(HealthChecksConfig, LoggingConfig, OpentelemetryConfig, PrometheusConfig, SentryConfig):
-    application: "AsgiFastStream"
+    application: "AsgiFastStream" = dataclasses.field(default_factory=lambda: AsgiFastStream())
     opentelemetry_middleware_cls: type[FastStreamTelemetryMiddlewareProtocol] | None = None
     prometheus_middleware_cls: type[FastStreamPrometheusMiddlewareProtocol] | None = None
     health_checks_additional_checker: typing.Callable[[], typing.Coroutine[bool, typing.Any, typing.Any]] | None = None
