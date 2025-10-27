@@ -17,6 +17,9 @@ lint-ci:
 test *args:
     uv run --no-sync pytest {{ args }}
 
+test-branch:
+    @just test --cov-branch
+
 publish:
     rm -rf dist
     uv version $GITHUB_REF_NAME
