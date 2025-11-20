@@ -56,8 +56,8 @@ class OpenTelemetryInstrument(BaseInstrument):
 
     def bootstrap(self) -> None:
         attributes = {
-            resources.SERVICE_NAME: self.bootstrap_config.service_name
-            or self.bootstrap_config.opentelemetry_service_name,
+            resources.SERVICE_NAME: self.bootstrap_config.opentelemetry_service_name
+            or self.bootstrap_config.service_name,
             resources.TELEMETRY_SDK_LANGUAGE: "python",
             resources.SERVICE_NAMESPACE: self.bootstrap_config.opentelemetry_namespace,
             resources.SERVICE_VERSION: self.bootstrap_config.service_version,
