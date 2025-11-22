@@ -104,11 +104,12 @@ class FastAPILoggingInstrument(LoggingInstrument):
 class FastAPIOpenTelemetryInstrument(OpenTelemetryInstrument):
     bootstrap_config: FastAPIConfig
 
-    def _build_excluded_urls(self) -> list[str]:
-        excluded_urls = [*self.bootstrap_config.opentelemetry_excluded_urls]
-        for one_url in (self.bootstrap_config.health_checks_path, self.bootstrap_config.prometheus_metrics_path):
-            if one_url and one_url not in excluded_urls:
-                excluded_urls.append(one_url)
+    def _build_excluded_urls(self) -> set[str]:
+        excluded_urls = set(self.bootstrap_config.opentelemetry_excluded_urls)
+        excluded_urls.add(self.bootstrap_config.prometheus_metrics_path)
+        if not self.bootstrap_config.opentelemetry_generate_health_check_spans:
+            excluded_urls.add(self.bootstrap_config.health_checks_path)
+
         return excluded_urls
 
     def bootstrap(self) -> None:

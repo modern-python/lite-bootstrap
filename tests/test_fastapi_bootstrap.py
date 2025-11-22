@@ -28,6 +28,7 @@ def fastapi_config() -> FastAPIConfig:
         opentelemetry_endpoint="otl",
         opentelemetry_instrumentors=[CustomInstrumentor()],
         opentelemetry_log_traces=True,
+        opentelemetry_generate_health_check_spans=False,
         prometheus_metrics_path="/custom-metrics/",
         sentry_dsn="https://testdsn@localhost/1",
         swagger_offline_docs=True,

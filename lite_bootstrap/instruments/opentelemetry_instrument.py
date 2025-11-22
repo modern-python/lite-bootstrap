@@ -36,6 +36,7 @@ class OpentelemetryConfig(BaseConfig):
         default_factory=list
     )
     opentelemetry_log_traces: bool = False
+    opentelemetry_generate_health_check_spans: bool = True
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
