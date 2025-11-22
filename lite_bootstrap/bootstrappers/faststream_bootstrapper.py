@@ -19,8 +19,11 @@ if import_checker.is_prometheus_client_installed:
     import prometheus_client
 
 if import_checker.is_opentelemetry_installed:
+    from opentelemetry import trace
     from opentelemetry.metrics import Meter, MeterProvider
     from opentelemetry.trace import TracerProvider, get_tracer_provider
+
+    tracer: typing.Final = trace.get_tracer(__name__)
 
 
 @typing.runtime_checkable
@@ -68,6 +71,11 @@ class FastStreamHealthChecksInstrument(HealthChecksInstrument):
                 )
                 if await self._define_health_status()
                 else AsgiResponse(b"Service is unhealthy", 500, headers={"content-type": "application/json"})
+            )
+
+        if self.bootstrap_config.opentelemetry_generate_health_check_spans:
+            check_health = tracer.start_as_current_span(f"GET {self.bootstrap_config.health_checks_path}")(
+                check_health,
             )
 
         self.bootstrap_config.application.mount(self.bootstrap_config.health_checks_path, check_health)

@@ -67,13 +67,14 @@ To bootstrap Opentelemetry, you must provide at least:
 
 Additional parameters:
 
-- `opentelemetry_service_name`
-- `opentelemetry_container_name`
-- `opentelemetry_endpoint`
-- `opentelemetry_namespace`
-- `opentelemetry_insecure`
-- `opentelemetry_instrumentors`
-- `opentelemetry_log_traces`
+- `opentelemetry_service_name` - if provided, will be passed to the `Resource` instead of `service_name`.
+- `opentelemetry_container_name` - will be passed to the `Resource`.
+- `opentelemetry_endpoint` - will be passed to `OTLPSpanExporter` as endpoint.
+- `opentelemetry_namespace` - will be passed to the `Resource`.
+- `opentelemetry_insecure` - is opentelemetry connection secure.
+- `opentelemetry_instrumentors` - a list of extra instrumentors.
+- `opentelemetry_log_traces` - traces will be logged to stdout.
+- `opentelemetry_generate_health_check_spans` - generate spans for health check handlers if `True`.
 
 Additional parameters for Litestar and FastAPI:
 
