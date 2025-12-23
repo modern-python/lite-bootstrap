@@ -17,6 +17,14 @@ class HealthChecksConfig(BaseConfig):
     health_checks_path: str = "/health/"
     health_checks_include_in_schema: bool = False
 
+    @property
+    def health_check_data(self) -> HealthCheckTypedDict:
+        return {
+            "service_version": self.service_version,
+            "service_name": self.service_name,
+            "health_status": True,
+        }
+
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class HealthChecksInstrument(BaseInstrument):
@@ -27,8 +35,4 @@ class HealthChecksInstrument(BaseInstrument):
         return self.bootstrap_config.health_checks_enabled
 
     def render_health_check_data(self) -> HealthCheckTypedDict:
-        return {
-            "service_version": self.bootstrap_config.service_version,
-            "service_name": self.bootstrap_config.service_name,
-            "health_status": True,
-        }
+        return self.bootstrap_config.health_check_data
