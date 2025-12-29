@@ -13,6 +13,7 @@ if typing.TYPE_CHECKING:
 
 
 if import_checker.is_structlog_installed:
+    import orjson
     import structlog
 
 
@@ -80,6 +81,9 @@ if import_checker.is_structlog_installed:
             logger.propagate = False
             return logger
 
+    def _serialize_log_with_orjson_to_string(value: typing.Any, **kwargs: typing.Any) -> str:  # noqa: ANN401
+        return orjson.dumps(value, **kwargs).decode()
+
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
 class LoggingConfig(BaseConfig):
@@ -128,7 +132,7 @@ class LoggingInstrument(BaseInstrument):
                 structlog.stdlib.filter_by_level,
                 *self.structlog_pre_chain_processors,
                 *self.bootstrap_config.logging_extra_processors,
-                structlog.processors.JSONRenderer(),
+                structlog.processors.JSONRenderer(serializer=_serialize_log_with_orjson_to_string),
             ],
             context_class=dict,
             logger_factory=MemoryLoggerFactory(
