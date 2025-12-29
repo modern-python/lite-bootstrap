@@ -45,6 +45,7 @@ otl = [
 ]
 logging = [
     "structlog",
+    "orjson",
 ]
 free-all = [
     "lite-bootstrap[sentry,otl,logging]",
