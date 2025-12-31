@@ -127,9 +127,3 @@ Additional params:
 
 - `health_checks_path`
 - `health_checks_include_in_schema`
-
-### Health checks FastStream
-
-Additional params:
-
-- `health_checks_additional_checker` - additional coroutine to check service health
