@@ -55,7 +55,6 @@ class FastStreamConfig(HealthChecksConfig, LoggingConfig, OpentelemetryConfig, P
     application: "AsgiFastStream" = dataclasses.field(default_factory=lambda: AsgiFastStream())
     opentelemetry_middleware_cls: type[FastStreamTelemetryMiddlewareProtocol] | None = None
     prometheus_middleware_cls: type[FastStreamPrometheusMiddlewareProtocol] | None = None
-    health_checks_additional_checker: typing.Callable[[], typing.Coroutine[bool, typing.Any, typing.Any]] | None = None
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
@@ -84,12 +83,7 @@ class FastStreamHealthChecksInstrument(HealthChecksInstrument):
         if not self.bootstrap_config.application or not self.bootstrap_config.application.broker:
             return False
 
-        additional_check = (
-            await self.bootstrap_config.health_checks_additional_checker()
-            if self.bootstrap_config.health_checks_additional_checker
-            else True
-        )
-        return additional_check and await self.bootstrap_config.application.broker.ping(timeout=5)
+        return await self.bootstrap_config.application.broker.ping(timeout=5)
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
