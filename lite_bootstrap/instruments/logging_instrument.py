@@ -15,6 +15,7 @@ if typing.TYPE_CHECKING:
 if import_checker.is_structlog_installed:
     import orjson
     import structlog
+    from structlog.processors import ExceptionRenderer
 
 
 ScopeType = typing.MutableMapping[str, typing.Any]
@@ -96,6 +97,15 @@ class LoggingConfig(BaseConfig):
     )
 
 
+class CustomExceptionRenderer(ExceptionRenderer):
+    def __call__(self, logger: "WrappedLogger", name: str, event_dict: "EventDict") -> "EventDict":
+        exc_info = event_dict.get("exc_info")
+        event_dict = super().__call__(logger=logger, name=name, event_dict=event_dict)
+        if exc_info:
+            event_dict["exc_info"] = exc_info
+        return event_dict
+
+
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class LoggingInstrument(BaseInstrument):
     bootstrap_config: LoggingConfig
@@ -111,7 +121,7 @@ class LoggingInstrument(BaseInstrument):
             structlog.stdlib.PositionalArgumentsFormatter(),
             structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S"),
             structlog.processors.StackInfoRenderer(),
-            structlog.processors.format_exc_info,
+            CustomExceptionRenderer(),
             structlog.processors.UnicodeDecoder(),
         ]
 
