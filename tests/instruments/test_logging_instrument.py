@@ -21,6 +21,11 @@ def test_logging_instrument_simple() -> None:
     try:
         logging_instrument.bootstrap()
         logger.info("testing structlog", key="value")
+        try:
+            msg = "some error"
+            raise ValueError(msg)  # noqa: TRY301
+        except ValueError:
+            logger.exception("logging error")
         std_logger.info("testing std logger", extra={"key": "value"})
     finally:
         logging_instrument.teardown()
