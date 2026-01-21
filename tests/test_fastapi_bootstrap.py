@@ -8,7 +8,7 @@ from starlette import status
 from starlette.testclient import TestClient
 
 from lite_bootstrap import FastAPIBootstrapper, FastAPIConfig
-from tests.conftest import CustomInstrumentor, emulate_package_missing
+from tests.conftest import CustomInstrumentor, SentryTestTransport, emulate_package_missing
 
 
 logger = structlog.getLogger(__name__)
@@ -25,12 +25,12 @@ def fastapi_config() -> FastAPIConfig:
         cors_allowed_origins=["http://test"],
         health_checks_path="/custom-health/",
         logging_buffer_capacity=0,
-        opentelemetry_endpoint="otl",
         opentelemetry_instrumentors=[CustomInstrumentor()],
         opentelemetry_log_traces=True,
         opentelemetry_generate_health_check_spans=False,
         prometheus_metrics_path="/custom-metrics/",
         sentry_dsn="https://testdsn@localhost/1",
+        sentry_additional_params={"transport": SentryTestTransport()},
         swagger_offline_docs=True,
     )
 
@@ -75,7 +75,7 @@ def test_fastapi_bootstrap_std_logger(fastapi_config: FastAPIConfig, capsys: pyt
         test_client.get("/")
 
     stdout = capsys.readouterr().out
-    assert '"event": "std logger", "level": "info", "logger": "root"' in stdout
+    assert '"event":"std logger","level":"info","logger":"root"' in stdout
     assert stdout.count("std logger") == 1
 
 

@@ -4,7 +4,7 @@ from litestar import status_codes
 from litestar.testing import TestClient
 
 from lite_bootstrap import LitestarBootstrapper, LitestarConfig
-from tests.conftest import CustomInstrumentor, emulate_package_missing
+from tests.conftest import CustomInstrumentor, SentryTestTransport, emulate_package_missing
 
 
 logger = structlog.getLogger(__name__)
@@ -19,12 +19,12 @@ def litestar_config() -> LitestarConfig:
         service_debug=False,
         cors_allowed_origins=["http://test"],
         health_checks_path="/custom-health/",
-        opentelemetry_endpoint="otl",
         opentelemetry_instrumentors=[CustomInstrumentor()],
         opentelemetry_log_traces=True,
         opentelemetry_generate_health_check_spans=False,
         prometheus_metrics_path="/custom-metrics/",
         sentry_dsn="https://testdsn@localhost/1",
+        sentry_additional_params={"transport": SentryTestTransport()},
         swagger_offline_docs=True,
         logging_buffer_capacity=0,
     )

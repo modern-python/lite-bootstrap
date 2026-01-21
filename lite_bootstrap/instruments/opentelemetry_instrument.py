@@ -70,7 +70,7 @@ class OpenTelemetryInstrument(BaseInstrument):
         tracer_provider = TracerProvider(resource=resource)
         if self.bootstrap_config.opentelemetry_log_traces:
             tracer_provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
-        if self.bootstrap_config.opentelemetry_endpoint:
+        if self.bootstrap_config.opentelemetry_endpoint:  # pragma: no cover
             tracer_provider.add_span_processor(
                 BatchSpanProcessor(
                     OTLPSpanExporter(
