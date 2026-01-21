@@ -3,7 +3,7 @@ import structlog
 from structlog.typing import EventDict
 
 from lite_bootstrap import FreeBootstrapper, FreeBootstrapperConfig
-from tests.conftest import CustomInstrumentor, emulate_package_missing
+from tests.conftest import CustomInstrumentor, SentryTestTransport, emulate_package_missing
 
 
 logger = structlog.getLogger(__name__)
@@ -13,7 +13,6 @@ logger = structlog.getLogger(__name__)
 def free_bootstrapper_config() -> FreeBootstrapperConfig:
     return FreeBootstrapperConfig(
         service_debug=False,
-        opentelemetry_endpoint="otl",
         opentelemetry_instrumentors=[CustomInstrumentor()],
         opentelemetry_log_traces=True,
         sentry_dsn="https://testdsn@localhost/1",
@@ -34,10 +33,10 @@ def test_free_bootstrap_logging_not_ready(log_output: list[EventDict]) -> None:
     FreeBootstrapper(
         bootstrap_config=FreeBootstrapperConfig(
             service_debug=True,
-            opentelemetry_endpoint="otl",
             opentelemetry_instrumentors=[CustomInstrumentor()],
             opentelemetry_log_traces=True,
             sentry_dsn="https://testdsn@localhost/1",
+            sentry_additional_params={"transport": SentryTestTransport()},
             logging_buffer_capacity=0,
         ),
     )

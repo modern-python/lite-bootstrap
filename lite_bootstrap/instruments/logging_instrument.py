@@ -4,6 +4,8 @@ import logging.handlers
 import sys
 import typing
 
+import orjson
+
 from lite_bootstrap import import_checker
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 
@@ -13,9 +15,7 @@ if typing.TYPE_CHECKING:
 
 
 if import_checker.is_structlog_installed:
-    import orjson
     import structlog
-    from structlog.processors import ExceptionRenderer
 
 
 ScopeType = typing.MutableMapping[str, typing.Any]
@@ -97,15 +97,6 @@ class LoggingConfig(BaseConfig):
     )
 
 
-class CustomExceptionRenderer(ExceptionRenderer):
-    def __call__(self, logger: "WrappedLogger", name: str, event_dict: "EventDict") -> "EventDict":
-        exc_info = event_dict.get("exc_info")
-        event_dict = super().__call__(logger=logger, name=name, event_dict=event_dict)
-        if exc_info:
-            event_dict["exc_info"] = exc_info
-        return event_dict
-
-
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class LoggingInstrument(BaseInstrument):
     bootstrap_config: LoggingConfig
@@ -121,7 +112,7 @@ class LoggingInstrument(BaseInstrument):
             structlog.stdlib.PositionalArgumentsFormatter(),
             structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S"),
             structlog.processors.StackInfoRenderer(),
-            CustomExceptionRenderer(),
+            structlog.processors.format_exc_info,
             structlog.processors.UnicodeDecoder(),
         ]
 
@@ -162,7 +153,8 @@ class LoggingInstrument(BaseInstrument):
                 foreign_pre_chain=self.structlog_pre_chain_processors,
                 processors=[
                     structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-                    structlog.processors.JSONRenderer(),
+                    *self.bootstrap_config.logging_extra_processors,
+                    structlog.processors.JSONRenderer(serializer=_serialize_log_with_orjson_to_string),
                 ],
                 logger=root_logger,
             )
@@ -177,3 +169,8 @@ class LoggingInstrument(BaseInstrument):
 
     def teardown(self) -> None:
         structlog.reset_defaults()
+        root_logger = logging.getLogger()
+        for h in root_logger.handlers[:]:
+            root_logger.removeHandler(h)
+            h.close()
+        root_logger.setLevel(logging.WARNING)

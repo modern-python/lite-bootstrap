@@ -29,6 +29,9 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 version = "0"
+dependencies = [
+    "orjson",
+]
 
 [project.urls]
 repository = "https://github.com/modern-python/lite-bootstrap"
@@ -45,7 +48,6 @@ otl = [
 ]
 logging = [
     "structlog",
-    "orjson",
 ]
 free-all = [
     "lite-bootstrap[sentry,otl,logging]",

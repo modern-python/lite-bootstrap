@@ -11,7 +11,7 @@ from starlette import status
 from starlette.testclient import TestClient
 
 from lite_bootstrap import FastStreamBootstrapper, FastStreamConfig
-from tests.conftest import CustomInstrumentor, emulate_package_missing
+from tests.conftest import CustomInstrumentor, SentryTestTransport, emulate_package_missing
 
 
 logger = structlog.getLogger(__name__)
@@ -30,13 +30,13 @@ def build_faststream_config(
         service_version="2.0.0",
         service_environment="test",
         service_debug=False,
-        opentelemetry_endpoint="otl",
         opentelemetry_instrumentors=[CustomInstrumentor()],
         opentelemetry_log_traces=True,
         opentelemetry_middleware_cls=RedisTelemetryMiddleware,
         prometheus_metrics_path="/custom-metrics/",
         prometheus_middleware_cls=RedisPrometheusMiddleware,
         sentry_dsn="https://testdsn@localhost/1",
+        sentry_additional_params={"transport": SentryTestTransport()},
         health_checks_path="/custom-health/",
         logging_buffer_capacity=0,
         application=faststream.asgi.AsgiFastStream(

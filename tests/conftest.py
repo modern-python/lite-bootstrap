@@ -2,9 +2,9 @@ import contextlib
 import sys
 import typing
 from importlib import reload
-from unittest.mock import Mock
 
 import pytest
+import sentry_sdk
 from opentelemetry.instrumentation.instrumentor import BaseInstrumentor  # type: ignore[attr-defined]
 from structlog.testing import capture_logs
 from structlog.typing import EventDict
@@ -20,9 +20,21 @@ class CustomInstrumentor(BaseInstrumentor):  # type: ignore[misc]
         pass
 
 
-@pytest.fixture(autouse=True)
-def mock_sentry_init(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("sentry_sdk.init", Mock)
+P = typing.ParamSpec("P")
+
+
+class SentryTestTransport(sentry_sdk.Transport):
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:  # noqa: ANN401
+        super().__init__(*args, **kwargs)
+        self.mock_envelopes: list[sentry_sdk.envelope.Envelope] = []
+
+    def capture_envelope(self, envelope: sentry_sdk.envelope.Envelope) -> None:
+        self.mock_envelopes.append(envelope)
+
+
+@pytest.fixture
+def sentry_mock() -> SentryTestTransport:
+    return SentryTestTransport()
 
 
 @contextlib.contextmanager
