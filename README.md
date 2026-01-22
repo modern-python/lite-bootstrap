@@ -25,6 +25,11 @@ Those instruments can be bootstrapped for:
 - [services and scripts without frameworks](https://lite-bootstrap.readthedocs.io/integrations/free)
 ---
 
+Usage examples:
+
+- with LiteStar - [litestar-sqlalchemy-template](https://github.com/modern-python/litestar-sqlalchemy-template)
+- with FastAPI - [fastapi-sqlalchemy-template](https://github.com/modern-python/fastapi-sqlalchemy-template)
+
 ## 📚 [Documentation](https://lite-bootstrap.readthedocs.io)
 
 ## 📦 [PyPi](https://pypi.org/project/lite-bootstrap)

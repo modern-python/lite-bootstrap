@@ -1,22 +1,28 @@
+import copy
 import logging
 import typing
 
 import pytest
 import sentry_sdk
+import structlog
+from sentry_sdk.integrations.logging import LoggingIntegration
 
-from tests.conftest import SentryTestTransport
+from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument
+from tests.conftest import LoggingMock, SentryTestTransport
 
 
 if typing.TYPE_CHECKING:
-    pass
+    from sentry_sdk import _types as sentry_types
 
 from lite_bootstrap.instruments.sentry_instrument import (
     SentryConfig,
     SentryInstrument,
+    enrich_sentry_event_from_structlog_log,
 )
 
 
-logger = logging.getLogger(__name__)
+std_logger = logging.getLogger(__name__)
+logger = structlog.getLogger(__name__)
 
 
 @pytest.fixture
@@ -32,11 +38,79 @@ def test_sentry_instrument_with_raise(minimal_sentry_config: SentryConfig, sentr
     SentryInstrument(bootstrap_config=minimal_sentry_config).bootstrap()
 
     try:
-        logger.error("some error")
+        std_logger.error("some error")
         assert len(sentry_mock.mock_envelopes) == 1
     finally:
         sentry_sdk.init()
 
 
+def test_sentry_instrument_with_structlog_error(
+    minimal_sentry_config: SentryConfig, sentry_mock: SentryTestTransport, logging_mock: LoggingMock
+) -> None:
+    SentryInstrument(bootstrap_config=minimal_sentry_config).bootstrap()
+    logging_instrument = LoggingInstrument(
+        bootstrap_config=LoggingConfig(
+            logging_unset_handlers=["uvicorn"],
+            logging_buffer_capacity=0,
+            service_debug=False,
+            logging_extra_processors=[logging_mock],
+        )
+    )
+    logging_instrument.bootstrap()
+
+    try:
+        logger.error("some error")
+        logger.error("some error, skipping sentry", skip_sentry=True)
+        assert len(sentry_mock.mock_envelopes) == 1
+        LoggingIntegration()
+    finally:
+        sentry_sdk.init()
+        logging_instrument.teardown()
+
+
 def test_sentry_instrument_empty_dsn() -> None:
     SentryInstrument(bootstrap_config=SentryConfig(sentry_dsn="")).bootstrap()
+
+
+class TestSentryEnrichEventFromStructlog:
+    @pytest.mark.parametrize(
+        "event",
+        [
+            {},
+            {"logentry": None},
+            {"logentry": {}},
+            {"logentry": {"formatted": b""}},
+            {"logentry": {"formatted": ""}},
+            {"logentry": {"formatted": "hi"}},
+            {"logentry": {"formatted": "[]"}},
+            {"logentry": {"formatted": "[{}]"}},
+            {"logentry": {"formatted": "{"}, "contexts": {}},
+            {"logentry": {"formatted": "{}"}, "contexts": {}},
+        ],
+    )
+    def test_skip(self, event: "sentry_types.Event") -> None:
+        assert enrich_sentry_event_from_structlog_log(copy.deepcopy(event), {}) == event
+
+    @pytest.mark.parametrize(
+        ("event_before", "event_after"),
+        [
+            (
+                {"logentry": {"formatted": '{"event": "event name"}'}, "contexts": {}},
+                {"logentry": {"formatted": "event name"}, "contexts": {}},
+            ),
+            (
+                {
+                    "logentry": {
+                        "formatted": '{"event": "event name", "timestamp": 1, "level": "error", "logger": "event.logger", "tracing": {}, "foo": "bar"}'  # noqa: E501
+                    },
+                    "contexts": {},
+                },
+                {
+                    "logentry": {"formatted": "event name"},
+                    "contexts": {"structlog": {"foo": "bar"}},
+                },
+            ),
+        ],
+    )
+    def test_modify(self, event_before: "sentry_types.Event", event_after: "sentry_types.Event") -> None:
+        assert enrich_sentry_event_from_structlog_log(event_before, {}) == event_after

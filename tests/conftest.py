@@ -6,8 +6,7 @@ from importlib import reload
 import pytest
 import sentry_sdk
 from opentelemetry.instrumentation.instrumentor import BaseInstrumentor  # type: ignore[attr-defined]
-from structlog.testing import capture_logs
-from structlog.typing import EventDict
+from structlog.typing import EventDict, WrappedLogger
 
 from lite_bootstrap import import_checker
 
@@ -18,9 +17,6 @@ class CustomInstrumentor(BaseInstrumentor):  # type: ignore[misc]
 
     def _uninstrument(self, **kwargs: typing.Mapping[str, typing.Any]) -> None:
         pass
-
-
-P = typing.ParamSpec("P")
 
 
 class SentryTestTransport(sentry_sdk.Transport):
@@ -37,6 +33,20 @@ def sentry_mock() -> SentryTestTransport:
     return SentryTestTransport()
 
 
+class LoggingMock:
+    def __init__(self) -> None:
+        self.entries: list[EventDict] = []
+
+    def __call__(self, _: WrappedLogger, __: str, event_dict: EventDict) -> EventDict:
+        self.entries.append(event_dict)
+        return event_dict
+
+
+@pytest.fixture
+def logging_mock() -> LoggingMock:
+    return LoggingMock()
+
+
 @contextlib.contextmanager
 def emulate_package_missing(package_name: str) -> typing.Iterator[None]:
     old_module = sys.modules[package_name]
@@ -47,9 +57,3 @@ def emulate_package_missing(package_name: str) -> typing.Iterator[None]:
     finally:
         sys.modules[package_name] = old_module
         reload(import_checker)
-
-
-@pytest.fixture(name="log_output")
-def fixture_log_output() -> typing.Iterator[list[EventDict]]:
-    with capture_logs() as cap_logs:
-        yield cap_logs
