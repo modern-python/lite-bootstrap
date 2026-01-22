@@ -3,50 +3,48 @@ from io import StringIO
 
 import structlog
 from opentelemetry.trace import get_tracer
-from structlog.testing import LogCapture
 
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument, MemoryLoggerFactory
 from lite_bootstrap.instruments.opentelemetry_instrument import OpentelemetryConfig, OpenTelemetryInstrument
+from tests.conftest import LoggingMock
 
 
-std_logger = logging.getLogger(__name__)
-
-
-def test_logging_instrument_simple() -> None:
-    log_capture = LogCapture()
+def test_logging_instrument_simple(logging_mock: LoggingMock) -> None:
     logging_instrument = LoggingInstrument(
         bootstrap_config=LoggingConfig(
             logging_unset_handlers=["uvicorn"],
             logging_buffer_capacity=0,
             service_debug=False,
-            logging_extra_processors=[log_capture],
+            logging_extra_processors=[logging_mock],
         )
     )
     try:
         logging_instrument.bootstrap()
 
+        std_logger = logging.getLogger(__name__)
+        std_logger.info("testing std logger", extra={"key": "value"})
+
         logger = structlog.getLogger(__name__)
         logger.info("testing structlog", key="value")
-        std_logger.info("testing std logger", extra={"key": "value"})
+
         try:
             msg = "some error"
             raise ValueError(msg)  # noqa: TRY301
         except ValueError:
             logger.exception("logging error")
 
-        events_number = 2
-        assert len(log_capture.entries) == events_number
+        events_number = 3
+        assert len(logging_mock.entries) == events_number
     finally:
         logging_instrument.teardown()
 
 
-def test_logging_instrument_tracer_injection() -> None:
-    log_capture = LogCapture()
+def test_logging_instrument_tracer_injection(logging_mock: LoggingMock) -> None:
     logging_instrument = LoggingInstrument(
         bootstrap_config=LoggingConfig(
             logging_unset_handlers=["uvicorn"],
             logging_buffer_capacity=0,
-            logging_extra_processors=[log_capture],
+            logging_extra_processors=[logging_mock],
         )
     )
     opentelemetry_instrument = OpenTelemetryInstrument(
@@ -67,13 +65,13 @@ def test_logging_instrument_tracer_injection() -> None:
             span.add_event("example_event", {"event_attr": 1})
             logger.info("testing tracer injection with span attributes")
 
-        assert log_capture.entries[0]["event"] == "testing tracer injection without spans"
+        assert logging_mock.entries[0]["event"] == "testing tracer injection without spans"
 
-        assert log_capture.entries[1]["event"] == "testing tracer injection without span attributes"
-        assert log_capture.entries[2]["event"] == "testing tracer injection with span attributes"
+        assert logging_mock.entries[1]["event"] == "testing tracer injection without span attributes"
+        assert logging_mock.entries[2]["event"] == "testing tracer injection with span attributes"
 
-        tracing1 = log_capture.entries[1]["tracing"]
-        tracing2 = log_capture.entries[2]["tracing"]
+        tracing1 = logging_mock.entries[1]["tracing"]
+        tracing2 = logging_mock.entries[2]["tracing"]
         assert tracing1
         assert tracing1 == tracing2
     finally:

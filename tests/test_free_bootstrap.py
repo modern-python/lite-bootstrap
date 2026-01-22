@@ -1,6 +1,6 @@
 import pytest
 import structlog
-from structlog.typing import EventDict
+from structlog.testing import capture_logs
 
 from lite_bootstrap import FreeBootstrapper, FreeBootstrapperConfig
 from tests.conftest import CustomInstrumentor, SentryTestTransport, emulate_package_missing
@@ -29,20 +29,21 @@ def test_free_bootstrap(free_bootstrapper_config: FreeBootstrapperConfig) -> Non
         bootstrapper.teardown()
 
 
-def test_free_bootstrap_logging_not_ready(log_output: list[EventDict]) -> None:
-    FreeBootstrapper(
-        bootstrap_config=FreeBootstrapperConfig(
-            service_debug=True,
-            opentelemetry_instrumentors=[CustomInstrumentor()],
-            opentelemetry_log_traces=True,
-            sentry_dsn="https://testdsn@localhost/1",
-            sentry_additional_params={"transport": SentryTestTransport()},
-            logging_buffer_capacity=0,
-        ),
-    )
-    assert log_output == [
-        {"event": "LoggingInstrument is not ready, because service_debug is True", "log_level": "info"}
-    ]
+def test_free_bootstrap_logging_not_ready() -> None:
+    with capture_logs() as cap_logs:
+        FreeBootstrapper(
+            bootstrap_config=FreeBootstrapperConfig(
+                service_debug=True,
+                opentelemetry_instrumentors=[CustomInstrumentor()],
+                opentelemetry_log_traces=True,
+                sentry_dsn="https://testdsn@localhost/1",
+                sentry_additional_params={"transport": SentryTestTransport()},
+                logging_buffer_capacity=0,
+            ),
+        )
+        assert cap_logs == [
+            {"event": "LoggingInstrument is not ready, because service_debug is True", "log_level": "info"}
+        ]
 
 
 @pytest.mark.parametrize(
