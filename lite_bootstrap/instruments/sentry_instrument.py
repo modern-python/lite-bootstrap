@@ -58,7 +58,7 @@ def enrich_sentry_event_from_structlog_log(
             return None
 
         if event_name := loaded_formatted_log.get("event"):
-            event["logentry"]["formatted"] = event_name  # type: ignore[index]
+            event["logentry"]["formatted"] = event_name
         else:
             return event
 

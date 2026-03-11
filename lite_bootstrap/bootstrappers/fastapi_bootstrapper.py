@@ -64,7 +64,7 @@ class FastApiCorsInstrument(CorsInstrument):
 
     def bootstrap(self) -> None:
         self.bootstrap_config.application.add_middleware(
-            CORSMiddleware,
+            CORSMiddleware,  # ty: ignore[invalid-argument-type]
             allow_origins=self.bootstrap_config.cors_allowed_origins,
             allow_methods=self.bootstrap_config.cors_allowed_methods,
             allow_headers=self.bootstrap_config.cors_allowed_headers,
