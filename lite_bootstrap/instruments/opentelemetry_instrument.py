@@ -7,7 +7,7 @@ from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 
 
 if typing.TYPE_CHECKING:
-    from opentelemetry.instrumentation.instrumentor import BaseInstrumentor  # type: ignore[attr-defined]
+    from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
 
 if import_checker.is_opentelemetry_installed:
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter

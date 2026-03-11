@@ -52,7 +52,7 @@ class FastStreamPrometheusMiddlewareProtocol(typing.Protocol):
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class FastStreamConfig(HealthChecksConfig, LoggingConfig, OpentelemetryConfig, PrometheusConfig, SentryConfig):
-    application: "AsgiFastStream" = dataclasses.field(default_factory=lambda: AsgiFastStream())
+    application: "AsgiFastStream" = dataclasses.field(default_factory=AsgiFastStream)
     opentelemetry_middleware_cls: type[FastStreamTelemetryMiddlewareProtocol] | None = None
     prometheus_middleware_cls: type[FastStreamPrometheusMiddlewareProtocol] | None = None
 
@@ -103,7 +103,7 @@ class FastStreamOpenTelemetryInstrument(OpenTelemetryInstrument):
         if self.bootstrap_config.opentelemetry_middleware_cls and self.bootstrap_config.application.broker:
             self.bootstrap_config.opentelemetry_middleware_cls(tracer_provider=get_tracer_provider())
             self.bootstrap_config.application.broker.add_middleware(
-                self.bootstrap_config.opentelemetry_middleware_cls(tracer_provider=get_tracer_provider())  # type: ignore[arg-type]
+                self.bootstrap_config.opentelemetry_middleware_cls(tracer_provider=get_tracer_provider())
             )
 
 
@@ -116,7 +116,7 @@ class FastStreamSentryInstrument(SentryInstrument):
 class FastStreamPrometheusInstrument(PrometheusInstrument):
     bootstrap_config: FastStreamConfig
     collector_registry: "prometheus_client.CollectorRegistry" = dataclasses.field(
-        default_factory=lambda: prometheus_client.CollectorRegistry(), init=False
+        default_factory=prometheus_client.CollectorRegistry, init=False
     )
     not_ready_message = PrometheusInstrument.not_ready_message + " or prometheus_middleware_cls is missing"
     missing_dependency_message = "prometheus_client is not installed"
@@ -138,7 +138,7 @@ class FastStreamPrometheusInstrument(PrometheusInstrument):
         )
         if self.bootstrap_config.prometheus_middleware_cls and self.bootstrap_config.application.broker:
             self.bootstrap_config.application.broker.add_middleware(
-                self.bootstrap_config.prometheus_middleware_cls(registry=self.collector_registry)  # type: ignore[arg-type]
+                self.bootstrap_config.prometheus_middleware_cls(registry=self.collector_registry)
             )
 
 

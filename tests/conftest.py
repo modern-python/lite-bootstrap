@@ -5,13 +5,14 @@ from importlib import reload
 
 import pytest
 import sentry_sdk
-from opentelemetry.instrumentation.instrumentor import BaseInstrumentor  # type: ignore[attr-defined]
+from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
+from sentry_sdk.envelope import Envelope
 from structlog.typing import EventDict, WrappedLogger
 
 from lite_bootstrap import import_checker
 
 
-class CustomInstrumentor(BaseInstrumentor):  # type: ignore[misc]
+class CustomInstrumentor(BaseInstrumentor):
     def instrumentation_dependencies(self) -> typing.Collection[str]:
         return []
 
@@ -22,9 +23,9 @@ class CustomInstrumentor(BaseInstrumentor):  # type: ignore[misc]
 class SentryTestTransport(sentry_sdk.Transport):
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:  # noqa: ANN401
         super().__init__(*args, **kwargs)
-        self.mock_envelopes: list[sentry_sdk.envelope.Envelope] = []
+        self.mock_envelopes: list[Envelope] = []
 
-    def capture_envelope(self, envelope: sentry_sdk.envelope.Envelope) -> None:
+    def capture_envelope(self, envelope: Envelope) -> None:
         self.mock_envelopes.append(envelope)
 
 
