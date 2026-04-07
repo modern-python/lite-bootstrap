@@ -19,7 +19,6 @@ InstrumentT = typing.TypeVar("InstrumentT", bound=BaseInstrument)
 
 
 class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
-    SLOTS = "bootstrap_config", "instruments", "is_bootstrapped"
     instruments_types: typing.ClassVar[list[type[BaseInstrument]]]
     instruments: list[BaseInstrument]
     bootstrap_config: BaseConfig

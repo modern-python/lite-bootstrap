@@ -25,17 +25,17 @@ For example, if you want to bootstrap litestar with structlog and opentelemetry 
 === "uv"
 
       ```bash
-      uv add lite-bootstrapp[litestar-logging,litestar-otl]
+      uv add lite-bootstrap[litestar-logging,litestar-otl]
       ```
 
 === "pip"
 
       ```bash
-      pip install lite-bootstrapp[litestar-logging,litestar-otl]
+      pip install lite-bootstrap[litestar-logging,litestar-otl]
       ```
 
 === "poetry"
 
       ```bash
-      poetry add lite-bootstrapp[litestar-logging,litestar-otl]
+      poetry add lite-bootstrap[litestar-logging,litestar-otl]
       ```

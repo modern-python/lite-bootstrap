@@ -38,7 +38,7 @@ if import_checker.is_prometheus_fastapi_instrumentator_installed:
 class FastAPIConfig(
     CorsConfig, HealthChecksConfig, LoggingConfig, OpentelemetryConfig, PrometheusConfig, SentryConfig, SwaggerConfig
 ):
-    application: "fastapi.FastAPI" = dataclasses.field(default=None)  # type: ignore[assignment]
+    application: "fastapi.FastAPI" = dataclasses.field(default=None)  # ty: ignore[invalid-assignment]
     application_kwargs: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     opentelemetry_excluded_urls: list[str] = dataclasses.field(default_factory=list)
     prometheus_instrumentator_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
@@ -59,12 +59,12 @@ class FastAPIConfig(
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
-class FastApiCorsInstrument(CorsInstrument):
+class FastAPICorsInstrument(CorsInstrument):
     bootstrap_config: FastAPIConfig
 
     def bootstrap(self) -> None:
         self.bootstrap_config.application.add_middleware(
-            CORSMiddleware,  # ty: ignore[invalid-argument-type]
+            CORSMiddleware,
             allow_origins=self.bootstrap_config.cors_allowed_origins,
             allow_methods=self.bootstrap_config.cors_allowed_methods,
             allow_headers=self.bootstrap_config.cors_allowed_headers,
@@ -152,7 +152,7 @@ class FastAPIPrometheusInstrument(PrometheusInstrument):
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
-class FastApiSwaggerInstrument(SwaggerInstrument):
+class FastAPISwaggerInstrument(SwaggerInstrument):
     bootstrap_config: FastAPIConfig
 
     def bootstrap(self) -> None:
@@ -172,13 +172,13 @@ class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI"]):
     __slots__ = "bootstrap_config", "instruments"
 
     instruments_types: typing.ClassVar = [
-        FastApiCorsInstrument,
+        FastAPICorsInstrument,
         FastAPIOpenTelemetryInstrument,
         FastAPISentryInstrument,
         FastAPIHealthChecksInstrument,
         FastAPILoggingInstrument,
         FastAPIPrometheusInstrument,
-        FastApiSwaggerInstrument,
+        FastAPISwaggerInstrument,
     ]
     bootstrap_config: FastAPIConfig
     not_ready_message = "fastapi is not installed"

@@ -17,7 +17,9 @@ Additional parameters can also be supplied through the settings object:
 - `sentry_attach_stacktrace` - if True, stack traces are automatically attached to all messages logged
 - `sentry_integrations` - list of integrations to enable
 - `sentry_tags` - key/value string pairs that are both indexed and searchable
-- `sentry_additional_params** - additional params, which will be passed to `sentry_sdk.init`
+- `sentry_additional_params` - additional params, which will be passed to `sentry_sdk.init`
+- `sentry_default_integrations` - whether to use sentry's default integrations (default: `True`)
+- `sentry_before_send` - optional callback chained after the built-in structlog enricher, passed to `sentry_sdk.init(before_send=...)`
 
 Read more about sentry_sdk params [here](https://docs.sentry.io/platforms/python/configuration/options/).
 

@@ -7,19 +7,19 @@
 === "uv"
 
       ```bash
-      uv add lite-bootstrapp[litestar-all]
+      uv add lite-bootstrap[litestar-all]
       ```
 
 === "pip"
 
       ```bash
-      pip install lite-bootstrapp[litestar-all]
+      pip install lite-bootstrap[litestar-all]
       ```
 
 === "poetry"
 
       ```bash
-      poetry add lite-bootstrapp[litestar-all]
+      poetry add lite-bootstrap[litestar-all]
       ```
 
 Read more about available extras [here](../../../introduction/installation):
