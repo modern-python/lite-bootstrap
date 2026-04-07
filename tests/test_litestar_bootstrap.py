@@ -1,9 +1,18 @@
+import dataclasses
+
+import litestar
 import pytest
 import structlog
 from litestar import status_codes
+from litestar.config.app import AppConfig
 from litestar.testing import TestClient
+from opentelemetry.sdk.trace import TracerProvider as SDKTracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace import get_tracer_provider
 
 from lite_bootstrap import LitestarBootstrapper, LitestarConfig
+from lite_bootstrap.bootstrappers.litestar_bootstrapper import build_litestar_route_details_from_scope, build_span_name
 from tests.conftest import CustomInstrumentor, SentryTestTransport, emulate_package_missing
 
 
@@ -78,3 +87,44 @@ def test_litestar_bootstrapper_with_missing_instrument_dependency(
 ) -> None:
     with emulate_package_missing(package_name), pytest.warns(UserWarning, match=package_name):
         LitestarBootstrapper(bootstrap_config=litestar_config)
+
+
+def test_litestar_otel_span_naming(litestar_config: LitestarConfig) -> None:
+    @litestar.get("/items/{item_id:int}")
+    async def get_item(item_id: int) -> dict[str, int]:
+        return {"item_id": item_id}
+
+    config = dataclasses.replace(litestar_config, application_config=AppConfig(route_handlers=[get_item]))
+    bootstrapper = LitestarBootstrapper(bootstrap_config=config)
+    application = bootstrapper.bootstrap()
+
+    tracer_provider = get_tracer_provider()
+    assert isinstance(tracer_provider, SDKTracerProvider)
+    exporter = InMemorySpanExporter()
+    tracer_provider.add_span_processor(SimpleSpanProcessor(exporter))
+
+    with TestClient(app=application) as client:
+        response = client.get("/items/42")
+        assert response.status_code == status_codes.HTTP_200_OK
+
+    spans = exporter.get_finished_spans()
+    span_names = [s.name for s in spans]
+    assert any("GET /items/{item_id}" in name for name in span_names)
+
+
+def test_build_span_name_no_route() -> None:
+    assert build_span_name("GET", "") == "GET"
+
+
+def test_build_litestar_route_details_from_scope_path_fallback() -> None:
+    scope = {"method": "POST", "path": "/fallback/path"}
+    name, attrs = build_litestar_route_details_from_scope(scope)
+    assert name == "POST /fallback/path"
+    assert attrs == {"http.route": "/fallback/path"}
+
+
+def test_build_litestar_route_details_from_scope_no_path() -> None:
+    scope = {"type": "lifespan"}
+    name, attrs = build_litestar_route_details_from_scope(scope)
+    assert name == "HTTP"
+    assert attrs == {}

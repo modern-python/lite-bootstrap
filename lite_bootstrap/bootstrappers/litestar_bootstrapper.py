@@ -33,10 +33,57 @@ if import_checker.is_litestar_installed:
     from litestar.static_files import create_static_files_router
 
 if import_checker.is_litestar_opentelemetry_installed:
-    from litestar.contrib.opentelemetry import OpenTelemetryConfig
+    from litestar.middleware import ASGIMiddleware
+    from litestar.types.asgi_types import ASGIApp, Receive, Scope, Send
+    from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
+    from opentelemetry.trace import TracerProvider
 
 if import_checker.is_opentelemetry_installed:
     from opentelemetry.trace import get_tracer_provider
+
+
+def build_span_name(method: str, route: str) -> str:
+    if not route:
+        return method
+    return f"{method} {route}"
+
+
+def build_litestar_route_details_from_scope(
+    scope: typing.MutableMapping[str, typing.Any],
+) -> tuple[str, dict[str, str]]:
+    path_template: typing.Final = scope.get("path_template")
+    method: typing.Final = str(scope.get("method", "HTTP")).strip()
+    if path_template is not None:
+        path_template_stripped: typing.Final = path_template.strip()
+        return build_span_name(method, path_template_stripped), {"http.route": path_template_stripped}
+
+    path: typing.Final = scope.get("path")
+    if path is not None:
+        path_stripped: typing.Final = path.strip()
+        return build_span_name(method, path_stripped), {"http.route": path_stripped}
+    return method, {}
+
+
+if import_checker.is_litestar_opentelemetry_installed:
+
+    class LitestarOpenTelemetryInstrumentationMiddleware(ASGIMiddleware):
+        def __init__(self, tracer_provider: "TracerProvider", excluded_urls: set[str]) -> None:
+            self._tracer_provider = tracer_provider
+            self._excluded_urls = ",".join(excluded_urls)
+
+        async def handle(
+            self,
+            scope: "Scope",
+            receive: "Receive",
+            send: "Send",
+            next_app: "ASGIApp",
+        ) -> None:
+            await OpenTelemetryMiddleware(
+                app=next_app,
+                default_span_details=build_litestar_route_details_from_scope,
+                excluded_urls=self._excluded_urls,
+                tracer_provider=self._tracer_provider,
+            )(scope, receive, send)  # ty: ignore
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
@@ -111,10 +158,10 @@ class LitestarOpenTelemetryInstrument(OpenTelemetryInstrument):
     def bootstrap(self) -> None:
         super().bootstrap()
         self.bootstrap_config.application_config.middleware.append(
-            OpenTelemetryConfig(
+            LitestarOpenTelemetryInstrumentationMiddleware(
                 tracer_provider=get_tracer_provider(),
-                exclude=list(self._build_excluded_urls()),
-            ).middleware,
+                excluded_urls=self._build_excluded_urls(),
+            )
         )
 
 
