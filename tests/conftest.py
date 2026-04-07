@@ -51,7 +51,7 @@ def logging_mock() -> LoggingMock:
 @contextlib.contextmanager
 def emulate_package_missing(package_name: str) -> typing.Iterator[None]:
     old_module = sys.modules[package_name]
-    sys.modules[package_name] = None  # type: ignore[assignment]
+    sys.modules[package_name] = None  # ty: ignore[invalid-assignment]
     reload(import_checker)
     try:
         yield

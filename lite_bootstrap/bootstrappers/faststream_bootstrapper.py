@@ -66,10 +66,12 @@ class FastStreamHealthChecksInstrument(HealthChecksInstrument):
         async def check_health(_: object) -> "AsgiResponse":
             return (
                 AsgiResponse(
-                    json.dumps(self.render_health_check_data()).encode(), 200, headers={"content-type": "text/plain"}
+                    json.dumps(self.render_health_check_data()).encode(),
+                    200,
+                    headers={"content-type": "application/json"},
                 )
                 if await self._define_health_status()
-                else AsgiResponse(b"Service is unhealthy", 500, headers={"content-type": "application/json"})
+                else AsgiResponse(b"Service is unhealthy", 500, headers={"content-type": "text/plain"})
             )
 
         if self.bootstrap_config.opentelemetry_generate_health_check_spans:
@@ -101,7 +103,6 @@ class FastStreamOpenTelemetryInstrument(OpenTelemetryInstrument):
 
     def bootstrap(self) -> None:
         if self.bootstrap_config.opentelemetry_middleware_cls and self.bootstrap_config.application.broker:
-            self.bootstrap_config.opentelemetry_middleware_cls(tracer_provider=get_tracer_provider())
             self.bootstrap_config.application.broker.add_middleware(
                 self.bootstrap_config.opentelemetry_middleware_cls(tracer_provider=get_tracer_provider())
             )
@@ -112,11 +113,15 @@ class FastStreamSentryInstrument(SentryInstrument):
     bootstrap_config: FastStreamConfig
 
 
+def _make_collector_registry() -> "prometheus_client.CollectorRegistry":
+    return prometheus_client.CollectorRegistry()
+
+
 @dataclasses.dataclass(kw_only=True, frozen=True)
 class FastStreamPrometheusInstrument(PrometheusInstrument):
     bootstrap_config: FastStreamConfig
     collector_registry: "prometheus_client.CollectorRegistry" = dataclasses.field(
-        default_factory=prometheus_client.CollectorRegistry, init=False
+        default_factory=_make_collector_registry, init=False
     )
     not_ready_message = PrometheusInstrument.not_ready_message + " or prometheus_middleware_cls is missing"
     missing_dependency_message = "prometheus_client is not installed"

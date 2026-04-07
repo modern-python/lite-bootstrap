@@ -1,23 +1,23 @@
 # Usage without frameworks
 
-## 1. Install `lite-bootstrapp[free-all]`:
+## 1. Install `lite-bootstrap[free-all]`:
 
 === "uv"
- 
+
       ```bash
-      uv add lite-bootstrapp[free-all]
+      uv add lite-bootstrap[free-all]
       ```
- 
+
 === "pip"
 
       ```bash
-      pip install lite-bootstrapp[free-all]
+      pip install lite-bootstrap[free-all]
       ```
 
 === "poetry"
 
       ```bash
-      poetry add lite-bootstrapp[free-all]
+      poetry add lite-bootstrap[free-all]
       ```
 
 Read more about available extras [here](../../../introduction/installation):

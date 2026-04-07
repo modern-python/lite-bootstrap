@@ -62,7 +62,7 @@ class LitestarCorsInstrument(CorsInstrument):
     def bootstrap(self) -> None:
         self.bootstrap_config.application_config.cors_config = CORSConfig(
             allow_origins=self.bootstrap_config.cors_allowed_origins,
-            allow_methods=self.bootstrap_config.cors_allowed_methods,  # type: ignore[arg-type]
+            allow_methods=self.bootstrap_config.cors_allowed_methods,  # ty: ignore[invalid-argument-type]
             allow_headers=self.bootstrap_config.cors_allowed_headers,
             allow_credentials=self.bootstrap_config.cors_allowed_credentials,
             allow_origin_regex=self.bootstrap_config.cors_allowed_origin_regex,

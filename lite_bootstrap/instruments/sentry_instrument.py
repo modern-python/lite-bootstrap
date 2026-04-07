@@ -58,7 +58,7 @@ def enrich_sentry_event_from_structlog_log(
             return None
 
         if event_name := loaded_formatted_log.get("event"):
-            event["logentry"]["formatted"] = event_name
+            event["logentry"]["formatted"] = event_name  # ty: ignore[invalid-assignment]
         else:
             return event
 
@@ -114,6 +114,7 @@ class SentryInstrument(BaseInstrument):
             max_value_length=self.bootstrap_config.sentry_max_value_length,
             attach_stacktrace=self.bootstrap_config.sentry_attach_stacktrace,
             integrations=self.bootstrap_config.sentry_integrations,
+            default_integrations=self.bootstrap_config.sentry_default_integrations,
             before_send=wrap_before_send_callbacks(
                 enrich_sentry_event_from_structlog_log, self.bootstrap_config.sentry_before_send
             ),

@@ -2,24 +2,24 @@
 
 *Another example of usage with FastAPI - [fastapi-sqlalchemy-template](https://github.com/modern-python/fastapi-sqlalchemy-template)*
 
-## 1. Install `lite-bootstrapp[fastapi-all]`:
+## 1. Install `lite-bootstrap[fastapi-all]`:
 
 === "uv"
- 
+
       ```bash
-      uv add lite-bootstrapp[fastapi-all]
+      uv add lite-bootstrap[fastapi-all]
       ```
- 
+
 === "pip"
 
       ```bash
-      pip install lite-bootstrapp[fastapi-all]
+      pip install lite-bootstrap[fastapi-all]
       ```
 
 === "poetry"
 
       ```bash
-      poetry add lite-bootstrapp[fastapi-all]
+      poetry add lite-bootstrap[fastapi-all]
       ```
 
 Read more about available extras [here](../../../introduction/installation):
