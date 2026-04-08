@@ -15,6 +15,7 @@ from lite_bootstrap.instruments.healthchecks_instrument import (
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument
 from lite_bootstrap.instruments.opentelemetry_instrument import OpentelemetryConfig, OpenTelemetryInstrument
 from lite_bootstrap.instruments.prometheus_instrument import PrometheusConfig, PrometheusInstrument
+from lite_bootstrap.instruments.pyroscope_instrument import PyroscopeConfig, PyroscopeInstrument
 from lite_bootstrap.instruments.sentry_instrument import SentryConfig, SentryInstrument
 from lite_bootstrap.instruments.swagger_instrument import SwaggerConfig, SwaggerInstrument
 
@@ -36,7 +37,14 @@ if import_checker.is_prometheus_fastapi_instrumentator_installed:
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class FastAPIConfig(
-    CorsConfig, HealthChecksConfig, LoggingConfig, OpentelemetryConfig, PrometheusConfig, SentryConfig, SwaggerConfig
+    CorsConfig,
+    HealthChecksConfig,
+    LoggingConfig,
+    OpentelemetryConfig,
+    PrometheusConfig,
+    PyroscopeConfig,
+    SentryConfig,
+    SwaggerConfig,
 ):
     application: "fastapi.FastAPI" = dataclasses.field(default=None)  # ty: ignore[invalid-assignment]
     application_kwargs: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
@@ -174,6 +182,7 @@ class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI"]):
     instruments_types: typing.ClassVar = [
         FastAPICorsInstrument,
         FastAPIOpenTelemetryInstrument,
+        PyroscopeInstrument,
         FastAPISentryInstrument,
         FastAPIHealthChecksInstrument,
         FastAPILoggingInstrument,

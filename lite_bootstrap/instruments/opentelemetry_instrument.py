@@ -1,4 +1,5 @@
 import dataclasses
+import logging
 import os
 import typing
 
@@ -10,11 +11,19 @@ if typing.TYPE_CHECKING:
     from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
 
 if import_checker.is_opentelemetry_installed:
+    from opentelemetry.context import Context
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
     from opentelemetry.sdk import resources
-    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace import ReadableSpan, SpanProcessor, TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter, SimpleSpanProcessor
-    from opentelemetry.trace import set_tracer_provider
+    from opentelemetry.trace import Span, format_span_id, set_tracer_provider
+
+if import_checker.is_pyroscope_installed:
+    import pyroscope
+
+
+def _format_span(readable_span: "ReadableSpan") -> str:
+    return typing.cast("str", readable_span.to_json(indent=None)) + os.linesep
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
@@ -39,6 +48,31 @@ class OpentelemetryConfig(BaseConfig):
     opentelemetry_generate_health_check_spans: bool = True
 
 
+if import_checker.is_opentelemetry_installed and import_checker.is_pyroscope_installed:
+    _OTEL_PROFILE_ID_KEY: typing.Final = "pyroscope.profile.id"
+    _PYROSCOPE_SPAN_ID_KEY: typing.Final = "span_id"
+    _PYROSCOPE_SPAN_NAME_KEY: typing.Final = "span_name"
+
+    def _is_root_span(span: "ReadableSpan") -> bool:
+        return span.parent is None or span.parent.is_remote
+
+    class PyroscopeSpanProcessor(SpanProcessor):
+        def on_start(self, span: "Span", parent_context: "Context | None" = None) -> None:  # noqa: ARG002
+            if _is_root_span(span):  # ty: ignore[invalid-argument-type]
+                formatted_span_id = format_span_id(span.context.span_id)  # ty: ignore[unresolved-attribute]
+                span.set_attribute(_OTEL_PROFILE_ID_KEY, formatted_span_id)
+                pyroscope.add_thread_tag(_PYROSCOPE_SPAN_ID_KEY, formatted_span_id)
+                pyroscope.add_thread_tag(_PYROSCOPE_SPAN_NAME_KEY, span.name)  # ty: ignore[unresolved-attribute]
+
+        def on_end(self, span: "ReadableSpan") -> None:
+            if _is_root_span(span):
+                pyroscope.remove_thread_tag(_PYROSCOPE_SPAN_ID_KEY, format_span_id(span.context.span_id))
+                pyroscope.remove_thread_tag(_PYROSCOPE_SPAN_NAME_KEY, span.name)
+
+        def force_flush(self, timeout_millis: int = 30000) -> bool:  # pragma: no cover  # noqa: ARG002
+            return True
+
+
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class OpenTelemetryInstrument(BaseInstrument):
     bootstrap_config: OpentelemetryConfig
@@ -56,6 +90,8 @@ class OpenTelemetryInstrument(BaseInstrument):
         return import_checker.is_opentelemetry_installed
 
     def bootstrap(self) -> None:
+        logging.getLogger("opentelemetry.instrumentation.instrumentor").disabled = True
+        logging.getLogger("opentelemetry.trace").disabled = True
         attributes = {
             resources.SERVICE_NAME: self.bootstrap_config.opentelemetry_service_name
             or self.bootstrap_config.service_name,
@@ -68,8 +104,10 @@ class OpenTelemetryInstrument(BaseInstrument):
             attributes={k: v for k, v in attributes.items() if v},
         )
         tracer_provider = TracerProvider(resource=resource)
+        if import_checker.is_pyroscope_installed and getattr(self.bootstrap_config, "pyroscope_endpoint", None):
+            tracer_provider.add_span_processor(PyroscopeSpanProcessor())
         if self.bootstrap_config.opentelemetry_log_traces:
-            tracer_provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
+            tracer_provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter(formatter=_format_span)))
         if self.bootstrap_config.opentelemetry_endpoint:  # pragma: no cover
             tracer_provider.add_span_processor(
                 BatchSpanProcessor(

@@ -8,6 +8,7 @@ from lite_bootstrap.instruments.healthchecks_instrument import HealthChecksConfi
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument
 from lite_bootstrap.instruments.opentelemetry_instrument import OpentelemetryConfig, OpenTelemetryInstrument
 from lite_bootstrap.instruments.prometheus_instrument import PrometheusConfig, PrometheusInstrument
+from lite_bootstrap.instruments.pyroscope_instrument import PyroscopeConfig, PyroscopeInstrument
 from lite_bootstrap.instruments.sentry_instrument import SentryConfig, SentryInstrument
 
 
@@ -51,7 +52,9 @@ class FastStreamPrometheusMiddlewareProtocol(typing.Protocol):
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
-class FastStreamConfig(HealthChecksConfig, LoggingConfig, OpentelemetryConfig, PrometheusConfig, SentryConfig):
+class FastStreamConfig(
+    HealthChecksConfig, LoggingConfig, OpentelemetryConfig, PrometheusConfig, PyroscopeConfig, SentryConfig
+):
     application: "AsgiFastStream" = dataclasses.field(default_factory=AsgiFastStream)
     opentelemetry_middleware_cls: type[FastStreamTelemetryMiddlewareProtocol] | None = None
     prometheus_middleware_cls: type[FastStreamPrometheusMiddlewareProtocol] | None = None
@@ -152,6 +155,7 @@ class FastStreamBootstrapper(BaseBootstrapper["AsgiFastStream"]):
 
     instruments_types: typing.ClassVar = [
         FastStreamOpenTelemetryInstrument,
+        PyroscopeInstrument,
         FastStreamSentryInstrument,
         FastStreamHealthChecksInstrument,
         FastStreamLoggingInstrument,

@@ -40,6 +40,9 @@ repository = "https://github.com/modern-python/lite-bootstrap"
 sentry = [
     "sentry-sdk",
 ]
+pyroscope = [
+    "pyroscope-io",
+]
 otl = [
     "opentelemetry-api",
     "opentelemetry-sdk",
@@ -74,7 +77,6 @@ fastapi-all = [
 ]
 litestar = [
     "litestar>=2.9",
-    "sniffio",  # remove after release of https://github.com/litestar-org/litestar/issues/4505
 ]
 litestar-sentry = [
     "lite-bootstrap[litestar,sentry]",

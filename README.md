@@ -11,6 +11,7 @@ With `lite-bootstrap`, you receive an application with lightweight built-in supp
 - `sentry`
 - `prometheus`
 - `opentelemetry`
+- `pyroscope` - with OpenTelemetry trace-profile linking
 - `structlog`
 - `cors`
 - `swagger` - with additional offline version support

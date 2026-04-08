@@ -87,6 +87,22 @@ For FastStream you must provide additionally:
 - `opentelemetry_middleware_cls`
 
 
+## Pyroscope
+
+Pyroscope integration uses `pyroscope-io` package under the hood. Install it with the `pyroscope` extra, e.g. `lite-bootstrap[fastapi-all,pyroscope]`.
+
+To bootstrap Pyroscope, you must provide at least:
+
+- `pyroscope_endpoint` - the Pyroscope server address (e.g. `http://pyroscope:4040`).
+
+Additional parameters:
+
+- `pyroscope_sample_rate` - CPU profiling sample rate in Hz (default: `100`).
+- `pyroscope_tags` - key/value string pairs attached to all profiles.
+- `pyroscope_additional_params` - additional params passed directly to `pyroscope.configure`.
+
+When OpenTelemetry is also enabled, a `PyroscopeSpanProcessor` is automatically added to the tracer provider. It tags root spans with a `pyroscope.profile.id` attribute and sets Pyroscope thread tags so that traces and profiles can be linked in the Grafana UI.
+
 ## Structlog
 
 To bootstrap Structlog, you must set `service_debug` to False

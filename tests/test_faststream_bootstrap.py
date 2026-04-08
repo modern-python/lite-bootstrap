@@ -82,6 +82,7 @@ async def test_faststream_bootstrap_health_check_wo_broker() -> None:
     response = test_client.get(bootstrap_config.health_checks_path)
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     assert response.text == "Service is unhealthy"
+    bootstrapper.teardown()
 
 
 def test_faststream_bootstrapper_not_ready() -> None:
