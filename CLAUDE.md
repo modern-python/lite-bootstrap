@@ -61,6 +61,7 @@ Install via `pip install lite-bootstrap[<group>]` or `uv add lite-bootstrap[<gro
 | `litestar-all` | litestar + sentry + otl + logging |
 | `faststream-all` | faststream + sentry + otl + logging |
 | `free-all` | sentry + otl + logging |
+| `pyroscope` | pyroscope-io (add to any group) |
 
 ## Code style
 

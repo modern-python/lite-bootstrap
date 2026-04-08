@@ -42,7 +42,8 @@ def test_free_bootstrap_logging_not_ready() -> None:
             ),
         )
         assert cap_logs == [
-            {"event": "LoggingInstrument is not ready, because service_debug is True", "log_level": "info"}
+            {"event": "LoggingInstrument is not ready, because service_debug is True", "log_level": "info"},
+            {"event": "PyroscopeInstrument is not ready, because pyroscope_endpoint is empty", "log_level": "info"},
         ]
 
 

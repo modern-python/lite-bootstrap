@@ -19,6 +19,7 @@ from lite_bootstrap.instruments.prometheus_instrument import (
 from lite_bootstrap.instruments.prometheus_instrument import (
     PrometheusInstrument,
 )
+from lite_bootstrap.instruments.pyroscope_instrument import PyroscopeConfig, PyroscopeInstrument
 from lite_bootstrap.instruments.sentry_instrument import SentryConfig, SentryInstrument
 from lite_bootstrap.instruments.swagger_instrument import SwaggerConfig, SwaggerInstrument
 
@@ -83,7 +84,7 @@ if import_checker.is_litestar_opentelemetry_installed:
                 default_span_details=build_litestar_route_details_from_scope,
                 excluded_urls=self._excluded_urls,
                 tracer_provider=self._tracer_provider,
-            )(scope, receive, send)  # ty: ignore
+            )(scope, receive, send)  # ty: ignore[invalid-argument-type]
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
@@ -93,6 +94,7 @@ class LitestarConfig(
     LoggingConfig,
     OpentelemetryConfig,
     PrometheusBootstrapperConfig,
+    PyroscopeConfig,
     SentryConfig,
     SwaggerConfig,
 ):
@@ -239,6 +241,7 @@ class LitestarBootstrapper(BaseBootstrapper["litestar.Litestar"]):
     instruments_types: typing.ClassVar = [
         LitestarCorsInstrument,
         LitestarOpenTelemetryInstrument,
+        PyroscopeInstrument,
         LitestarSentryInstrument,
         LitestarHealthChecksInstrument,
         LitestarLoggingInstrument,

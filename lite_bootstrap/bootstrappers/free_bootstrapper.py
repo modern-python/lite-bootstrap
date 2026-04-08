@@ -4,11 +4,12 @@ import typing
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument
 from lite_bootstrap.instruments.opentelemetry_instrument import OpentelemetryConfig, OpenTelemetryInstrument
+from lite_bootstrap.instruments.pyroscope_instrument import PyroscopeConfig, PyroscopeInstrument
 from lite_bootstrap.instruments.sentry_instrument import SentryConfig, SentryInstrument
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
-class FreeBootstrapperConfig(LoggingConfig, OpentelemetryConfig, SentryConfig): ...
+class FreeBootstrapperConfig(LoggingConfig, OpentelemetryConfig, PyroscopeConfig, SentryConfig): ...
 
 
 class FreeBootstrapper(BaseBootstrapper[None]):
@@ -18,6 +19,7 @@ class FreeBootstrapper(BaseBootstrapper[None]):
         LoggingInstrument,
         SentryInstrument,
         OpenTelemetryInstrument,
+        PyroscopeInstrument,
     ]
     bootstrap_config: FreeBootstrapperConfig
     not_ready_message = ""
