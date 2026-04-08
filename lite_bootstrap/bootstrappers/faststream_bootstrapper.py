@@ -51,11 +51,15 @@ class FastStreamPrometheusMiddlewareProtocol(typing.Protocol):
     ) -> None: ...
 
 
+def _make_asgi_faststream() -> "AsgiFastStream":
+    return AsgiFastStream()
+
+
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class FastStreamConfig(
     HealthChecksConfig, LoggingConfig, OpentelemetryConfig, PrometheusConfig, PyroscopeConfig, SentryConfig
 ):
-    application: "AsgiFastStream" = dataclasses.field(default_factory=AsgiFastStream)
+    application: "AsgiFastStream" = dataclasses.field(default_factory=_make_asgi_faststream)
     opentelemetry_middleware_cls: type[FastStreamTelemetryMiddlewareProtocol] | None = None
     prometheus_middleware_cls: type[FastStreamPrometheusMiddlewareProtocol] | None = None
 

@@ -85,6 +85,11 @@ async def test_faststream_bootstrap_health_check_wo_broker() -> None:
     bootstrapper.teardown()
 
 
+def test_faststream_config_default_application() -> None:
+    config = FastStreamConfig()
+    assert isinstance(config.application, faststream.asgi.AsgiFastStream)
+
+
 def test_faststream_bootstrapper_not_ready() -> None:
     with emulate_package_missing("faststream"), pytest.raises(RuntimeError, match="faststream is not installed"):
         FastStreamBootstrapper(bootstrap_config=FastStreamConfig(application=faststream.asgi.AsgiFastStream()))
