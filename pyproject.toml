@@ -53,7 +53,7 @@ logging = [
     "structlog",
 ]
 free-all = [
-    "lite-bootstrap[sentry,otl,logging]",
+    "lite-bootstrap[sentry,otl,logging,pyroscope]",
 ]
 fastapi = [
     "fastapi",
@@ -73,7 +73,7 @@ fastapi-metrics = [
     "prometheus-fastapi-instrumentator>=6.1",
 ]
 fastapi-all = [
-    "lite-bootstrap[fastapi-sentry,fastapi-otl,fastapi-logging,fastapi-metrics]",
+    "lite-bootstrap[fastapi-sentry,fastapi-otl,fastapi-logging,fastapi-metrics,pyroscope]",
 ]
 litestar = [
     "litestar>=2.9",
@@ -93,7 +93,7 @@ litestar-metrics = [
     "prometheus-client>=0.20",
 ]
 litestar-all = [
-    "lite-bootstrap[litestar-sentry,litestar-otl,litestar-logging,litestar-metrics]",
+    "lite-bootstrap[litestar-sentry,litestar-otl,litestar-logging,litestar-metrics,pyroscope]",
 ]
 faststream = [
     "faststream",
@@ -112,8 +112,8 @@ faststream-metrics = [
     "prometheus-client>=0.20",
 ]
 faststream-all = [
-    "lite-bootstrap[faststream-sentry,faststream-otl,faststream-logging,faststream-metrics]",
-    "lite-bootstrap[sentry,otl,logging,faststream,faststream-metrics]"
+    "lite-bootstrap[faststream-sentry,faststream-otl,faststream-logging,faststream-metrics,pyroscope]",
+    "lite-bootstrap[sentry,otl,logging,faststream,faststream-metrics,pyroscope]"
 ]
 
 [dependency-groups]
