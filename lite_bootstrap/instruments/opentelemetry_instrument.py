@@ -104,6 +104,7 @@ class OpenTelemetryInstrument(BaseInstrument):
             attributes={k: v for k, v in attributes.items() if v},
         )
         tracer_provider = TracerProvider(resource=resource)
+        set_tracer_provider(tracer_provider)
         if import_checker.is_pyroscope_installed and getattr(self.bootstrap_config, "pyroscope_endpoint", None):
             tracer_provider.add_span_processor(PyroscopeSpanProcessor())
         if self.bootstrap_config.opentelemetry_log_traces:
@@ -125,7 +126,6 @@ class OpenTelemetryInstrument(BaseInstrument):
                 )
             else:
                 one_instrumentor.instrument(tracer_provider=tracer_provider)
-        set_tracer_provider(tracer_provider)
 
     def teardown(self) -> None:
         for one_instrumentor in self.bootstrap_config.opentelemetry_instrumentors:

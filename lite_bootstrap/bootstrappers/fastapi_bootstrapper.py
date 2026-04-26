@@ -54,6 +54,10 @@ class FastAPIConfig(
     prometheus_expose_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        if not import_checker.is_fastapi_installed:
+            msg = "fastapi is not installed"
+            raise RuntimeError(msg)
+
         if not self.application:
             object.__setattr__(
                 self, "application", fastapi.FastAPI(docs_url=self.swagger_path, **self.application_kwargs)

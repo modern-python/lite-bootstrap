@@ -61,5 +61,13 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
 
     def teardown(self) -> None:
         self.is_bootstrapped = False
-        for one_instrument in self.instruments:
-            one_instrument.teardown()
+        errors: list[BaseException] = []
+        for one_instrument in reversed(self.instruments):
+            try:
+                one_instrument.teardown()
+            except Exception as e:  # noqa: BLE001, PERF203
+                logger.warning(f"Error tearing down {type(one_instrument).__name__}: {e}")
+                errors.append(e)
+        if errors:
+            msg = f"{len(errors)} instrument(s) failed during teardown"
+            raise RuntimeError(msg) from errors[0]
