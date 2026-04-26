@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock
+
 import pytest
 import structlog
 from structlog.testing import capture_logs
@@ -45,6 +47,25 @@ def test_free_bootstrap_logging_not_ready() -> None:
             {"event": "LoggingInstrument is not ready, because service_debug is True", "log_level": "info"},
             {"event": "PyroscopeInstrument is not ready, because pyroscope_endpoint is empty", "log_level": "info"},
         ]
+
+
+def test_teardown_error_isolation(free_bootstrapper_config: FreeBootstrapperConfig) -> None:
+    bootstrapper = FreeBootstrapper(bootstrap_config=free_bootstrapper_config)
+    bootstrapper.bootstrap()
+
+    # Replace instruments with mocks: first raises, second succeeds.
+    bad = MagicMock()
+    bad.teardown.side_effect = RuntimeError("boom")
+    good = MagicMock()
+    bootstrapper.instruments = [bad, good]
+
+    with capture_logs() as cap_logs, pytest.raises(RuntimeError, match="1 instrument"):
+        bootstrapper.teardown()
+
+    # Both instruments attempted teardown despite the error (LIFO: good first, bad second).
+    good.teardown.assert_called_once()
+    bad.teardown.assert_called_once()
+    assert any("boom" in entry.get("event", "") for entry in cap_logs)
 
 
 @pytest.mark.parametrize(
