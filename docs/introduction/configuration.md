@@ -115,6 +115,28 @@ Additional parameters:
 - `logging_extra_processors`
 - `logging_unset_handlers`.
 
+### Structlog FastStream
+
+When using FastStream, the structlog logger is automatically injected into the broker so that all broker
+service messages (e.g. "Received", "Processed") are routed through structlog.
+
+The broker log level is controlled independently from the application log level:
+
+- `faststream_log_level` - log level for FastStream broker service messages (default: `logging.WARNING`).
+
+This allows you to suppress broker noise while keeping your application logs at a lower level:
+
+```python
+import logging
+from lite_bootstrap import FastStreamConfig
+
+config = FastStreamConfig(
+    service_debug=False,
+    logging_log_level=logging.INFO,       # your application logs
+    faststream_log_level=logging.WARNING, # broker "Received"/"Processed" messages (default)
+)
+```
+
 ## CORS
 
 To bootstrap CORS headers, you must provide `cors_allowed_origins` or `cors_allowed_origin_regex`.

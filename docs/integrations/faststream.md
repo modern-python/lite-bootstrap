@@ -26,6 +26,7 @@ Read more about available extras [here](../../../introduction/installation):
 
 ```python
 from lite_bootstrap import FastStreamConfig, FastStreamBootstrapper
+from faststream.asgi import AsgiFastStream
 from faststream.redis.opentelemetry import RedisTelemetryMiddleware
 from faststream.redis.prometheus import RedisPrometheusMiddleware
 from faststream.redis import RedisBroker
@@ -44,7 +45,7 @@ bootstrapper_config = FastStreamConfig(
     sentry_dsn="https://testdsn@localhost/1",
     health_checks_path="/custom-health/",
     logging_buffer_capacity=0,
-    broker=broker,
+    application=AsgiFastStream(broker),
 )
 bootstrapper = FastStreamBootstrapper(bootstrapper_config)
 application = bootstrapper.bootstrap()
