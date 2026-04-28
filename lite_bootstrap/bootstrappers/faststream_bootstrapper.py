@@ -109,8 +109,9 @@ class FastStreamLoggingInstrument(LoggingInstrument):
         super().bootstrap()
         broker = self.bootstrap_config.application.broker
         if broker is not None and import_checker.is_structlog_installed and import_checker.is_faststream_installed:
-            broker.config.logger.params_storage = ManualLoggerStorage(structlog.get_logger("faststream"))
-            broker.config.logger.set_level(self.bootstrap_config.faststream_log_level)
+            logger = structlog.get_logger("faststream")
+            logger.setLevel(self.bootstrap_config.faststream_log_level)
+            broker.config.logger.params_storage = ManualLoggerStorage(logger)
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)

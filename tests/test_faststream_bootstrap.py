@@ -99,7 +99,7 @@ def test_faststream_logging_instrument_injects_structlog_logger(broker: RedisBro
     bootstrapper.bootstrap()
     try:
         assert isinstance(broker.config.logger.params_storage, ManualLoggerStorage)
-        assert broker.config.logger.log_level == logging.WARNING
+        assert logging.getLogger("faststream").level == logging.WARNING
     finally:
         bootstrapper.teardown()
 
