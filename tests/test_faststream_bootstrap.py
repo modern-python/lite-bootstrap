@@ -91,7 +91,8 @@ def test_faststream_logging_instrument_injects_structlog_logger(broker: RedisBro
     bootstrap_config = FastStreamConfig(
         service_debug=False,
         logging_buffer_capacity=0,
-        logging_log_level=logging.WARNING,
+        logging_log_level=logging.INFO,
+        faststream_log_level=logging.WARNING,
         application=faststream.asgi.AsgiFastStream(broker),
     )
     bootstrapper = FastStreamBootstrapper(bootstrap_config=bootstrap_config)

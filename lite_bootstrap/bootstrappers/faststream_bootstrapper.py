@@ -1,5 +1,6 @@
 import dataclasses
 import json
+import logging
 import typing
 
 from lite_bootstrap import import_checker
@@ -66,6 +67,7 @@ class FastStreamConfig(
     application: "AsgiFastStream" = dataclasses.field(default_factory=_make_asgi_faststream)
     opentelemetry_middleware_cls: type[FastStreamTelemetryMiddlewareProtocol] | None = None
     prometheus_middleware_cls: type[FastStreamPrometheusMiddlewareProtocol] | None = None
+    faststream_log_level: int = logging.WARNING
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
@@ -108,7 +110,7 @@ class FastStreamLoggingInstrument(LoggingInstrument):
         broker = self.bootstrap_config.application.broker
         if broker is not None and import_checker.is_structlog_installed and import_checker.is_faststream_installed:
             broker.config.logger.params_storage = ManualLoggerStorage(structlog.get_logger("faststream"))
-            broker.config.logger.set_level(self.bootstrap_config.logging_log_level)
+            broker.config.logger.set_level(self.bootstrap_config.faststream_log_level)
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
