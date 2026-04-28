@@ -13,8 +13,12 @@ from lite_bootstrap.instruments.sentry_instrument import SentryConfig, SentryIns
 
 
 if import_checker.is_faststream_installed:
+    from faststream._internal.logger.params_storage import ManualLoggerStorage
     from faststream.asgi import AsgiFastStream, AsgiResponse
     from faststream.asgi import get as handle_get
+
+if import_checker.is_structlog_installed:
+    import structlog
 
 if import_checker.is_prometheus_client_installed:
     import prometheus_client
@@ -98,6 +102,13 @@ class FastStreamHealthChecksInstrument(HealthChecksInstrument):
 @dataclasses.dataclass(kw_only=True, frozen=True)
 class FastStreamLoggingInstrument(LoggingInstrument):
     bootstrap_config: FastStreamConfig
+
+    def bootstrap(self) -> None:
+        super().bootstrap()
+        broker = self.bootstrap_config.application.broker
+        if broker is not None and import_checker.is_structlog_installed and import_checker.is_faststream_installed:
+            broker.config.logger.params_storage = ManualLoggerStorage(structlog.get_logger("faststream"))
+            broker.config.logger.set_level(self.bootstrap_config.logging_log_level)
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)

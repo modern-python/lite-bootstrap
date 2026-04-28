@@ -1,9 +1,11 @@
+import logging
 import typing
 
 import faststream.asgi
 import pytest
 import structlog
 from faststream._internal.broker import BrokerUsecase
+from faststream._internal.logger.params_storage import ManualLoggerStorage
 from faststream.redis import RedisBroker, TestRedisBroker
 from faststream.redis.opentelemetry import RedisTelemetryMiddleware
 from faststream.redis.prometheus import RedisPrometheusMiddleware
@@ -83,6 +85,22 @@ async def test_faststream_bootstrap_health_check_wo_broker() -> None:
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     assert response.text == "Service is unhealthy"
     bootstrapper.teardown()
+
+
+def test_faststream_logging_instrument_injects_structlog_logger(broker: RedisBroker) -> None:
+    bootstrap_config = FastStreamConfig(
+        service_debug=False,
+        logging_buffer_capacity=0,
+        logging_log_level=logging.WARNING,
+        application=faststream.asgi.AsgiFastStream(broker),
+    )
+    bootstrapper = FastStreamBootstrapper(bootstrap_config=bootstrap_config)
+    bootstrapper.bootstrap()
+    try:
+        assert isinstance(broker.config.logger.params_storage, ManualLoggerStorage)
+        assert broker.config.logger.log_level == logging.WARNING
+    finally:
+        bootstrapper.teardown()
 
 
 def test_faststream_config_default_application() -> None:
