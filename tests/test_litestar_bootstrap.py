@@ -112,6 +112,22 @@ def test_litestar_otel_span_naming(litestar_config: LitestarConfig) -> None:
     assert any("GET /items/{item_id}" in name for name in span_names)
 
 
+def test_litestar_request_logger(litestar_config: LitestarConfig) -> None:
+    @litestar.get("/log-test")
+    async def log_handler(request: litestar.Request) -> dict[str, str]:
+        request.logger.info("test log from handler", key="value")
+        return {"status": "ok"}
+
+    config = dataclasses.replace(litestar_config, application_config=AppConfig(route_handlers=[log_handler]))
+    bootstrapper = LitestarBootstrapper(bootstrap_config=config)
+    application = bootstrapper.bootstrap()
+
+    with TestClient(app=application) as client:
+        response = client.get("/log-test")
+        assert response.status_code == status_codes.HTTP_200_OK
+        assert response.json() == {"status": "ok"}
+
+
 def test_build_span_name_no_route() -> None:
     assert build_span_name("GET", "") == "GET"
 

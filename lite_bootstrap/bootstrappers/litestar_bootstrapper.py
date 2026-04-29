@@ -28,9 +28,11 @@ if import_checker.is_litestar_installed:
     import litestar
     from litestar.config.app import AppConfig
     from litestar.config.cors import CORSConfig
+    from litestar.logging.config import StructLoggingConfig
     from litestar.openapi import OpenAPIConfig
     from litestar.openapi.plugins import SwaggerRenderPlugin
     from litestar.plugins.prometheus import PrometheusConfig, PrometheusController
+    from litestar.plugins.structlog import StructlogConfig, StructlogPlugin
     from litestar.static_files import create_static_files_router
 
 if import_checker.is_litestar_opentelemetry_installed:
@@ -41,6 +43,9 @@ if import_checker.is_litestar_opentelemetry_installed:
 
 if import_checker.is_opentelemetry_installed:
     from opentelemetry.trace import get_tracer_provider
+
+if import_checker.is_structlog_installed:
+    import structlog
 
 
 def build_span_name(method: str, route: str) -> str:
@@ -143,6 +148,25 @@ class LitestarHealthChecksInstrument(HealthChecksInstrument):
 @dataclasses.dataclass(kw_only=True, frozen=True)
 class LitestarLoggingInstrument(LoggingInstrument):
     bootstrap_config: LitestarConfig
+
+    def bootstrap(self) -> None:
+        self._unset_handlers()
+        if import_checker.is_structlog_installed and import_checker.is_litestar_installed:
+            self.bootstrap_config.application_config.plugins.append(
+                StructlogPlugin(
+                    config=StructlogConfig(
+                        structlog_logging_config=StructLoggingConfig(
+                            processors=self.structlog_processors,
+                            logger_factory=self.memory_logger_factory,
+                            wrapper_class=structlog.stdlib.BoundLogger,
+                            cache_logger_on_first_use=True,
+                            pretty_print_tty=False,
+                            standard_lib_logging_config=None,
+                        ),
+                    ),
+                )
+            )
+            self._configure_foreign_loggers()
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
