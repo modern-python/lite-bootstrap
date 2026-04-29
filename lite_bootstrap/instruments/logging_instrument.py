@@ -127,20 +127,28 @@ class LoggingInstrument(BaseInstrument):
         for unset_handlers_logger in self.bootstrap_config.logging_unset_handlers:
             logging.getLogger(unset_handlers_logger).handlers = []
 
+    @property
+    def structlog_processors(self) -> list[typing.Any]:
+        return [
+            structlog.stdlib.filter_by_level,
+            *self.structlog_pre_chain_processors,
+            *self.bootstrap_config.logging_extra_processors,
+            structlog.processors.JSONRenderer(serializer=_serialize_log_with_orjson_to_string),
+        ]
+
+    @property
+    def memory_logger_factory(self) -> "MemoryLoggerFactory":
+        return MemoryLoggerFactory(
+            logging_buffer_capacity=self.bootstrap_config.logging_buffer_capacity,
+            logging_flush_level=self.bootstrap_config.logging_flush_level,
+            logging_log_level=self.bootstrap_config.logging_log_level,
+        )
+
     def _configure_structlog_loggers(self) -> None:
         structlog.configure(
-            processors=[
-                structlog.stdlib.filter_by_level,
-                *self.structlog_pre_chain_processors,
-                *self.bootstrap_config.logging_extra_processors,
-                structlog.processors.JSONRenderer(serializer=_serialize_log_with_orjson_to_string),
-            ],
+            processors=self.structlog_processors,
             context_class=dict,
-            logger_factory=MemoryLoggerFactory(
-                logging_buffer_capacity=self.bootstrap_config.logging_buffer_capacity,
-                logging_flush_level=self.bootstrap_config.logging_flush_level,
-                logging_log_level=self.bootstrap_config.logging_log_level,
-            ),
+            logger_factory=self.memory_logger_factory,
             wrapper_class=structlog.stdlib.BoundLogger,
             cache_logger_on_first_use=True,
         )

@@ -47,3 +47,17 @@ application = bootstrapper.bootstrap()
 ```
 
 Read more about available configuration options [here](../../../introduction/configuration):
+
+## Logging
+
+Structlog is integrated via Litestar's `StructlogPlugin`, which makes `request.logger` available in route handlers:
+
+```python
+from litestar import Request, get
+
+
+@get("/items")
+async def list_items(request: Request) -> list[str]:
+    request.logger.info("listing items")
+    return []
+```

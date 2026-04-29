@@ -115,6 +115,21 @@ Additional parameters:
 - `logging_extra_processors`
 - `logging_unset_handlers`.
 
+### Structlog Litestar
+
+When using Litestar, the `StructlogPlugin` is automatically registered, which enables `request.logger` inside route handlers:
+
+```python
+from litestar import Litestar, Request, get
+from lite_bootstrap import LitestarConfig, LitestarBootstrapper
+
+
+@get("/")
+async def handler(request: Request) -> dict[str, str]:
+    request.logger.info("handling request")
+    return {"status": "ok"}
+```
+
 ### Structlog FastStream
 
 When using FastStream, the structlog logger is automatically injected into the broker so that all broker
