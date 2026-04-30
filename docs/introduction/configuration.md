@@ -113,7 +113,18 @@ Additional parameters:
 - `logging_flush_level`
 - `logging_buffer_capacity`
 - `logging_extra_processors`
-- `logging_unset_handlers`.
+- `logging_unset_handlers`
+- `logging_time_stamper` - a `structlog.processors.TimeStamper` instance controlling timestamp format (default: `TimeStamper(fmt="iso")`). Pass a custom instance to change the format or enable UTC:
+
+```python
+import structlog
+from lite_bootstrap import FastAPIConfig
+
+config = FastAPIConfig(
+    service_debug=False,
+    logging_time_stamper=structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S", utc=True),
+)
+```
 
 ### Structlog Litestar
 
