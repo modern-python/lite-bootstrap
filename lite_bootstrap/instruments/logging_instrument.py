@@ -95,6 +95,7 @@ class LoggingConfig(BaseConfig):
     logging_unset_handlers: list[str] = dataclasses.field(
         default_factory=list,
     )
+    logging_time_stamper: "structlog.processors.TimeStamper | None" = None
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
@@ -110,7 +111,7 @@ class LoggingInstrument(BaseInstrument):
             structlog.stdlib.add_logger_name,
             tracer_injection,
             structlog.stdlib.PositionalArgumentsFormatter(),
-            structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S"),
+            self.bootstrap_config.logging_time_stamper or structlog.processors.TimeStamper(fmt="iso"),
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
             structlog.processors.UnicodeDecoder(),
