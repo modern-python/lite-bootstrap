@@ -111,12 +111,13 @@ class LoggingConfig(BaseConfig):
         default_factory=list,
     )
     logging_time_stamper: "structlog.processors.TimeStamper | None" = None
+    logging_enabled: bool = True
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class LoggingInstrument(BaseInstrument):
     bootstrap_config: LoggingConfig
-    not_ready_message = "service_debug is True"
+    not_ready_message = "logging_enabled is False"
     missing_dependency_message = "structlog is not installed"
     _logger_factory: "MemoryLoggerFactory | None" = dataclasses.field(
         default_factory=lambda: None, init=False, repr=False, compare=False
@@ -136,7 +137,7 @@ class LoggingInstrument(BaseInstrument):
         ]
 
     def is_ready(self) -> bool:
-        return not self.bootstrap_config.service_debug and import_checker.is_structlog_installed
+        return self.bootstrap_config.logging_enabled and import_checker.is_structlog_installed
 
     @staticmethod
     def check_dependencies() -> bool:
