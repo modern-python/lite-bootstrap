@@ -18,6 +18,28 @@ if import_checker.is_structlog_installed:
     import structlog
 
 
+if import_checker.is_opentelemetry_installed:
+    from opentelemetry import trace
+
+    def tracer_injection(_: "WrappedLogger", __: str, event_dict: "EventDict") -> "EventDict":
+        current_span = trace.get_current_span()
+        if not current_span.is_recording():
+            event_dict["tracing"] = {}
+            return event_dict
+
+        current_span_context = current_span.get_span_context()
+        event_dict["tracing"] = {
+            "span_id": trace.format_span_id(current_span_context.span_id),
+            "trace_id": trace.format_trace_id(current_span_context.trace_id),
+        }
+        return event_dict
+
+else:  # pragma: no cover
+
+    def tracer_injection(_: "WrappedLogger", __: str, event_dict: "EventDict") -> "EventDict":
+        return event_dict
+
+
 ScopeType = typing.MutableMapping[str, typing.Any]
 
 
@@ -30,25 +52,6 @@ class RequestProtocol(typing.Protocol):
     client: AddressProtocol
     scope: ScopeType
     method: str
-
-
-def tracer_injection(_: "WrappedLogger", __: str, event_dict: "EventDict") -> "EventDict":
-    try:
-        from opentelemetry import trace  # noqa: PLC0415
-    except ImportError:  # pragma: no cover
-        return event_dict
-
-    current_span = trace.get_current_span()
-    if not current_span.is_recording():
-        event_dict["tracing"] = {}
-        return event_dict
-
-    current_span_context = current_span.get_span_context()
-    event_dict["tracing"] = {
-        "span_id": trace.format_span_id(current_span_context.span_id),
-        "trace_id": trace.format_trace_id(current_span_context.trace_id),
-    }
-    return event_dict
 
 
 if import_checker.is_structlog_installed:
