@@ -3,6 +3,7 @@ import logging
 import typing
 import warnings
 
+from lite_bootstrap.exceptions import BootstrapperNotReadyError, TeardownError
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 from lite_bootstrap.types import ApplicationT
 
@@ -27,7 +28,7 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
         self.is_bootstrapped = False
         if not self.is_ready():
             msg = f"{type(self).__name__} is not ready: {self.not_ready_message}"
-            raise RuntimeError(msg)
+            raise BootstrapperNotReadyError(msg)
 
         self.bootstrap_config = bootstrap_config
         self.instruments = []
@@ -61,13 +62,13 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
 
     def teardown(self) -> None:
         self.is_bootstrapped = False
-        errors: list[BaseException] = []
+        errors: list[tuple[str, BaseException]] = []
         for one_instrument in reversed(self.instruments):
             try:
                 one_instrument.teardown()
             except Exception as e:  # noqa: BLE001, PERF203
-                logger.warning(f"Error tearing down {type(one_instrument).__name__}: {e}")
-                errors.append(e)
+                name = type(one_instrument).__name__
+                logger.warning(f"Error tearing down {name}: {e}")
+                errors.append((name, e))
         if errors:
-            msg = f"{len(errors)} instrument(s) failed during teardown"
-            raise RuntimeError(msg) from errors[0]
+            raise TeardownError(errors) from errors[0][1]

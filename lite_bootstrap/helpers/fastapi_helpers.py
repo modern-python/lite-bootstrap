@@ -2,6 +2,7 @@ import pathlib
 import typing
 
 from lite_bootstrap import import_checker
+from lite_bootstrap.exceptions import ConfigurationError
 
 
 if import_checker.is_fastapi_installed:
@@ -18,7 +19,7 @@ def enable_offline_docs(
 ) -> None:
     if not (app_openapi_url := app.openapi_url):
         msg = "No app.openapi_url specified"
-        raise RuntimeError(msg)
+        raise ConfigurationError(msg)
 
     docs_url: str = app.docs_url or "/docs"
     redoc_url: str = app.redoc_url or "/redoc"
