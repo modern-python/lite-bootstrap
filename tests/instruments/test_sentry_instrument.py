@@ -5,7 +5,6 @@ import typing
 import pytest
 import sentry_sdk
 import structlog
-from sentry_sdk.integrations.logging import LoggingIntegration
 
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument
 from tests.conftest import LoggingMock, SentryTestTransport
@@ -62,7 +61,6 @@ def test_sentry_instrument_with_structlog_error(
         logger.error("some error")
         logger.error("some error, skipping sentry", skip_sentry=True)
         assert len(sentry_mock.mock_envelopes) == 1
-        LoggingIntegration()
     finally:
         sentry_sdk.init()
         logging_instrument.teardown()

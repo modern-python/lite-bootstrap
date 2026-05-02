@@ -68,6 +68,7 @@ if import_checker.is_structlog_installed:
             self.logging_flush_level = logging_flush_level
             self.logging_log_level = logging_log_level
             self.log_stream = log_stream
+            self._created_handlers: list[tuple[logging.Logger, logging.handlers.MemoryHandler]] = []
 
         def __call__(self, *args: typing.Any) -> logging.Logger:  # noqa: ANN401
             logger: typing.Final = super().__call__(*args)
@@ -80,7 +81,18 @@ if import_checker.is_structlog_installed:
             logger.addHandler(handler)
             logger.setLevel(self.logging_log_level)
             logger.propagate = False
+            self._created_handlers.append((logger, handler))
             return logger
+
+        def close_handlers(self) -> None:
+            for created_logger, handler in self._created_handlers:
+                created_logger.removeHandler(handler)
+                created_logger.propagate = True
+                target = handler.target
+                handler.close()
+                if target is not None:
+                    target.close()
+            self._created_handlers.clear()
 
     def _serialize_log_with_orjson_to_string(value: typing.Any, **kwargs: typing.Any) -> str:  # noqa: ANN401
         return orjson.dumps(value, **kwargs).decode()
@@ -98,7 +110,7 @@ class LoggingConfig(BaseConfig):
     logging_time_stamper: "structlog.processors.TimeStamper | None" = None
 
 
-@dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
+@dataclasses.dataclass(kw_only=True, frozen=True)
 class LoggingInstrument(BaseInstrument):
     bootstrap_config: LoggingConfig
     not_ready_message = "service_debug is True"
@@ -139,11 +151,15 @@ class LoggingInstrument(BaseInstrument):
 
     @property
     def memory_logger_factory(self) -> "MemoryLoggerFactory":
-        return MemoryLoggerFactory(
-            logging_buffer_capacity=self.bootstrap_config.logging_buffer_capacity,
-            logging_flush_level=self.bootstrap_config.logging_flush_level,
-            logging_log_level=self.bootstrap_config.logging_log_level,
-        )
+        cached = getattr(self, "_logger_factory", None)
+        if cached is None:
+            cached = MemoryLoggerFactory(
+                logging_buffer_capacity=self.bootstrap_config.logging_buffer_capacity,
+                logging_flush_level=self.bootstrap_config.logging_flush_level,
+                logging_log_level=self.bootstrap_config.logging_log_level,
+            )
+            object.__setattr__(self, "_logger_factory", cached)
+        return cached
 
     def _configure_structlog_loggers(self) -> None:
         structlog.configure(
@@ -183,3 +199,7 @@ class LoggingInstrument(BaseInstrument):
             root_logger.removeHandler(h)
             h.close()
         root_logger.setLevel(logging.WARNING)
+        cached = getattr(self, "_logger_factory", None)
+        if cached is not None:
+            cached.close_handlers()
+            object.__setattr__(self, "_logger_factory", None)

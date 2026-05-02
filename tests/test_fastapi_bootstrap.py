@@ -87,7 +87,7 @@ def test_fastapi_bootstrapper_not_ready() -> None:
 def test_fastapi_bootstrapper_docs_url_differ(fastapi_config: FastAPIConfig) -> None:
     new_config = dataclasses.replace(fastapi_config, application=fastapi.FastAPI(docs_url="/custom-docs/"))
     bootstrapper = FastAPIBootstrapper(bootstrap_config=new_config)
-    with pytest.warns(UserWarning, match="swagger_path is differ from docs_url"):
+    with pytest.warns(UserWarning, match="swagger_path differs from docs_url"):
         bootstrapper.bootstrap()
     bootstrapper.teardown()
 
