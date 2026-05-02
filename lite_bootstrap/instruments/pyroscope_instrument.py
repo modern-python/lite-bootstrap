@@ -15,6 +15,8 @@ class PyroscopeConfig(BaseConfig):
     pyroscope_sample_rate: int = 100
     pyroscope_tags: dict[str, str] = dataclasses.field(default_factory=dict)
     pyroscope_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
+    opentelemetry_service_name: str | None = None
+    opentelemetry_namespace: str | None = None
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
@@ -31,11 +33,10 @@ class PyroscopeInstrument(BaseInstrument):
         return import_checker.is_pyroscope_installed
 
     def bootstrap(self) -> None:
-        namespace: str | None = getattr(self.bootstrap_config, "opentelemetry_namespace", None)
+        namespace = self.bootstrap_config.opentelemetry_namespace
         tags = ({"service_namespace": namespace} if namespace else {}) | self.bootstrap_config.pyroscope_tags
         pyroscope.configure(
-            application_name=getattr(self.bootstrap_config, "opentelemetry_service_name", None)
-            or self.bootstrap_config.service_name,
+            application_name=self.bootstrap_config.opentelemetry_service_name or self.bootstrap_config.service_name,
             server_address=self.bootstrap_config.pyroscope_endpoint,
             sample_rate=self.bootstrap_config.pyroscope_sample_rate,
             tags=tags,
