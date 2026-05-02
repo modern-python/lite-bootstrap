@@ -4,7 +4,7 @@ import pytest
 import structlog
 from structlog.testing import capture_logs
 
-from lite_bootstrap import FreeBootstrapper, FreeBootstrapperConfig
+from lite_bootstrap import FreeBootstrapper, FreeBootstrapperConfig, TeardownError
 from tests.conftest import CustomInstrumentor, SentryTestTransport, emulate_package_missing
 
 
@@ -59,13 +59,36 @@ def test_teardown_error_isolation(free_bootstrapper_config: FreeBootstrapperConf
     good = MagicMock()
     bootstrapper.instruments = [bad, good]
 
-    with capture_logs() as cap_logs, pytest.raises(RuntimeError, match="1 instrument"):
+    with capture_logs() as cap_logs, pytest.raises(TeardownError, match="boom") as excinfo:
         bootstrapper.teardown()
 
     # Both instruments attempted teardown despite the error (LIFO: good first, bad second).
     good.teardown.assert_called_once()
     bad.teardown.assert_called_once()
     assert any("boom" in entry.get("event", "") for entry in cap_logs)
+    assert excinfo.value.errors == [("MagicMock", excinfo.value.__cause__)]
+
+
+def test_teardown_error_aggregates_all_failures(free_bootstrapper_config: FreeBootstrapperConfig) -> None:
+    bootstrapper = FreeBootstrapper(bootstrap_config=free_bootstrapper_config)
+    bootstrapper.bootstrap()
+
+    first = MagicMock()
+    first.teardown.side_effect = RuntimeError("boom-1")
+    second = MagicMock()
+    second.teardown.side_effect = ValueError("boom-2")
+    bootstrapper.instruments = [first, second]
+
+    with pytest.raises(TeardownError) as excinfo:
+        bootstrapper.teardown()
+
+    msg = str(excinfo.value)
+    assert "2 instrument(s) failed during teardown" in msg
+    assert "boom-1" in msg
+    assert "boom-2" in msg
+    # `second` runs first under reversed(), so its ValueError is the chained cause.
+    assert isinstance(excinfo.value.__cause__, ValueError)
+    assert [name for name, _ in excinfo.value.errors] == ["MagicMock", "MagicMock"]
 
 
 @pytest.mark.parametrize(

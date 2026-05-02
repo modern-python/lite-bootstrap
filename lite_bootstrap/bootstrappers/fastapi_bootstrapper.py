@@ -5,6 +5,7 @@ import warnings
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
+from lite_bootstrap.exceptions import ConfigurationError
 from lite_bootstrap.helpers.fastapi_helpers import enable_offline_docs
 from lite_bootstrap.instruments.cors_instrument import CorsConfig, CorsInstrument
 from lite_bootstrap.instruments.healthchecks_instrument import (
@@ -56,7 +57,7 @@ class FastAPIConfig(
     def __post_init__(self) -> None:
         if not import_checker.is_fastapi_installed:
             msg = "fastapi is not installed"
-            raise RuntimeError(msg)
+            raise ConfigurationError(msg)
 
         if not self.application:
             object.__setattr__(
