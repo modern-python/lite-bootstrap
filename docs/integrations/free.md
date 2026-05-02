@@ -29,7 +29,6 @@ from lite_bootstrap import FreeBootstrapperConfig, FreeBootstrapper
 
 
 bootstrapper_config = FreeBootstrapperConfig(
-    service_debug=False,
     opentelemetry_endpoint="otl",
     sentry_dsn="https://testdsn@localhost/1",
 )

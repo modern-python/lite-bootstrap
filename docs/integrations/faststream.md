@@ -37,7 +37,6 @@ bootstrapper_config = FastStreamConfig(
     service_name="microservice",
     service_version="2.0.0",
     service_environment="test",
-    service_debug=False,
     opentelemetry_endpoint="otl",
     opentelemetry_middleware_cls=RedisTelemetryMiddleware,
     prometheus_metrics_path="/custom-metrics/",

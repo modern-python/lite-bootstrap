@@ -3,7 +3,12 @@ import logging
 import typing
 import warnings
 
-from lite_bootstrap.exceptions import BootstrapperNotReadyError, TeardownError
+from lite_bootstrap.exceptions import (
+    BootstrapperNotReadyError,
+    InstrumentDependencyMissingWarning,
+    InstrumentNotReadyWarning,
+    TeardownError,
+)
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 from lite_bootstrap.types import ApplicationT
 
@@ -33,16 +38,26 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
         self.bootstrap_config = bootstrap_config
         self.instruments = []
         for instrument_type in self.instruments_types:
-            instrument = instrument_type(bootstrap_config=bootstrap_config)
-            if not instrument.check_dependencies():
-                warnings.warn(instrument.missing_dependency_message, stacklevel=2)
-                continue
+            if (instrument := self._register_or_skip(instrument_type)) is not None:
+                self.instruments.append(instrument)
 
-            if not instrument.is_ready():
-                logger.info(f"{instrument_type.__name__} is not ready: {instrument.not_ready_message}")
-                continue
-
-            self.instruments.append(instrument)
+    def _register_or_skip(self, instrument_type: type[BaseInstrument]) -> BaseInstrument | None:
+        instrument = instrument_type(bootstrap_config=self.bootstrap_config)
+        if not instrument.check_dependencies():
+            warnings.warn(
+                instrument.missing_dependency_message,
+                category=InstrumentDependencyMissingWarning,
+                stacklevel=4,
+            )
+            return None
+        if not instrument.is_ready():
+            warnings.warn(
+                f"{instrument_type.__name__} is not ready: {instrument.not_ready_message}",
+                category=InstrumentNotReadyWarning,
+                stacklevel=4,
+            )
+            return None
+        return instrument
 
     @property
     @abc.abstractmethod
