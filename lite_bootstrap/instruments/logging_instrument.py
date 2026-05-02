@@ -110,11 +110,14 @@ class LoggingConfig(BaseConfig):
     logging_time_stamper: "structlog.processors.TimeStamper | None" = None
 
 
-@dataclasses.dataclass(kw_only=True, frozen=True)
+@dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class LoggingInstrument(BaseInstrument):
     bootstrap_config: LoggingConfig
     not_ready_message = "service_debug is True"
     missing_dependency_message = "structlog is not installed"
+    _logger_factory: "MemoryLoggerFactory | None" = dataclasses.field(
+        default_factory=lambda: None, init=False, repr=False, compare=False
+    )
 
     @property
     def structlog_pre_chain_processors(self) -> list[typing.Any]:
@@ -151,7 +154,7 @@ class LoggingInstrument(BaseInstrument):
 
     @property
     def memory_logger_factory(self) -> "MemoryLoggerFactory":
-        cached = getattr(self, "_logger_factory", None)
+        cached: MemoryLoggerFactory | None = self._logger_factory
         if cached is None:
             cached = MemoryLoggerFactory(
                 logging_buffer_capacity=self.bootstrap_config.logging_buffer_capacity,
@@ -199,7 +202,6 @@ class LoggingInstrument(BaseInstrument):
             root_logger.removeHandler(h)
             h.close()
         root_logger.setLevel(logging.WARNING)
-        cached = getattr(self, "_logger_factory", None)
-        if cached is not None:
-            cached.close_handlers()
+        if self._logger_factory is not None:
+            self._logger_factory.close_handlers()
             object.__setattr__(self, "_logger_factory", None)
