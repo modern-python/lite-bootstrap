@@ -5,6 +5,9 @@ from lite_bootstrap.bootstrappers.litestar_bootstrapper import LitestarBootstrap
 from lite_bootstrap.exceptions import (
     BootstrapperNotReadyError,
     ConfigurationError,
+    InstrumentDependencyMissingWarning,
+    InstrumentNotReadyWarning,
+    InstrumentSkippedWarning,
     LiteBootstrapError,
     TeardownError,
 )
@@ -20,6 +23,9 @@ __all__ = [
     "FastStreamConfig",
     "FreeBootstrapper",
     "FreeBootstrapperConfig",
+    "InstrumentDependencyMissingWarning",
+    "InstrumentNotReadyWarning",
+    "InstrumentSkippedWarning",
     "LiteBootstrapError",
     "LitestarBootstrapper",
     "LitestarConfig",

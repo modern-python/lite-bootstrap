@@ -34,7 +34,6 @@ bootstrapper_config = LitestarConfig(
     service_name="microservice",
     service_version="2.0.0",
     service_environment="test",
-    service_debug=False,
     cors_allowed_origins=["http://test"],
     health_checks_path="/custom-health/",
     opentelemetry_endpoint="otl",

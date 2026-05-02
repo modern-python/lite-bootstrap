@@ -17,3 +17,15 @@ class TeardownError(LiteBootstrapError):
         self.errors = errors
         details = "; ".join(f"{name}: {err}" for name, err in errors)
         super().__init__(f"{len(errors)} instrument(s) failed during teardown: {details}")
+
+
+class InstrumentSkippedWarning(UserWarning):
+    """Base class for warnings emitted when an instrument is skipped during bootstrap."""
+
+
+class InstrumentDependencyMissingWarning(InstrumentSkippedWarning):
+    """Emitted when an instrument is skipped because its optional dependency is not installed."""
+
+
+class InstrumentNotReadyWarning(InstrumentSkippedWarning):
+    """Emitted when an instrument is skipped because its config indicates it should not run."""

@@ -4,7 +4,12 @@ import pytest
 import structlog
 from structlog.testing import capture_logs
 
-from lite_bootstrap import FreeBootstrapper, FreeBootstrapperConfig, TeardownError
+from lite_bootstrap import (
+    FreeBootstrapper,
+    FreeBootstrapperConfig,
+    InstrumentNotReadyWarning,
+    TeardownError,
+)
 from tests.conftest import CustomInstrumentor, SentryTestTransport, emulate_package_missing
 
 
@@ -32,7 +37,7 @@ def test_free_bootstrap(free_bootstrapper_config: FreeBootstrapperConfig) -> Non
 
 
 def test_free_bootstrap_logging_disabled() -> None:
-    with capture_logs() as cap_logs:
+    with pytest.warns(InstrumentNotReadyWarning) as records:
         FreeBootstrapper(
             bootstrap_config=FreeBootstrapperConfig(
                 logging_enabled=False,
@@ -43,10 +48,9 @@ def test_free_bootstrap_logging_disabled() -> None:
                 logging_buffer_capacity=0,
             ),
         )
-        assert cap_logs == [
-            {"event": "LoggingInstrument is not ready: logging_enabled is False", "log_level": "info"},
-            {"event": "PyroscopeInstrument is not ready: pyroscope_endpoint is empty", "log_level": "info"},
-        ]
+    messages = [str(r.message) for r in records]
+    assert "LoggingInstrument is not ready: logging_enabled is False" in messages
+    assert "PyroscopeInstrument is not ready: pyroscope_endpoint is empty" in messages
 
 
 def test_teardown_error_isolation(free_bootstrapper_config: FreeBootstrapperConfig) -> None:

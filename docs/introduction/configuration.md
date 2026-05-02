@@ -105,10 +105,11 @@ When OpenTelemetry is also enabled, a `PyroscopeSpanProcessor` is automatically 
 
 ## Structlog
 
-To bootstrap Structlog, you must set `service_debug` to False
+Structlog is bootstrapped by default. To opt out, set `logging_enabled=False`.
 
 Additional parameters:
 
+- `logging_enabled` - whether to configure structlog (default: `True`).
 - `logging_log_level`
 - `logging_flush_level`
 - `logging_buffer_capacity`
@@ -121,7 +122,6 @@ import structlog
 from lite_bootstrap import FastAPIConfig
 
 config = FastAPIConfig(
-    service_debug=False,
     logging_time_stamper=structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S", utc=True),
 )
 ```
@@ -157,7 +157,6 @@ import logging
 from lite_bootstrap import FastStreamConfig
 
 config = FastStreamConfig(
-    service_debug=False,
     logging_log_level=logging.INFO,       # your application logs
     faststream_log_level=logging.WARNING, # broker "Received"/"Processed" messages (default)
 )
@@ -193,3 +192,29 @@ Additional params:
 
 - `health_checks_path`
 - `health_checks_include_in_schema`
+
+## Skipped instrument warnings
+
+When a bootstrapper is constructed, each registered instrument is checked. If it can't run, the instrument is skipped and a `UserWarning` subclass is emitted so the skip is visible at the call site:
+
+- `InstrumentDependencyMissingWarning` — the instrument's optional package is not installed (e.g. `[sentry]` extra missing).
+- `InstrumentNotReadyWarning` — the instrument's required config is missing or disabled (e.g. `sentry_dsn` not set, `logging_enabled=False`, `pyroscope_endpoint` empty).
+- `InstrumentSkippedWarning` — base class for both, useful if you want to filter every skip with one rule.
+
+Both go through Python's `warnings` module, so they show up in stderr by default and can be filtered, captured, or escalated like any other warning. Example — silence intentional opt-outs but keep dependency-missing warnings loud:
+
+```python
+import warnings
+from lite_bootstrap import InstrumentNotReadyWarning
+
+warnings.filterwarnings("ignore", category=InstrumentNotReadyWarning)
+```
+
+Or treat any skip as an error in CI:
+
+```python
+import warnings
+from lite_bootstrap import InstrumentSkippedWarning
+
+warnings.filterwarnings("error", category=InstrumentSkippedWarning)
+```
