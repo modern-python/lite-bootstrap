@@ -31,11 +31,11 @@ def test_free_bootstrap(free_bootstrapper_config: FreeBootstrapperConfig) -> Non
         bootstrapper.teardown()
 
 
-def test_free_bootstrap_logging_not_ready() -> None:
+def test_free_bootstrap_logging_disabled() -> None:
     with capture_logs() as cap_logs:
         FreeBootstrapper(
             bootstrap_config=FreeBootstrapperConfig(
-                service_debug=True,
+                logging_enabled=False,
                 opentelemetry_instrumentors=[CustomInstrumentor()],
                 opentelemetry_log_traces=True,
                 sentry_dsn="https://testdsn@localhost/1",
@@ -44,7 +44,7 @@ def test_free_bootstrap_logging_not_ready() -> None:
             ),
         )
         assert cap_logs == [
-            {"event": "LoggingInstrument is not ready: service_debug is True", "log_level": "info"},
+            {"event": "LoggingInstrument is not ready: logging_enabled is False", "log_level": "info"},
             {"event": "PyroscopeInstrument is not ready: pyroscope_endpoint is empty", "log_level": "info"},
         ]
 
