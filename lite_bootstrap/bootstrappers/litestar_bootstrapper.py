@@ -76,6 +76,7 @@ if import_checker.is_litestar_opentelemetry_installed:
         def __init__(self, tracer_provider: "TracerProvider", excluded_urls: set[str]) -> None:
             self._tracer_provider = tracer_provider
             self._excluded_urls = ",".join(excluded_urls)
+            self._otel_apps: dict[int, ASGIApp] = {}
 
         async def handle(
             self,
@@ -84,12 +85,16 @@ if import_checker.is_litestar_opentelemetry_installed:
             send: "Send",
             next_app: "ASGIApp",
         ) -> None:
-            await OpenTelemetryMiddleware(
-                app=next_app,
-                default_span_details=build_litestar_route_details_from_scope,
-                excluded_urls=self._excluded_urls,
-                tracer_provider=self._tracer_provider,
-            )(scope, receive, send)  # ty: ignore[invalid-argument-type]
+            otel_app = self._otel_apps.get(id(next_app))
+            if otel_app is None:
+                otel_app = OpenTelemetryMiddleware(
+                    app=next_app,
+                    default_span_details=build_litestar_route_details_from_scope,
+                    excluded_urls=self._excluded_urls,
+                    tracer_provider=self._tracer_provider,
+                )
+                self._otel_apps[id(next_app)] = otel_app  # ty: ignore[invalid-assignment]
+            await otel_app(scope, receive, send)  # ty: ignore[invalid-argument-type]
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
