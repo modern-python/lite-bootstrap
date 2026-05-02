@@ -170,7 +170,7 @@ class FastAPISwaggerInstrument(SwaggerInstrument):
     def bootstrap(self) -> None:
         if self.bootstrap_config.swagger_path != self.bootstrap_config.application.docs_url:
             warnings.warn(
-                f"swagger_path is differ from docs_url, "
+                f"swagger_path differs from docs_url, "
                 f"{self.bootstrap_config.application.docs_url} will be used for docs path",
                 stacklevel=2,
             )
