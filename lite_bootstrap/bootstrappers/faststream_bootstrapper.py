@@ -87,7 +87,10 @@ class FastStreamHealthChecksInstrument(HealthChecksInstrument):
                 else AsgiResponse(b"Service is unhealthy", 500, headers={"content-type": "text/plain"})
             )
 
-        if self.bootstrap_config.opentelemetry_generate_health_check_spans:
+        if (
+            self.bootstrap_config.opentelemetry_generate_health_check_spans
+            and import_checker.is_opentelemetry_installed
+        ):
             check_health = tracer.start_as_current_span(f"GET {self.bootstrap_config.health_checks_path}")(
                 check_health,
             )

@@ -58,3 +58,39 @@ def emulate_package_missing(package_name: str) -> typing.Iterator[None]:
     finally:
         sys.modules[package_name] = old_module
         reload(import_checker)
+
+
+@contextlib.contextmanager
+def emulate_package_missing_with_module_reload(
+    package_name: str, module_names: typing.Iterable[str]
+) -> typing.Iterator[None]:
+    # Reload listed modules under emulate_package_missing so their
+    # `if import_checker.is_X_installed: import X` blocks re-evaluate against
+    # the patched flag. `importlib.reload` preserves existing module globals,
+    # so we wipe non-dunder names first to truly simulate a fresh import where
+    # the conditional import never ran.
+    module_names = list(module_names)
+    snapshots: dict[str, dict[str, typing.Any]] = {}
+    for name in module_names:
+        if name in sys.modules:
+            snapshots[name] = dict(sys.modules[name].__dict__)
+
+    def _wipe_and_reload() -> None:
+        for name in module_names:
+            if name in sys.modules:
+                mod_dict = sys.modules[name].__dict__
+                for key in [k for k in mod_dict if not k.startswith("__")]:
+                    del mod_dict[key]
+                reload(sys.modules[name])
+
+    with emulate_package_missing(package_name):
+        _wipe_and_reload()
+        try:
+            yield
+        finally:
+            for name, snap in snapshots.items():
+                if name in sys.modules:
+                    mod_dict = sys.modules[name].__dict__
+                    for key in [k for k in mod_dict if not k.startswith("__")]:
+                        del mod_dict[key]
+                    mod_dict.update({k: v for k, v in snap.items() if not k.startswith("__")})

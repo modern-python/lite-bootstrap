@@ -13,7 +13,12 @@ from starlette import status
 from starlette.testclient import TestClient
 
 from lite_bootstrap import FastStreamBootstrapper, FastStreamConfig
-from tests.conftest import CustomInstrumentor, SentryTestTransport, emulate_package_missing
+from tests.conftest import (
+    CustomInstrumentor,
+    SentryTestTransport,
+    emulate_package_missing,
+    emulate_package_missing_with_module_reload,
+)
 
 
 logger = structlog.getLogger(__name__)
@@ -127,3 +132,30 @@ def test_faststream_bootstrapper_with_missing_instrument_dependency(broker: Redi
     bootstrap_config = build_faststream_config(broker=broker)
     with emulate_package_missing(package_name), pytest.warns(UserWarning, match=package_name):
         FastStreamBootstrapper(bootstrap_config=bootstrap_config)
+
+
+def test_faststream_bootstrap_without_prometheus_client(broker: RedisBroker) -> None:
+    # Regression: issue #87 bug 1 — FastStreamPrometheusInstrument's
+    # default_factory called prometheus_client.CollectorRegistry() during
+    # dataclass __init__, raising NameError before check_dependencies() ran.
+    bootstrap_config = build_faststream_config(broker=broker)
+    with emulate_package_missing_with_module_reload(
+        "prometheus_client",
+        ["lite_bootstrap.bootstrappers.faststream_bootstrapper"],
+    ):
+        with pytest.warns(UserWarning, match="prometheus_client"):
+            bootstrapper = FastStreamBootstrapper(bootstrap_config=bootstrap_config)
+        bootstrapper.bootstrap()
+
+
+def test_faststream_bootstrap_without_opentelemetry(broker: RedisBroker) -> None:
+    # Regression: issue #87 bug 2 — FastStreamHealthChecksInstrument.bootstrap
+    # referenced unbound `tracer` when opentelemetry was absent and
+    # opentelemetry_generate_health_check_spans defaulted to True.
+    bootstrap_config = build_faststream_config(broker=broker)
+    with emulate_package_missing_with_module_reload(
+        "opentelemetry",
+        ["lite_bootstrap.bootstrappers.faststream_bootstrapper"],
+    ):
+        bootstrapper = FastStreamBootstrapper(bootstrap_config=bootstrap_config)
+        bootstrapper.bootstrap()

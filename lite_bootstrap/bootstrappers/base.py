@@ -42,14 +42,18 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
                 self.instruments.append(instrument)
 
     def _register_or_skip(self, instrument_type: type[BaseInstrument]) -> BaseInstrument | None:
-        instrument = instrument_type(bootstrap_config=self.bootstrap_config)
-        if not instrument.check_dependencies():
+        # Check dependencies before instantiation: an instrument's __init__
+        # may reference symbols gated behind an optional import (e.g. a
+        # default_factory that calls into the missing package), which would
+        # raise NameError before the check_dependencies skip could run.
+        if not instrument_type.check_dependencies():
             warnings.warn(
-                instrument.missing_dependency_message,
+                instrument_type.missing_dependency_message,
                 category=InstrumentDependencyMissingWarning,
                 stacklevel=4,
             )
             return None
+        instrument = instrument_type(bootstrap_config=self.bootstrap_config)
         if not instrument.is_ready():
             warnings.warn(
                 f"{instrument_type.__name__} is not ready: {instrument.not_ready_message}",
