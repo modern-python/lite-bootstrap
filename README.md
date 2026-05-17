@@ -35,3 +35,18 @@ Usage examples:
 ## 📦 [PyPi](https://pypi.org/project/lite-bootstrap)
 
 ## 📝 [License](LICENSE)
+
+## Acknowledgements
+
+`lite-bootstrap` is inspired by [`microbootstrap`](https://github.com/community-of-python/microbootstrap) — a single package that wires up the common observability stack (sentry, prometheus, opentelemetry, logging, cors, swagger, health-checks) for FastAPI / Litestar / FastStream services and for plain scripts.
+
+The following ideas were borrowed:
+
+- the overall surface — a `Bootstrapper` per framework that composes a set of instruments,
+- the lifecycle model — each instrument has `bootstrap()` / `teardown()` / `is_ready()` and is skipped when its optional dependency is not installed,
+- the catalog of supported instruments and supported frameworks.
+
+The following intentionally differ:
+
+- **Configuration**: `lite-bootstrap` uses frozen `dataclass` configs (no `pydantic` / `pydantic-settings` runtime dependency), which is what makes it "lite". `microbootstrap` configures everything through `pydantic-settings` models.
+- **Scope**: `lite-bootstrap` is deliberately narrow — only instrument wiring. It does not include a Granian server runner or a console writer.
