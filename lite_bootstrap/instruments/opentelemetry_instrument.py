@@ -78,6 +78,9 @@ class OpenTelemetryInstrument(BaseInstrument):
     bootstrap_config: OpentelemetryConfig
     not_ready_message = "opentelemetry_endpoint is empty and opentelemetry_log_traces is False"
     missing_dependency_message = "opentelemetry is not installed"
+    _tracer_provider: "TracerProvider | None" = dataclasses.field(
+        default_factory=lambda: None, init=False, repr=False, compare=False
+    )
 
     def is_ready(self) -> bool:
         return (
@@ -105,6 +108,7 @@ class OpenTelemetryInstrument(BaseInstrument):
         )
         tracer_provider = TracerProvider(resource=resource)
         set_tracer_provider(tracer_provider)
+        object.__setattr__(self, "_tracer_provider", tracer_provider)
         if import_checker.is_pyroscope_installed and getattr(self.bootstrap_config, "pyroscope_endpoint", None):
             tracer_provider.add_span_processor(PyroscopeSpanProcessor())
         if self.bootstrap_config.opentelemetry_log_traces:
@@ -133,3 +137,6 @@ class OpenTelemetryInstrument(BaseInstrument):
                 one_instrumentor.instrumentor.uninstrument(**one_instrumentor.additional_params)
             else:
                 one_instrumentor.uninstrument()
+        if self._tracer_provider is not None:
+            self._tracer_provider.shutdown()
+            object.__setattr__(self, "_tracer_provider", None)
