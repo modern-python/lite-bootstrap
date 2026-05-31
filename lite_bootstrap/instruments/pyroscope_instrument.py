@@ -2,7 +2,8 @@ import dataclasses
 import typing
 
 from lite_bootstrap import import_checker
-from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
+from lite_bootstrap.instruments.base import BaseInstrument
+from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryServiceFieldsConfig
 
 
 if import_checker.is_pyroscope_installed:
@@ -10,13 +11,11 @@ if import_checker.is_pyroscope_installed:
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
-class PyroscopeConfig(BaseConfig):
+class PyroscopeConfig(OpenTelemetryServiceFieldsConfig):
     pyroscope_endpoint: str | None = None
     pyroscope_sample_rate: int = 100
     pyroscope_tags: dict[str, str] = dataclasses.field(default_factory=dict)
     pyroscope_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
-    opentelemetry_service_name: str | None = None
-    opentelemetry_namespace: str | None = None
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
