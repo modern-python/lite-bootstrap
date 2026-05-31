@@ -80,6 +80,8 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
         return self._prepare_application()
 
     def teardown(self) -> None:
+        if not self.is_bootstrapped:
+            return
         self.is_bootstrapped = False
         errors: list[tuple[str, BaseException]] = []
         for one_instrument in reversed(self.instruments):

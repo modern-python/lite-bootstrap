@@ -108,3 +108,19 @@ def test_free_bootstrapper_with_missing_instrument_dependency(
 ) -> None:
     with emulate_package_missing(package_name), pytest.warns(UserWarning, match=package_name):
         FreeBootstrapper(bootstrap_config=free_bootstrapper_config)
+
+
+def test_teardown_is_idempotent(free_bootstrapper_config: FreeBootstrapperConfig) -> None:
+    bootstrapper = FreeBootstrapper(bootstrap_config=free_bootstrapper_config)
+    bootstrapper.bootstrap()
+
+    first = MagicMock()
+    second = MagicMock()
+    bootstrapper.instruments = [first, second]
+
+    bootstrapper.teardown()
+    bootstrapper.teardown()
+
+    first.teardown.assert_called_once()
+    second.teardown.assert_called_once()
+    assert not bootstrapper.is_bootstrapped
