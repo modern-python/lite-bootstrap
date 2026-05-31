@@ -33,13 +33,17 @@ class InstrumentorWithParams:
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
-class OpentelemetryConfig(BaseConfig):
+class OpenTelemetryServiceFieldsConfig(BaseConfig):
     opentelemetry_service_name: str | None = None
+    opentelemetry_namespace: str | None = None
+
+
+@dataclasses.dataclass(kw_only=True, frozen=True)
+class OpentelemetryConfig(OpenTelemetryServiceFieldsConfig):
     opentelemetry_container_name: str | None = dataclasses.field(
         default_factory=lambda: os.environ.get("HOSTNAME") or None
     )
     opentelemetry_endpoint: str | None = None
-    opentelemetry_namespace: str | None = None
     opentelemetry_insecure: bool = True
     opentelemetry_instrumentors: list[typing.Union[InstrumentorWithParams, "BaseInstrumentor"]] = dataclasses.field(
         default_factory=list
