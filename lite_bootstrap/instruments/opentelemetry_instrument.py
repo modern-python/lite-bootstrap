@@ -83,10 +83,7 @@ class OpenTelemetryInstrument(BaseInstrument):
     )
 
     def is_ready(self) -> bool:
-        return (
-            bool(self.bootstrap_config.opentelemetry_endpoint or self.bootstrap_config.opentelemetry_log_traces)
-            and import_checker.is_opentelemetry_installed
-        )
+        return bool(self.bootstrap_config.opentelemetry_endpoint or self.bootstrap_config.opentelemetry_log_traces)
 
     @staticmethod
     def check_dependencies() -> bool:

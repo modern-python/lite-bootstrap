@@ -26,7 +26,7 @@ class PyroscopeInstrument(BaseInstrument):
     missing_dependency_message = "pyroscope is not installed"
 
     def is_ready(self) -> bool:
-        return bool(self.bootstrap_config.pyroscope_endpoint) and import_checker.is_pyroscope_installed
+        return bool(self.bootstrap_config.pyroscope_endpoint)
 
     @staticmethod
     def check_dependencies() -> bool:
