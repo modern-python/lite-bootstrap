@@ -42,6 +42,11 @@ def test_fastapi_offline_docs_root_path() -> None:
         response = client.get("/some-root-path/static/swagger-ui.css")
         assert response.status_code == HTTPStatus.OK
 
+        response = client.get("/redoc")
+        assert response.status_code == HTTPStatus.OK
+        assert "/some-root-path/static/redoc.standalone.js" in response.text
+        assert "/some-root-path/openapi.json" in response.text
+
 
 def test_fastapi_offline_docs_raises_without_openapi_url() -> None:
     app = FastAPI(openapi_url=None)

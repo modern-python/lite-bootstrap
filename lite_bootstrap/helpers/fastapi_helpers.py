@@ -50,9 +50,10 @@ def enable_offline_docs(
         return get_swagger_ui_oauth2_redirect_html()
 
     @app.get(redoc_url, include_in_schema=False)
-    async def redoc_html() -> HTMLResponse:
+    async def redoc_html(request: Request) -> HTMLResponse:
+        root_path = request.scope.get("root_path", "").rstrip("/")
         return get_redoc_html(
-            openapi_url=app_openapi_url,
+            openapi_url=f"{root_path}{app_openapi_url}",
             title=f"{app.title} - ReDoc",
-            redoc_js_url=f"{static_path}/redoc.standalone.js",
+            redoc_js_url=f"{root_path}{static_path}/redoc.standalone.js",
         )
