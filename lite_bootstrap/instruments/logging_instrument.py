@@ -137,7 +137,7 @@ class LoggingInstrument(BaseInstrument):
         ]
 
     def is_ready(self) -> bool:
-        return self.bootstrap_config.logging_enabled and import_checker.is_structlog_installed
+        return self.bootstrap_config.logging_enabled
 
     @staticmethod
     def check_dependencies() -> bool:

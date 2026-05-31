@@ -108,6 +108,16 @@ class TestSentryEnrichEventFromStructlog:
                     "contexts": {"structlog": {"foo": "bar"}},
                 },
             ),
+            (
+                {
+                    "logentry": {"formatted": '{"event": "event name", "skip_sentry": false, "foo": "bar"}'},
+                    "contexts": {},
+                },
+                {
+                    "logentry": {"formatted": "event name"},
+                    "contexts": {"structlog": {"foo": "bar"}},
+                },
+            ),
         ],
     )
     def test_modify(self, event_before: "sentry_types.Event", event_after: "sentry_types.Event") -> None:

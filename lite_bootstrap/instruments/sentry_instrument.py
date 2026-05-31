@@ -17,7 +17,7 @@ if import_checker.is_sentry_installed:
 
 
 IGNORED_STRUCTLOG_ATTRIBUTES: typing.Final = frozenset(
-    {"event", "level", "logger", "tracing", "timestamp", "exception"}
+    {"event", "level", "logger", "tracing", "timestamp", "exception", "skip_sentry"}
 )
 
 
@@ -98,7 +98,7 @@ class SentryInstrument(BaseInstrument):
     missing_dependency_message = "sentry_sdk is not installed"
 
     def is_ready(self) -> bool:
-        return bool(self.bootstrap_config.sentry_dsn) and import_checker.is_sentry_installed
+        return bool(self.bootstrap_config.sentry_dsn)
 
     @staticmethod
     def check_dependencies() -> bool:
