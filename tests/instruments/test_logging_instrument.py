@@ -1,6 +1,8 @@
 import logging
 from io import StringIO
+from unittest.mock import patch
 
+import pytest
 import structlog
 from opentelemetry.trace import get_tracer
 
@@ -117,3 +119,20 @@ def test_memory_logger_factory_error() -> None:
     error_message = "error message"
     test_logger.error(error_message)
     assert error_message in test_stream.getvalue()
+
+
+def test_logging_instrument_teardown_resets_factory_when_close_handlers_raises() -> None:
+    instrument = LoggingInstrument(
+        bootstrap_config=LoggingConfig(logging_buffer_capacity=0),
+    )
+    instrument.bootstrap()
+    factory = instrument._logger_factory  # noqa: SLF001
+    assert factory is not None
+
+    with (
+        patch.object(factory, "close_handlers", side_effect=RuntimeError("boom")),
+        pytest.raises(RuntimeError, match="boom"),
+    ):
+        instrument.teardown()
+
+    assert instrument._logger_factory is None  # noqa: SLF001

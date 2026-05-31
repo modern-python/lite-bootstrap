@@ -207,5 +207,7 @@ class LoggingInstrument(BaseInstrument):
             h.close()
         root_logger.setLevel(logging.WARNING)
         if self._logger_factory is not None:
-            self._logger_factory.close_handlers()
-            object.__setattr__(self, "_logger_factory", None)
+            try:
+                self._logger_factory.close_handlers()
+            finally:
+                object.__setattr__(self, "_logger_factory", None)

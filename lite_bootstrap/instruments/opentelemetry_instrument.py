@@ -138,5 +138,7 @@ class OpenTelemetryInstrument(BaseInstrument):
             else:
                 one_instrumentor.uninstrument()
         if self._tracer_provider is not None:
-            self._tracer_provider.shutdown()
-            object.__setattr__(self, "_tracer_provider", None)
+            try:
+                self._tracer_provider.shutdown()
+            finally:
+                object.__setattr__(self, "_tracer_provider", None)
