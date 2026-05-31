@@ -49,3 +49,46 @@ def test_config_from_object() -> None:
     short_config = BaseConfig.from_object(big_config)
     for field in dataclasses.fields(BaseConfig):
         assert getattr(short_config, field.name) == getattr(big_config, field.name)
+
+
+def test_from_object_skips_none_attribute() -> None:
+    @dataclasses.dataclass
+    class Source:
+        service_name: str | None = None
+        service_version: str = "2.0.0"
+
+    config = BaseConfig.from_object(Source())
+    assert config.service_name == "micro-service"
+    assert config.service_version == "2.0.0"
+
+
+def test_from_object_skips_missing_attribute() -> None:
+    class Source:
+        pass
+
+    config = BaseConfig.from_object(Source())
+    assert config.service_name == "micro-service"
+    assert config.service_version == "1.0.0"
+    assert config.service_debug is True
+
+
+def test_from_object_preserves_falsy_values() -> None:
+    @dataclasses.dataclass
+    class Source:
+        service_name: str = ""
+        service_debug: bool = False
+
+    config = BaseConfig.from_object(Source())
+    assert config.service_name == ""
+    assert config.service_debug is False
+
+
+def test_from_dict_drops_unknown_keys_silently() -> None:
+    config = BaseConfig.from_dict({"service_name": "test", "unknown_key": "value"})
+    assert config.service_name == "test"
+    assert config.service_version == "1.0.0"
+
+
+def test_from_dict_explicit_none_overrides_default() -> None:
+    config = BaseConfig.from_dict({"service_name": None})
+    assert config.service_name is None
