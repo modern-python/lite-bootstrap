@@ -4,6 +4,8 @@ from unittest.mock import MagicMock
 import pytest
 from fastmcp import FastMCP
 from fastmcp.server.middleware import MiddlewareContext
+from starlette import status
+from starlette.testclient import TestClient
 
 from lite_bootstrap import FastMcpBootstrapper, FastMcpConfig
 from lite_bootstrap.bootstrappers.fastmcp_bootstrapper import FastMcpLoggingMiddleware
@@ -95,3 +97,56 @@ async def test_fastmcp_logging_middleware_logs_exception(monkeypatch: pytest.Mon
 
     fake_logger.exception.assert_called_once()
     fake_logger.info.assert_not_called()
+
+
+def _make_test_config(**overrides: typing.Any) -> FastMcpConfig:  # noqa: ANN401
+    base: dict[str, typing.Any] = {
+        "service_name": "test-mcp",
+        "service_version": "1.2.3",
+        "logging_buffer_capacity": 0,
+    }
+    base.update(overrides)
+    return FastMcpConfig(**base)
+
+
+def test_fastmcp_health_check_route_serves_200_with_data() -> None:
+    config = _make_test_config()
+    bootstrapper = FastMcpBootstrapper(bootstrap_config=config)
+    application = bootstrapper.bootstrap()
+    try:
+        with TestClient(application.http_app()) as test_client:
+            response = test_client.get(config.health_checks_path)
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json() == {
+            "health_status": True,
+            "service_name": "test-mcp",
+            "service_version": "1.2.3",
+        }
+    finally:
+        bootstrapper.teardown()
+
+
+def test_fastmcp_health_check_path_is_configurable() -> None:
+    config = _make_test_config(health_checks_path="/healthz")
+    bootstrapper = FastMcpBootstrapper(bootstrap_config=config)
+    application = bootstrapper.bootstrap()
+    try:
+        with TestClient(application.http_app()) as test_client:
+            response = test_client.get("/healthz")
+            default_response = test_client.get("/health/")
+        assert response.status_code == status.HTTP_200_OK
+        assert default_response.status_code == status.HTTP_404_NOT_FOUND
+    finally:
+        bootstrapper.teardown()
+
+
+def test_fastmcp_health_check_disabled_when_flag_false() -> None:
+    config = _make_test_config(health_checks_enabled=False)
+    bootstrapper = FastMcpBootstrapper(bootstrap_config=config)
+    application = bootstrapper.bootstrap()
+    try:
+        with TestClient(application.http_app()) as test_client:
+            response = test_client.get(config.health_checks_path)
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+    finally:
+        bootstrapper.teardown()

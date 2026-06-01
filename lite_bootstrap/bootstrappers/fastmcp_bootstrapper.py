@@ -4,7 +4,7 @@ import typing
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
-from lite_bootstrap.instruments.healthchecks_instrument import HealthChecksConfig
+from lite_bootstrap.instruments.healthchecks_instrument import HealthChecksConfig, HealthChecksInstrument
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig
 from lite_bootstrap.instruments.prometheus_instrument import PrometheusConfig
 from lite_bootstrap.instruments.pyroscope_instrument import PyroscopeConfig
@@ -14,6 +14,8 @@ from lite_bootstrap.instruments.sentry_instrument import SentryConfig
 if import_checker.is_fastmcp_installed:
     from fastmcp import FastMCP
     from fastmcp.server.middleware import Middleware, MiddlewareContext
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse
 
 if import_checker.is_structlog_installed:
     import structlog
@@ -63,10 +65,27 @@ class FastMcpConfig(HealthChecksConfig, LoggingConfig, PrometheusConfig, Pyrosco
     logging_turn_off_middleware: bool = False
 
 
+@dataclasses.dataclass(kw_only=True)
+class FastMcpHealthChecksInstrument(HealthChecksInstrument):
+    bootstrap_config: FastMcpConfig
+
+    def bootstrap(self) -> None:
+        @self.bootstrap_config.application.custom_route(
+            self.bootstrap_config.health_checks_path,
+            methods=["GET"],
+            name="health_check",
+            include_in_schema=self.bootstrap_config.health_checks_include_in_schema,
+        )
+        async def health_check_handler(_: "Request") -> "JSONResponse":
+            return JSONResponse(dict(self.render_health_check_data()))
+
+
 class FastMcpBootstrapper(BaseBootstrapper["FastMCP[typing.Any]"]):
     __slots__ = "bootstrap_config", "instruments"
 
-    instruments_types: typing.ClassVar = []
+    instruments_types: typing.ClassVar = [
+        FastMcpHealthChecksInstrument,
+    ]
     bootstrap_config: FastMcpConfig
     not_ready_message = "fastmcp is not installed"
 
