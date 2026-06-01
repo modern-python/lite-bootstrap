@@ -197,11 +197,6 @@ class LitestarOpenTelemetryInstrument(OpenTelemetryInstrument):
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
-class LitestarSentryInstrument(SentryInstrument):
-    bootstrap_config: LitestarConfig
-
-
-@dataclasses.dataclass(kw_only=True, frozen=True)
 class LitestarPrometheusInstrument(PrometheusInstrument):
     bootstrap_config: LitestarConfig
     missing_dependency_message = "prometheus_client is not installed"
@@ -271,7 +266,7 @@ class LitestarBootstrapper(BaseBootstrapper["litestar.Litestar"]):
         LitestarCorsInstrument,
         LitestarOpenTelemetryInstrument,
         PyroscopeInstrument,
-        LitestarSentryInstrument,
+        SentryInstrument,
         LitestarHealthChecksInstrument,
         LitestarLoggingInstrument,
         LitestarPrometheusInstrument,

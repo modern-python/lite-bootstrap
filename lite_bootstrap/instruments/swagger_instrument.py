@@ -11,5 +11,5 @@ class SwaggerConfig(BaseConfig):
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
-class SwaggerInstrument(BaseInstrument):
-    bootstrap_config: SwaggerConfig
+class SwaggerInstrument(BaseInstrument[SwaggerConfig]):
+    pass

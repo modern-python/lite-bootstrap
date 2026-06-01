@@ -15,8 +15,7 @@ class CorsConfig(BaseConfig):
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
-class CorsInstrument(BaseInstrument):
-    bootstrap_config: CorsConfig
+class CorsInstrument(BaseInstrument[CorsConfig]):
     not_ready_message = "cors_allowed_origins or cors_allowed_origin_regex must be provided"
 
     def is_ready(self) -> bool:

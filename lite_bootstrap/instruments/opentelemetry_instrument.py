@@ -78,8 +78,7 @@ if import_checker.is_opentelemetry_installed and import_checker.is_pyroscope_ins
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
-class OpenTelemetryInstrument(BaseInstrument):
-    bootstrap_config: OpentelemetryConfig
+class OpenTelemetryInstrument(BaseInstrument[OpentelemetryConfig]):
     not_ready_message = "opentelemetry_endpoint is empty and opentelemetry_log_traces is False"
     missing_dependency_message = "opentelemetry is not installed"
     _tracer_provider: "TracerProvider | None" = dataclasses.field(

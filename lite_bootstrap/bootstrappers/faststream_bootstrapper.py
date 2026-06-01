@@ -132,11 +132,6 @@ class FastStreamOpenTelemetryInstrument(OpenTelemetryInstrument):
             )
 
 
-@dataclasses.dataclass(kw_only=True, frozen=True)
-class FastStreamSentryInstrument(SentryInstrument):
-    bootstrap_config: FastStreamConfig
-
-
 def _make_collector_registry() -> "prometheus_client.CollectorRegistry":
     return prometheus_client.CollectorRegistry()
 
@@ -177,7 +172,7 @@ class FastStreamBootstrapper(BaseBootstrapper["AsgiFastStream"]):
     instruments_types: typing.ClassVar = [
         FastStreamOpenTelemetryInstrument,
         PyroscopeInstrument,
-        FastStreamSentryInstrument,
+        SentryInstrument,
         FastStreamHealthChecksInstrument,
         FastStreamLoggingInstrument,
         FastStreamPrometheusInstrument,
