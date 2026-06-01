@@ -37,7 +37,7 @@ BaseBootstrapper (abc.ABC)
 
 ### Key design decisions
 
-- **Optional dependencies**: Each instrument checks for its optional package via `import_checker.py` (`importlib.util.find_spec`). Instruments are skipped silently if the package is absent. Optional packages are imported inside `if import_checker.is_X_installed:` blocks — Pyright doesn't recognize this guard pattern (see "Type checking" below).
+- **Optional dependencies**: Each instrument checks for its optional package via `import_checker.py` (`importlib.util.find_spec`). Instruments are skipped silently if the package is absent. Optional packages are imported inside `if import_checker.is_X_installed:` blocks; static analyzers that don't model this guard will report spurious "possibly unbound" diagnostics — the project uses `ty` which handles the pattern correctly.
 - **Frozen configs, non-frozen instruments**: All `*Config` classes are `@dataclasses.dataclass(kw_only=True, frozen=True)`. All `*Instrument` classes lose `frozen=True` because two instruments (`LoggingInstrument`, `OpenTelemetryInstrument`) cache mutable runtime state (`_logger_factory`, `_tracer_provider`); Python's dataclass rules require the whole hierarchy to be non-frozen. `from_dict()` and `from_object()` filter unknown keys before constructing.
 - **`FastAPIConfig.application` uses an `UnsetType` sentinel**: shared in `lite_bootstrap/types.py` as `UnsetType` + `UNSET` (singleton). `FastAPIConfig.__post_init__` checks `isinstance(self.application, UnsetType)` and replaces with a constructed `FastAPI()` via `object.__setattr__` (config stays frozen for user-facing immutability). A one-line comment in `__post_init__` documents the freeze bypass.
 - **Instrument registry**: `BaseBootstrapper` holds a list of instrument instances; it calls `bootstrap()` on each in order and `teardown()` in reverse during shutdown.
@@ -81,10 +81,4 @@ Install via `pip install lite-bootstrap[<group>]` or `uv add lite-bootstrap[<gro
 
 ### Type checking
 
-The project enforces **`ty`** (Astral's type checker) via `just lint`. Pyright (via VS Code/Pylance) is NOT enforced — it surfaces consistent false positives that don't reflect runtime safety:
-
-- `reportPossiblyUnbound` on symbols imported inside `if import_checker.is_X_installed:` blocks. The runtime invariant holds; Pyright doesn't model the guard.
-- `reportIncompatibleVariableOverride` on framework instrument subclasses (e.g., `FastAPICorsInstrument.bootstrap_config: FastAPIConfig` narrowing the base `CorsConfig`). This is covariant narrowing — invalid under strict invariance but the project's accepted pattern.
-- `reportTypedDictNotRequiredAccess` on `sentry_sdk._types.Event` keys (`logentry`, `contexts`). The `enrich_sentry_event_from_structlog_log` function guards each access with `event.get(...)` truthiness checks.
-
-A `[tool.pyright]` block in `pyproject.toml` disables these rules at the project level so IDE noise stays low. If you're tempted to add a `# pyright: ignore` comment, prefer the project-level suppression instead.
+The project uses **`ty`** (Astral's type checker), enforced via `just lint`. No other type checker is supported; the codebase patterns (conditional imports for optional dependencies, covariant `bootstrap_config` narrowing in framework instrument subclasses, TypedDict optional-key access guarded by `.get()` truthiness checks) require a checker that models them correctly. Pyright is not used.

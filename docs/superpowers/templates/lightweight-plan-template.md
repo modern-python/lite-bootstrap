@@ -133,32 +133,29 @@ alias in `__init__.py` (see PR15 for the established pattern).
 
 ## Type-checker behavior validation (when the plan claims type narrowing)
 
-Add this section to ANY plan that claims a type-checker behavior — narrowing
-across asserts, casts, sentinel identity checks, etc. PR16's plan claimed
-"`ty` and Pyright both narrow `str | None` → `str` after the assert." The
-`ty` half was correct; the Pyright half was wrong (Pyright doesn't narrow
-attribute chains across asserts because in theory any intervening call
-could mutate the attribute). The reviewer caught the discrepancy; no harm
-done, but the plan over-promised.
-
-Lesson: `ty` and Pyright behave differently in many narrowing scenarios,
-especially:
-- Attribute access (`self.x.y`) across asserts — `ty` narrows, Pyright doesn't
-- `typing.cast` with string forward references — sometimes one accepts, the other complains
-- TypedDict optional-key access — different default policies
-- Conditional imports under `if X is not None:` runtime guards — Pyright pessimistic
+Add this section to ANY plan that claims `ty` will narrow a type — across
+asserts, casts, sentinel identity checks, etc. PR16's plan claimed both `ty`
+and Pyright would narrow `str | None` → `str` after an assert; one half of
+that claim was wrong because the two checkers don't behave identically.
+(Pyright has since been dropped from the project — only `ty` is in scope —
+but the underlying lesson stands: don't assume narrowing, verify it.)
 
 Before writing a plan that depends on a type-checker behavior:
 
-1. Write the minimal failing/working pattern in a scratch file.
-2. Run `just lint` (which runs `ty`). Observe the diagnostic state.
-3. Check the relevant Pyright output (e.g., open in IDE; or `uv run pyright <file>` if Pyright is installed).
-4. Bake the OBSERVED behavior into the plan, not the assumed behavior.
+1. Write the minimal failing/working pattern in a scratch file or directly
+   in the target file.
+2. Run `just lint` (which runs `ty check`). Observe the diagnostic state.
+3. Bake the OBSERVED behavior into the plan, not the assumed behavior.
 
-If the two checkers disagree, the plan must say so explicitly and explain
-why the change is still worth landing. The runtime safety + documentation
-value of an assert often justifies it even when one checker doesn't
-narrow — but say so.
+Specific narrowing patterns worth verifying experimentally:
+
+- **Attribute access across asserts** (`assert self.x.y is not None`). Whether
+  the checker narrows depends on its purity model — some checkers assume any
+  intervening method call could mutate the attribute.
+- **`typing.cast` with string forward references**. Behavior varies on whether
+  the cast is treated as a runtime contract or pure documentation.
+- **TypedDict optional-key access** after a truthiness guard (`if event.get("k"):`).
+- **Conditional imports** under `if X is not None:` runtime guards.
 
 ---
 
