@@ -5,6 +5,7 @@ import pytest
 import structlog
 from litestar import status_codes
 from litestar.config.app import AppConfig
+from litestar.params import FromPath
 from litestar.testing import TestClient
 from opentelemetry.sdk.trace import TracerProvider as SDKTracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -91,7 +92,7 @@ def test_litestar_bootstrapper_with_missing_instrument_dependency(
 
 def test_litestar_otel_span_naming(litestar_config: LitestarConfig) -> None:
     @litestar.get("/items/{item_id:int}")
-    async def get_item(item_id: int) -> dict[str, int]:
+    async def get_item(item_id: FromPath[int]) -> dict[str, int]:
         return {"item_id": item_id}
 
     config = dataclasses.replace(litestar_config, application_config=AppConfig(route_handlers=[get_item]))

@@ -121,7 +121,7 @@ dev = [
     "pytest",
     "pytest-cov",
     "pytest-asyncio",
-    "httpx",  # for test client
+    "httpx2",  # for test client
     "redis>=5.2.1",
 ]
 lint = [
