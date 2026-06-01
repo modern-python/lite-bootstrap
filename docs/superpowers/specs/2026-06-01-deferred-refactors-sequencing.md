@@ -211,60 +211,42 @@ suite passes against the new layout.
 
 **Scope:**
 
-- REF-6: Drop `frozen=True` from `LoggingInstrument` and `OpenTelemetryInstrument`
-  (the only two instruments that legitimately cache mutable runtime state via
-  `object.__setattr__`). Replace `object.__setattr__(self, "_x", value)` with plain
-  `self._x = value`. The exception-safety from PR3's `try/finally` shape stays
-  intact — the pattern simplifies from:
+- REF-6: Python's dataclass rules forbid surgical unfreezing (a non-frozen
+  dataclass can't inherit from a frozen one). To drop `frozen=True` from
+  `LoggingInstrument` and `OpenTelemetryInstrument` (the two instruments with
+  `object.__setattr__` workarounds), `BaseInstrument` and all 22 instrument
+  subclasses must also lose `frozen=True`. Configs all keep `frozen=True`.
+  After the cascade, 4 `object.__setattr__(self, "_x", value)` call sites in
+  the two instruments become plain `self._x = value`. The `try/finally`
+  exception safety from PR3 is preserved.
 
-  ```python
-  if self._tracer_provider is not None:
-      try:
-          self._tracer_provider.shutdown()
-      finally:
-          object.__setattr__(self, "_tracer_provider", None)
-  ```
+- LOW-4: `FastAPIConfig.application` declared with `default=None` +
+  `# ty: ignore[invalid-assignment]`. Replaced with a proper sentinel-type
+  pattern: introduce `UnsetType` + `UNSET` singleton in
+  `lite_bootstrap/types.py`, type the field as `fastapi.FastAPI | UnsetType`,
+  default to `UNSET`, check via `isinstance(self.application, UnsetType)`. Add
+  a `_narrow_app(config)` helper that asserts the type and returns the
+  narrowed app; every FastAPI framework instrument calls it. Drops the
+  `# ty: ignore`. `FastAPIConfig` stays frozen — the existing
+  `object.__setattr__(self, "application", ...)` in `__post_init__` remains
+  (a code comment documents the rationale). Sibling configs (`LitestarConfig`,
+  `FastStreamConfig`) don't have this need because they use `default_factory`
+  for their app fields.
 
-  to:
+  **Note:** the originally-planned `typing.cast("fastapi.FastAPI", object())`
+  sentinel was replaced during implementation with a proper `UnsetType` class.
+  This spec has been retroactively updated to match what was built.
 
-  ```python
-  if self._tracer_provider is not None:
-      try:
-          self._tracer_provider.shutdown()
-      finally:
-          self._tracer_provider = None
-  ```
-
-  Configs stay frozen — only the two instruments with cached state lose `frozen`.
-  Apply to both `LoggingInstrument._logger_factory` resets and
-  `OpenTelemetryInstrument._tracer_provider` resets, including in their bootstrap
-  paths.
-
-- LOW-4: Address `FastAPIConfig.application` declared with
-  `default=None` + `# ty: ignore[invalid-assignment]` and patched in `__post_init__`.
-  The minimum-risk cleanup is to use a sentinel instead of `None`:
-
-  ```python
-  _UNSET: typing.Final = typing.cast("fastapi.FastAPI", object())
-  application: "fastapi.FastAPI" = _UNSET
-  ```
-
-  Drop the `# ty: ignore`. The `__post_init__` check changes from `if not
-  self.application:` to `if self.application is _UNSET:`. Litestar's
-  `default_factory=lambda: AppConfig()` pattern doesn't work here because the
-  factory needs `service_name` from the config to set `app.title` etc.
-
-**Files:** 3-4 — `logging_instrument.py`, `opentelemetry_instrument.py`,
-`fastapi_bootstrapper.py`. Possibly `tests/instruments/test_*_instrument.py` if any
-tests rely on instrument immutability (`dataclasses.replace`, `frozen` errors).
+**Files:** 13 — 9 instrument modules (`base.py` + 8 base instruments), 3
+bootstrapper modules (`fastapi`, `litestar`, `faststream`), and `types.py`
+(new `UnsetType` + `UNSET` sentinel).
 
 **Test impact:** Existing tests should pass unchanged. Watch for any test that relied
-on `FrozenInstanceError` being raised on instrument mutation — none expected, but
-verify.
+on `FrozenInstanceError` being raised on instrument mutation — none expected.
 
-**Risk:** Medium. The `frozen` change is observable to user code that relied on
-`dataclasses.replace` for `LoggingInstrument` / `OpenTelemetryInstrument`. Unlikely
-in practice but worth noting.
+**Risk:** Medium. The cascade is mechanical but missing one entry breaks the build
+(TypeError at import). The `frozen` change is observable to user code that relied on
+`dataclasses.replace` for instruments — unlikely in practice but worth noting.
 
 ---
 
