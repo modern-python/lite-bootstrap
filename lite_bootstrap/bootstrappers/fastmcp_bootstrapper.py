@@ -25,34 +25,36 @@ def _make_fastmcp() -> "FastMCP[typing.Any]":
     return FastMCP()
 
 
-class FastMcpLoggingMiddleware(Middleware):
-    async def on_message(
-        self,
-        context: "MiddlewareContext[typing.Any]",
-        call_next: "typing.Callable[[MiddlewareContext[typing.Any]], typing.Awaitable[typing.Any]]",
-    ) -> typing.Any:  # noqa: ANN401
-        start_time = time.perf_counter_ns()
-        mcp_fields = {
-            "method": context.method,
-            "source": context.source,
-            "type": context.type,
-        }
-        try:
-            result = await call_next(context)
-        except Exception:
-            fastmcp_access_logger.exception(
+if import_checker.is_fastmcp_installed:
+
+    class FastMcpLoggingMiddleware(Middleware):
+        async def on_message(
+            self,
+            context: "MiddlewareContext[typing.Any]",
+            call_next: "typing.Callable[[MiddlewareContext[typing.Any]], typing.Awaitable[typing.Any]]",
+        ) -> typing.Any:  # noqa: ANN401
+            start_time = time.perf_counter_ns()
+            mcp_fields = {
+                "method": context.method,
+                "source": context.source,
+                "type": context.type,
+            }
+            try:
+                result = await call_next(context)
+            except Exception:
+                fastmcp_access_logger.exception(
+                    context.method or "unknown",
+                    mcp=mcp_fields,
+                    duration=time.perf_counter_ns() - start_time,
+                )
+                raise
+
+            fastmcp_access_logger.info(
                 context.method or "unknown",
                 mcp=mcp_fields,
                 duration=time.perf_counter_ns() - start_time,
             )
-            raise
-
-        fastmcp_access_logger.info(
-            context.method or "unknown",
-            mcp=mcp_fields,
-            duration=time.perf_counter_ns() - start_time,
-        )
-        return result
+            return result
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
