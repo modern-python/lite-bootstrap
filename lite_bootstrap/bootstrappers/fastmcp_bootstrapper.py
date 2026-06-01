@@ -6,7 +6,7 @@ from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
 from lite_bootstrap.instruments.healthchecks_instrument import HealthChecksConfig, HealthChecksInstrument
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig
-from lite_bootstrap.instruments.prometheus_instrument import PrometheusConfig
+from lite_bootstrap.instruments.prometheus_instrument import PrometheusConfig, PrometheusInstrument
 from lite_bootstrap.instruments.pyroscope_instrument import PyroscopeConfig
 from lite_bootstrap.instruments.sentry_instrument import SentryConfig
 
@@ -15,12 +15,15 @@ if import_checker.is_fastmcp_installed:
     from fastmcp import FastMCP
     from fastmcp.server.middleware import Middleware, MiddlewareContext
     from starlette.requests import Request
-    from starlette.responses import JSONResponse
+    from starlette.responses import JSONResponse, Response
 
 if import_checker.is_structlog_installed:
     import structlog
 
     fastmcp_access_logger: typing.Final = structlog.get_logger("mcp.access")
+
+if import_checker.is_prometheus_client_installed:
+    import prometheus_client
 
 
 def _make_fastmcp() -> "FastMCP[typing.Any]":
@@ -80,11 +83,35 @@ class FastMcpHealthChecksInstrument(HealthChecksInstrument):
             return JSONResponse(dict(self.render_health_check_data()))
 
 
+@dataclasses.dataclass(kw_only=True)
+class FastMcpPrometheusInstrument(PrometheusInstrument):
+    bootstrap_config: FastMcpConfig
+    missing_dependency_message = "prometheus_client is not installed"
+
+    @staticmethod
+    def check_dependencies() -> bool:
+        return import_checker.is_prometheus_client_installed
+
+    def bootstrap(self) -> None:
+        @self.bootstrap_config.application.custom_route(
+            self.bootstrap_config.prometheus_metrics_path,
+            methods=["GET"],
+            name="metrics",
+            include_in_schema=self.bootstrap_config.prometheus_metrics_include_in_schema,
+        )
+        async def metrics_handler(_: "Request") -> "Response":
+            return Response(
+                prometheus_client.generate_latest(prometheus_client.REGISTRY),
+                headers={"content-type": prometheus_client.CONTENT_TYPE_LATEST},
+            )
+
+
 class FastMcpBootstrapper(BaseBootstrapper["FastMCP[typing.Any]"]):
     __slots__ = "bootstrap_config", "instruments"
 
     instruments_types: typing.ClassVar = [
         FastMcpHealthChecksInstrument,
+        FastMcpPrometheusInstrument,
     ]
     bootstrap_config: FastMcpConfig
     not_ready_message = "fastmcp is not installed"

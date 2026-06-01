@@ -1,6 +1,7 @@
 import typing
 from unittest.mock import MagicMock
 
+import prometheus_client
 import pytest
 from fastmcp import FastMCP
 from fastmcp.server.middleware import MiddlewareContext
@@ -148,5 +149,41 @@ def test_fastmcp_health_check_disabled_when_flag_false() -> None:
         with TestClient(application.http_app()) as test_client:
             response = test_client.get(config.health_checks_path)
         assert response.status_code == status.HTTP_404_NOT_FOUND
+    finally:
+        bootstrapper.teardown()
+
+
+def test_fastmcp_prometheus_route_exposes_registered_metric() -> None:
+    counter_name = "fastmcp_plan_test_requests_total"
+    try:
+        counter = prometheus_client.Counter(counter_name, "FastMCP plan test counter.")
+    except ValueError:
+        collector = prometheus_client.REGISTRY._names_to_collectors[counter_name]  # noqa: SLF001
+        counter = typing.cast(prometheus_client.Counter, collector)
+    counter.inc()
+
+    config = _make_test_config()
+    bootstrapper = FastMcpBootstrapper(bootstrap_config=config)
+    application = bootstrapper.bootstrap()
+    try:
+        with TestClient(application.http_app()) as test_client:
+            response = test_client.get(config.prometheus_metrics_path)
+        assert response.status_code == status.HTTP_200_OK
+        assert response.headers["content-type"].startswith(prometheus_client.CONTENT_TYPE_LATEST.split(";")[0])
+        assert counter_name.encode() in response.content
+    finally:
+        bootstrapper.teardown()
+
+
+def test_fastmcp_prometheus_path_is_configurable() -> None:
+    config = _make_test_config(prometheus_metrics_path="/m")
+    bootstrapper = FastMcpBootstrapper(bootstrap_config=config)
+    application = bootstrapper.bootstrap()
+    try:
+        with TestClient(application.http_app()) as test_client:
+            response = test_client.get("/m")
+            default_response = test_client.get("/metrics")
+        assert response.status_code == status.HTTP_200_OK
+        assert default_response.status_code == status.HTTP_404_NOT_FOUND
     finally:
         bootstrapper.teardown()
