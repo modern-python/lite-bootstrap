@@ -35,6 +35,8 @@ def _make_fastmcp() -> "FastMCP[typing.Any]":
 if import_checker.is_fastmcp_installed:
 
     class _TeardownProvider(Provider):
+        # FastMCP exposes no on_shutdown-style API; Provider.lifespan is the only public
+        # post-construction hook whose async-cm runs during ASGI startup/shutdown.
         def __init__(self, teardown: typing.Callable[[], None]) -> None:
             super().__init__()
             self._teardown = teardown

@@ -35,8 +35,8 @@ Two new files, six modified files.
 - **Instrument set:** Sentry, Pyroscope, structlog logging + MCP middleware, health, prometheus. No OTel/CORS/Swagger.
 - **Middleware default:** mounted on; `logging_turn_off_middleware: bool = False` flag to opt out.
 - **Prometheus route:** `application.custom_route` at `prometheus_metrics_path`, always-on (no per-bootstrapper opt-out flag).
-- **Teardown:** **manual** (user calls `bootstrapper.teardown()` themselves). Originally planned to wrap `FastMCP.lifespan` via `combine_lifespans`, but discovered empirically that `app.lifespan` is a read-only bound method and the real hook is `app._lifespan` (private). Documented fallback adopted; spec §"Teardown is manual" updated.
-- **Extras:** only `fastmcp` and `fastmcp-metrics`. No `fastmcp-sentry` / `fastmcp-logging` / `fastmcp-all` because they would not pull in a new direct dependency.
+- **Teardown:** wired automatically via `FastMCP.add_provider(_TeardownProvider(self.teardown))` in `FastMcpBootstrapper.__init__`. `_TeardownProvider` is an empty `Provider` subclass whose `async def lifespan(self)` calls the teardown callable on exit. This is the only **public, post-construction** lifecycle hook FastMCP exposes — `FastMCP.lifespan` is a read-only bound method and `_lifespan` is private. Two earlier approaches considered and rejected: wrapping `FastMCP.lifespan` via `combine_lifespans` (impossible — `lifespan` is read-only) and manual teardown (briefly adopted then reverted when `add_provider` was identified). See spec §"Teardown via Provider.lifespan".
+- **Extras:** `fastmcp`, `fastmcp-metrics`, and `fastmcp-all` rollup (matches `fastapi-all` / `litestar-all` / `faststream-all`). No `fastmcp-sentry` / `fastmcp-logging` because per-pair composites add no new direct dependencies.
 - **Default config app:** `default_factory=_make_fastmcp` where `_make_fastmcp()` returns `FastMCP()`. No `UnsetType` sentinel — `FastMCP()` needs no derived config.
 - **Middleware default registry:** `prometheus_client.REGISTRY`. No fastmcp-specific registry config field.
 
@@ -320,9 +320,9 @@ git commit -m "feat: scaffold FastMcpBootstrapper and FastMcpConfig"
 
 ---
 
-## Task 5: Verify manual teardown resets is_bootstrapped
+## Task 5: Verify teardown resets is_bootstrapped (direct + via ASGI lifespan)
 
-Originally planned as an ASGI-lifespan replay test, but the spec's "Teardown wiring risk" materialized — see the locked-decisions section. Teardown is manual. This task simply adds a regression test confirming `bootstrapper.teardown()` toggles `is_bootstrapped` correctly. (The existing `test_fastmcp_bootstrap_returns_same_application` test already calls `teardown()` at the end; this task makes the assertion explicit.)
+Initially this task covered only the direct-call assertion because the design first concluded teardown had to be manual (the `FastMCP.lifespan` read-only finding). Once `add_provider` + `Provider.lifespan` was identified as the right post-construction hook, the ASGI-lifespan replay test was restored alongside the direct test. Both land in the same task. (The earlier `test_fastmcp_bootstrap_returns_same_application` test calls `teardown()` at the end too; this task makes the assertion explicit and adds the lifespan-driven counterpart.)
 
 **Files:**
 - Modify: `tests/test_fastmcp_bootstrap.py`
