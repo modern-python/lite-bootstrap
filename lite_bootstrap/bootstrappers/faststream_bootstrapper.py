@@ -70,7 +70,7 @@ class FastStreamConfig(
     faststream_log_level: int = logging.WARNING
 
 
-@dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
+@dataclasses.dataclass(kw_only=True, slots=True)
 class FastStreamHealthChecksInstrument(HealthChecksInstrument):
     bootstrap_config: FastStreamConfig
 
@@ -104,7 +104,7 @@ class FastStreamHealthChecksInstrument(HealthChecksInstrument):
         return await self.bootstrap_config.application.broker.ping(timeout=5)
 
 
-@dataclasses.dataclass(kw_only=True, frozen=True)
+@dataclasses.dataclass(kw_only=True)
 class FastStreamLoggingInstrument(LoggingInstrument):
     bootstrap_config: FastStreamConfig
 
@@ -117,7 +117,7 @@ class FastStreamLoggingInstrument(LoggingInstrument):
             broker.config.logger.params_storage = ManualLoggerStorage(logger)
 
 
-@dataclasses.dataclass(kw_only=True, frozen=True)
+@dataclasses.dataclass(kw_only=True)
 class FastStreamOpenTelemetryInstrument(OpenTelemetryInstrument):
     bootstrap_config: FastStreamConfig
     not_ready_message = OpenTelemetryInstrument.not_ready_message + " or opentelemetry_middleware_cls is empty"
@@ -136,7 +136,7 @@ def _make_collector_registry() -> "prometheus_client.CollectorRegistry":
     return prometheus_client.CollectorRegistry()
 
 
-@dataclasses.dataclass(kw_only=True, frozen=True)
+@dataclasses.dataclass(kw_only=True)
 class FastStreamPrometheusInstrument(PrometheusInstrument):
     bootstrap_config: FastStreamConfig
     collector_registry: "prometheus_client.CollectorRegistry" = dataclasses.field(

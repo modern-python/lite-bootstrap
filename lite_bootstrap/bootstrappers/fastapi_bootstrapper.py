@@ -36,6 +36,9 @@ if import_checker.is_prometheus_fastapi_instrumentator_installed:
     from prometheus_fastapi_instrumentator import Instrumentator
 
 
+_UNSET_FASTAPI_APP: typing.Final = typing.cast("fastapi.FastAPI", object())
+
+
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class FastAPIConfig(
     CorsConfig,
@@ -47,7 +50,7 @@ class FastAPIConfig(
     SentryConfig,
     SwaggerConfig,
 ):
-    application: "fastapi.FastAPI" = dataclasses.field(default=None)  # ty: ignore[invalid-assignment]
+    application: "fastapi.FastAPI" = _UNSET_FASTAPI_APP
     application_kwargs: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     opentelemetry_excluded_urls: list[str] = dataclasses.field(default_factory=list)
     prometheus_instrumentator_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
@@ -59,7 +62,11 @@ class FastAPIConfig(
             msg = "fastapi is not installed"
             raise ConfigurationError(msg)
 
-        if not self.application:
+        if self.application is None:
+            msg = "application cannot be None; omit it to auto-create a FastAPI instance"
+            raise ConfigurationError(msg)
+
+        if self.application is _UNSET_FASTAPI_APP:
             object.__setattr__(
                 self, "application", fastapi.FastAPI(docs_url=self.swagger_path, **self.application_kwargs)
             )
@@ -71,7 +78,7 @@ class FastAPIConfig(
         self.application.version = self.service_version
 
 
-@dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
+@dataclasses.dataclass(kw_only=True, slots=True)
 class FastAPICorsInstrument(CorsInstrument):
     bootstrap_config: FastAPIConfig
 
@@ -88,7 +95,7 @@ class FastAPICorsInstrument(CorsInstrument):
         )
 
 
-@dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
+@dataclasses.dataclass(kw_only=True, slots=True)
 class FastAPIHealthChecksInstrument(HealthChecksInstrument):
     bootstrap_config: FastAPIConfig
 
@@ -108,7 +115,7 @@ class FastAPIHealthChecksInstrument(HealthChecksInstrument):
         self.bootstrap_config.application.include_router(self.build_fastapi_health_check_router())
 
 
-@dataclasses.dataclass(kw_only=True, frozen=True)
+@dataclasses.dataclass(kw_only=True)
 class FastAPIOpenTelemetryInstrument(OpenTelemetryInstrument):
     bootstrap_config: FastAPIConfig
 
@@ -125,7 +132,7 @@ class FastAPIOpenTelemetryInstrument(OpenTelemetryInstrument):
         super().teardown()
 
 
-@dataclasses.dataclass(kw_only=True, frozen=True)
+@dataclasses.dataclass(kw_only=True)
 class FastAPIPrometheusInstrument(PrometheusInstrument):
     bootstrap_config: FastAPIConfig
     missing_dependency_message = "prometheus_fastapi_instrumentator is not installed"
@@ -146,7 +153,7 @@ class FastAPIPrometheusInstrument(PrometheusInstrument):
         )
 
 
-@dataclasses.dataclass(kw_only=True, frozen=True)
+@dataclasses.dataclass(kw_only=True)
 class FastAPISwaggerInstrument(SwaggerInstrument):
     bootstrap_config: FastAPIConfig
 

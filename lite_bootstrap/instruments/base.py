@@ -29,7 +29,7 @@ class BaseConfig:
 ConfigT = typing.TypeVar("ConfigT", bound=BaseConfig)
 
 
-@dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
+@dataclasses.dataclass(kw_only=True, slots=True)
 class BaseInstrument(typing.Generic[ConfigT]):
     bootstrap_config: ConfigT
     not_ready_message = ""

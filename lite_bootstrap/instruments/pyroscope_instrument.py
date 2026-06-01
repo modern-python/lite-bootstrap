@@ -18,7 +18,7 @@ class PyroscopeConfig(OpenTelemetryServiceFieldsConfig):
     pyroscope_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
 
 
-@dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
+@dataclasses.dataclass(kw_only=True, slots=True)
 class PyroscopeInstrument(BaseInstrument[PyroscopeConfig]):
     not_ready_message = "pyroscope_endpoint is empty"
     missing_dependency_message = "pyroscope is not installed"

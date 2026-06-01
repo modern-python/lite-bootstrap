@@ -12,6 +12,6 @@ class SwaggerConfig(BaseConfig):
     swagger_offline_docs: bool = False
 
 
-@dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
+@dataclasses.dataclass(kw_only=True, slots=True)
 class SwaggerInstrument(BaseInstrument[SwaggerConfig]):
     pass
