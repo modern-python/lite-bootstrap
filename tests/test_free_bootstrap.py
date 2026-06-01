@@ -124,3 +124,18 @@ def test_teardown_is_idempotent(free_bootstrapper_config: FreeConfig) -> None:
     first.teardown.assert_called_once()
     second.teardown.assert_called_once()
     assert not bootstrapper.is_bootstrapped
+
+
+def test_bootstrap_is_idempotent(free_bootstrapper_config: FreeConfig) -> None:
+    bootstrapper = FreeBootstrapper(bootstrap_config=free_bootstrapper_config)
+
+    first = MagicMock()
+    second = MagicMock()
+    bootstrapper.instruments = [first, second]
+
+    bootstrapper.bootstrap()
+    bootstrapper.bootstrap()
+
+    first.bootstrap.assert_called_once()
+    second.bootstrap.assert_called_once()
+    assert bootstrapper.is_bootstrapped
