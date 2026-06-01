@@ -62,6 +62,8 @@ class FastAPIConfig(
 
         if isinstance(self.application, UnsetType):
             application = fastapi.FastAPI(docs_url=self.swagger_path, **self.application_kwargs)
+            # FastAPIConfig stays frozen for user-facing immutability; __post_init__ needs
+            # to set application after construction, so we bypass the freeze here.
             object.__setattr__(self, "application", application)
         else:
             application = self.application
