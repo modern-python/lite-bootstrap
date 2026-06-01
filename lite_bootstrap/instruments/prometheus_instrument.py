@@ -12,7 +12,7 @@ class PrometheusConfig(BaseConfig):
     prometheus_metrics_include_in_schema: bool = False
 
 
-@dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
+@dataclasses.dataclass(kw_only=True, slots=True)
 class PrometheusInstrument(BaseInstrument[PrometheusConfig]):
     not_ready_message = "prometheus_metrics_path is empty or not valid"
 

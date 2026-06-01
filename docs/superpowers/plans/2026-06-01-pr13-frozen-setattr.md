@@ -6,7 +6,7 @@
 
 - **REF-6**: Drop `frozen=True` from the instrument hierarchy. Python's dataclass rules force a cascade: dropping `frozen=True` from `LoggingInstrument` requires dropping it from `BaseInstrument`, which requires dropping it from every other instrument subclass. 23 dataclass declarations across 12 files lose `frozen=True`. In `LoggingInstrument` and `OpenTelemetryInstrument`, the four `object.__setattr__(self, "_x", value)` workarounds for cached runtime state become plain `self._x = value` assignments. **Configs stay frozen** — only instruments lose `frozen=True`.
 
-- **LOW-4**: `FastAPIConfig.application` currently uses `default=None` + `# ty: ignore[invalid-assignment]` because the field is typed `fastapi.FastAPI` (non-Optional). Replace with a typed-sentinel pattern: `_UNSET_FASTAPI_APP: typing.Final = typing.cast("fastapi.FastAPI", object())`. The `__post_init__` checks `self.application is _UNSET_FASTAPI_APP` instead of `not self.application`. Drops the `# ty: ignore`. FastAPIConfig stays frozen (so the existing `object.__setattr__(self, "application", ...)` in `__post_init__` remains — only the default-and-sentinel-check changes).
+- **LOW-4**: `FastAPIConfig.application` currently uses `default=None` + `# ty: ignore[invalid-assignment]` because the field is typed `fastapi.FastAPI` (non-Optional). Replace with a proper sentinel-type pattern: introduce `UnsetType` + `UNSET` in `lite_bootstrap/types.py` (a sentinel class with a singleton instance), type the field as `fastapi.FastAPI | UnsetType`, default to `UNSET`, and replace the truthiness check in `__post_init__` with `isinstance(self.application, UnsetType)`. Add a `_narrow_app(config)` helper at module scope that asserts the type and returns the narrowed value; FastAPI framework instruments call `_narrow_app(self.bootstrap_config)` instead of `self.bootstrap_config.application` directly. Drops the `# ty: ignore`. FastAPIConfig stays frozen — `object.__setattr__(self, "application", ...)` in `__post_init__` remains because the freeze bypass is the only way to mutate a frozen field after construction; a code comment documents the rationale.
 
 **Architecture:** Largest mechanical refactor in the deferred-refactors sequence. The cascade is purely mechanical — every change is `frozen=True` → (delete). The setattr replacements and LOW-4 sentinel are the only meaningful diffs.
 
@@ -48,16 +48,20 @@ The sequencing spec's PR13 section said "drop `frozen=True` from `LoggingInstrum
 - `lite_bootstrap/instruments/swagger_instrument.py` — `SwaggerInstrument` loses `frozen=True`.
 
 **Bootstrapper modules (3 files):**
-- `lite_bootstrap/bootstrappers/fastapi_bootstrapper.py` — 5 framework instruments lose `frozen=True` + LOW-4 sentinel pattern on `FastAPIConfig.application`.
+- `lite_bootstrap/bootstrappers/fastapi_bootstrapper.py` — 5 framework instruments lose `frozen=True` + LOW-4 sentinel-type pattern on `FastAPIConfig.application` + `_narrow_app` helper + every FastAPI instrument bootstrap calls `_narrow_app(self.bootstrap_config)` for the app reference.
 - `lite_bootstrap/bootstrappers/litestar_bootstrapper.py` — 6 framework instruments lose `frozen=True`.
 - `lite_bootstrap/bootstrappers/faststream_bootstrapper.py` — 4 framework instruments lose `frozen=True`.
+
+**Shared types (1 file):**
+- `lite_bootstrap/types.py` — add `UnsetType` class + `UNSET: typing.Final[UnsetType]` singleton. Reusable sentinel for fields that distinguish "not passed" from "explicitly None".
 
 ---
 
 ## Locked decisions
 
 - **Cascade scope:** Drop `frozen=True` from `BaseInstrument` and ALL 22 instrument subclasses. Configs stay frozen. Confirmed by the user after the constraint surfaced.
-- **LOW-4 pattern:** Typed sentinel via `typing.cast`. Cleaner than the current `# ty: ignore` once the cast obscures the type lie.
+- **LOW-4 pattern:** Proper `UnsetType` sentinel class in `lite_bootstrap/types.py`, used via `isinstance(value, UnsetType)`. Honest to the type checker (no `typing.cast` lie). Adds a `_narrow_app` helper that wraps the assert/return narrowing for callers. Revised from the original plan's `typing.cast("fastapi.FastAPI", object())` pattern — the spec was updated retroactively to match what was built.
+- **`FastAPIConfig` stays frozen:** Confirmed by user. The `object.__setattr__(self, "application", ...)` in `__post_init__` remains; a one-line code comment documents the rationale (frozen for user-facing immutability; bypass needed because `application` is constructed using other config fields).
 - **No new tests.** The full existing test suite verifies behavior preservation; pure-refactor changes should not affect runtime semantics other than enabling future direct mutation (which we don't exercise).
 
 ---

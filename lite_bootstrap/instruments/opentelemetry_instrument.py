@@ -77,7 +77,7 @@ if import_checker.is_opentelemetry_installed and import_checker.is_pyroscope_ins
             return True
 
 
-@dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
+@dataclasses.dataclass(kw_only=True, slots=True)
 class OpenTelemetryInstrument(BaseInstrument[OpentelemetryConfig]):
     not_ready_message = "opentelemetry_endpoint is empty and opentelemetry_log_traces is False"
     missing_dependency_message = "opentelemetry is not installed"
@@ -119,7 +119,7 @@ class OpenTelemetryInstrument(BaseInstrument[OpentelemetryConfig]):
         )
         tracer_provider = TracerProvider(resource=resource)
         set_tracer_provider(tracer_provider)
-        object.__setattr__(self, "_tracer_provider", tracer_provider)
+        self._tracer_provider = tracer_provider
         if import_checker.is_pyroscope_installed and getattr(self.bootstrap_config, "pyroscope_endpoint", None):
             tracer_provider.add_span_processor(PyroscopeSpanProcessor())
         if self.bootstrap_config.opentelemetry_log_traces:
@@ -152,4 +152,4 @@ class OpenTelemetryInstrument(BaseInstrument[OpentelemetryConfig]):
             try:
                 self._tracer_provider.shutdown()
             finally:
-                object.__setattr__(self, "_tracer_provider", None)
+                self._tracer_provider = None

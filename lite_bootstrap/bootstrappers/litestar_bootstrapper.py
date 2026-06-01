@@ -116,7 +116,7 @@ class LitestarConfig(
     swagger_extra_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
 
 
-@dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
+@dataclasses.dataclass(kw_only=True, slots=True)
 class LitestarCorsInstrument(CorsInstrument):
     bootstrap_config: LitestarConfig
 
@@ -132,7 +132,7 @@ class LitestarCorsInstrument(CorsInstrument):
         )
 
 
-@dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
+@dataclasses.dataclass(kw_only=True, slots=True)
 class LitestarHealthChecksInstrument(HealthChecksInstrument):
     bootstrap_config: LitestarConfig
 
@@ -152,7 +152,7 @@ class LitestarHealthChecksInstrument(HealthChecksInstrument):
         self.bootstrap_config.application_config.route_handlers.append(self.build_litestar_health_check_router())
 
 
-@dataclasses.dataclass(kw_only=True, frozen=True)
+@dataclasses.dataclass(kw_only=True)
 class LitestarLoggingInstrument(LoggingInstrument):
     bootstrap_config: LitestarConfig
 
@@ -175,7 +175,7 @@ class LitestarLoggingInstrument(LoggingInstrument):
         self._configure_foreign_loggers()
 
 
-@dataclasses.dataclass(kw_only=True, frozen=True)
+@dataclasses.dataclass(kw_only=True)
 class LitestarOpenTelemetryInstrument(OpenTelemetryInstrument):
     bootstrap_config: LitestarConfig
 
@@ -189,7 +189,7 @@ class LitestarOpenTelemetryInstrument(OpenTelemetryInstrument):
         )
 
 
-@dataclasses.dataclass(kw_only=True, frozen=True)
+@dataclasses.dataclass(kw_only=True)
 class LitestarPrometheusInstrument(PrometheusInstrument):
     bootstrap_config: LitestarConfig
     missing_dependency_message = "prometheus_client is not installed"
@@ -213,7 +213,7 @@ class LitestarPrometheusInstrument(PrometheusInstrument):
         self.bootstrap_config.application_config.middleware.append(litestar_prometheus_config.middleware)
 
 
-@dataclasses.dataclass(kw_only=True, frozen=True)
+@dataclasses.dataclass(kw_only=True)
 class LitestarSwaggerInstrument(SwaggerInstrument):
     bootstrap_config: LitestarConfig
     not_ready_message = "swagger_path is empty or not valid"

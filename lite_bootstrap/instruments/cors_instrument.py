@@ -14,7 +14,7 @@ class CorsConfig(BaseConfig):
     cors_max_age: int = 600
 
 
-@dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
+@dataclasses.dataclass(kw_only=True, slots=True)
 class CorsInstrument(BaseInstrument[CorsConfig]):
     not_ready_message = "cors_allowed_origins or cors_allowed_origin_regex must be provided"
 

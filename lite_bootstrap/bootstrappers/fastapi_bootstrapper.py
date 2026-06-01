@@ -19,6 +19,7 @@ from lite_bootstrap.instruments.prometheus_instrument import PrometheusConfig, P
 from lite_bootstrap.instruments.pyroscope_instrument import PyroscopeConfig, PyroscopeInstrument
 from lite_bootstrap.instruments.sentry_instrument import SentryConfig, SentryInstrument
 from lite_bootstrap.instruments.swagger_instrument import SwaggerConfig, SwaggerInstrument
+from lite_bootstrap.types import UNSET, UnsetType
 
 
 if import_checker.is_fastapi_installed:
@@ -47,7 +48,7 @@ class FastAPIConfig(
     SentryConfig,
     SwaggerConfig,
 ):
-    application: "fastapi.FastAPI" = dataclasses.field(default=None)  # ty: ignore[invalid-assignment]
+    application: "fastapi.FastAPI | UnsetType" = UNSET
     application_kwargs: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     opentelemetry_excluded_urls: list[str] = dataclasses.field(default_factory=list)
     prometheus_instrumentator_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
@@ -59,24 +60,32 @@ class FastAPIConfig(
             msg = "fastapi is not installed"
             raise ConfigurationError(msg)
 
-        if not self.application:
-            object.__setattr__(
-                self, "application", fastapi.FastAPI(docs_url=self.swagger_path, **self.application_kwargs)
-            )
-        elif self.application_kwargs:
-            warnings.warn("application_kwargs must be used without application", stacklevel=2)
+        if isinstance(self.application, UnsetType):
+            application = fastapi.FastAPI(docs_url=self.swagger_path, **self.application_kwargs)
+            # FastAPIConfig stays frozen for user-facing immutability; __post_init__ needs
+            # to set application after construction, so we bypass the freeze here.
+            object.__setattr__(self, "application", application)
+        else:
+            application = self.application
+            if self.application_kwargs:
+                warnings.warn("application_kwargs must be used without application", stacklevel=2)
 
-        self.application.title = self.service_name
-        self.application.debug = self.service_debug
-        self.application.version = self.service_version
+        application.title = self.service_name
+        application.debug = self.service_debug
+        application.version = self.service_version
 
 
-@dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
+def _narrow_app(config: "FastAPIConfig") -> "fastapi.FastAPI":
+    assert not isinstance(config.application, UnsetType)
+    return config.application
+
+
+@dataclasses.dataclass(kw_only=True, slots=True)
 class FastAPICorsInstrument(CorsInstrument):
     bootstrap_config: FastAPIConfig
 
     def bootstrap(self) -> None:
-        self.bootstrap_config.application.add_middleware(
+        _narrow_app(self.bootstrap_config).add_middleware(
             CORSMiddleware,
             allow_origins=self.bootstrap_config.cors_allowed_origins,
             allow_methods=self.bootstrap_config.cors_allowed_methods,
@@ -88,7 +97,7 @@ class FastAPICorsInstrument(CorsInstrument):
         )
 
 
-@dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
+@dataclasses.dataclass(kw_only=True, slots=True)
 class FastAPIHealthChecksInstrument(HealthChecksInstrument):
     bootstrap_config: FastAPIConfig
 
@@ -105,27 +114,27 @@ class FastAPIHealthChecksInstrument(HealthChecksInstrument):
         return fastapi_router
 
     def bootstrap(self) -> None:
-        self.bootstrap_config.application.include_router(self.build_fastapi_health_check_router())
+        _narrow_app(self.bootstrap_config).include_router(self.build_fastapi_health_check_router())
 
 
-@dataclasses.dataclass(kw_only=True, frozen=True)
+@dataclasses.dataclass(kw_only=True)
 class FastAPIOpenTelemetryInstrument(OpenTelemetryInstrument):
     bootstrap_config: FastAPIConfig
 
     def bootstrap(self) -> None:
         super().bootstrap()
         FastAPIInstrumentor.instrument_app(
-            app=self.bootstrap_config.application,
+            app=_narrow_app(self.bootstrap_config),
             tracer_provider=get_tracer_provider(),
             excluded_urls=",".join(self._build_excluded_urls()),
         )
 
     def teardown(self) -> None:
-        FastAPIInstrumentor.uninstrument_app(self.bootstrap_config.application)
+        FastAPIInstrumentor.uninstrument_app(_narrow_app(self.bootstrap_config))
         super().teardown()
 
 
-@dataclasses.dataclass(kw_only=True, frozen=True)
+@dataclasses.dataclass(kw_only=True)
 class FastAPIPrometheusInstrument(PrometheusInstrument):
     bootstrap_config: FastAPIConfig
     missing_dependency_message = "prometheus_fastapi_instrumentator is not installed"
@@ -135,32 +144,31 @@ class FastAPIPrometheusInstrument(PrometheusInstrument):
         return import_checker.is_prometheus_fastapi_instrumentator_installed
 
     def bootstrap(self) -> None:
+        application = _narrow_app(self.bootstrap_config)
         Instrumentator(**self.bootstrap_config.prometheus_instrumentator_params).instrument(
-            self.bootstrap_config.application,
+            application,
             **self.bootstrap_config.prometheus_instrument_params,
         ).expose(
-            self.bootstrap_config.application,
+            application,
             endpoint=self.bootstrap_config.prometheus_metrics_path,
             include_in_schema=self.bootstrap_config.prometheus_metrics_include_in_schema,
             **self.bootstrap_config.prometheus_expose_params,
         )
 
 
-@dataclasses.dataclass(kw_only=True, frozen=True)
+@dataclasses.dataclass(kw_only=True)
 class FastAPISwaggerInstrument(SwaggerInstrument):
     bootstrap_config: FastAPIConfig
 
     def bootstrap(self) -> None:
-        if self.bootstrap_config.swagger_path != self.bootstrap_config.application.docs_url:
+        application = _narrow_app(self.bootstrap_config)
+        if self.bootstrap_config.swagger_path != application.docs_url:
             warnings.warn(
-                f"swagger_path differs from docs_url, "
-                f"{self.bootstrap_config.application.docs_url} will be used for docs path",
+                f"swagger_path differs from docs_url, {application.docs_url} will be used for docs path",
                 stacklevel=2,
             )
         if self.bootstrap_config.swagger_offline_docs:
-            enable_offline_docs(
-                self.bootstrap_config.application, static_path=self.bootstrap_config.swagger_static_path
-            )
+            enable_offline_docs(application, static_path=self.bootstrap_config.swagger_static_path)
 
 
 class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI"]):
@@ -189,8 +197,9 @@ class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI"]):
     def __init__(self, bootstrap_config: FastAPIConfig) -> None:
         super().__init__(bootstrap_config)
 
-        old_lifespan_manager = self.bootstrap_config.application.router.lifespan_context
-        self.bootstrap_config.application.router.lifespan_context = _merge_lifespan_context(
+        application = _narrow_app(self.bootstrap_config)
+        old_lifespan_manager = application.router.lifespan_context
+        application.router.lifespan_context = _merge_lifespan_context(
             old_lifespan_manager,
             self.lifespan_manager,
         )
@@ -199,4 +208,4 @@ class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI"]):
         return import_checker.is_fastapi_installed
 
     def _prepare_application(self) -> "fastapi.FastAPI":
-        return self.bootstrap_config.application
+        return _narrow_app(self.bootstrap_config)

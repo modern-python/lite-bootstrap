@@ -26,7 +26,7 @@ class HealthChecksConfig(BaseConfig):
         }
 
 
-@dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
+@dataclasses.dataclass(kw_only=True, slots=True)
 class HealthChecksInstrument(BaseInstrument[HealthChecksConfig]):
     not_ready_message = "health_checks_enabled is False"
 

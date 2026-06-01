@@ -72,7 +72,7 @@ class LoggingConfig(BaseConfig):
     logging_enabled: bool = True
 
 
-@dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
+@dataclasses.dataclass(kw_only=True, slots=True)
 class LoggingInstrument(BaseInstrument[LoggingConfig]):
     not_ready_message = "logging_enabled is False"
     missing_dependency_message = "structlog is not installed"
@@ -125,7 +125,7 @@ class LoggingInstrument(BaseInstrument[LoggingConfig]):
                     logging_log_level=self.bootstrap_config.logging_log_level,
                 ),
             )
-            object.__setattr__(self, "_logger_factory", cached)
+            self._logger_factory = cached
         return cached
 
     def _configure_structlog_loggers(self) -> None:
@@ -174,4 +174,4 @@ class LoggingInstrument(BaseInstrument[LoggingConfig]):
             try:
                 self._logger_factory.close_handlers()
             finally:
-                object.__setattr__(self, "_logger_factory", None)
+                self._logger_factory = None
