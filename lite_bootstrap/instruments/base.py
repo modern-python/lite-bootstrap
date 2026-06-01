@@ -1,4 +1,3 @@
-import abc
 import dataclasses
 import typing
 
@@ -31,7 +30,7 @@ ConfigT = typing.TypeVar("ConfigT", bound=BaseConfig)
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
-class BaseInstrument(abc.ABC, typing.Generic[ConfigT]):
+class BaseInstrument(typing.Generic[ConfigT]):
     bootstrap_config: ConfigT
     not_ready_message = ""
     missing_dependency_message = ""

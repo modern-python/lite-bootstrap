@@ -1,3 +1,5 @@
+"""Prometheus config and readiness check; framework-specific bootstrap lives in the bootstrapper subclasses."""
+
 import dataclasses
 
 from lite_bootstrap.helpers.path import is_valid_path

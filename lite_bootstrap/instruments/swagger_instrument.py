@@ -1,3 +1,5 @@
+"""Swagger config and minimal base instrument; framework-specific behavior lives in the bootstrapper subclasses."""
+
 import dataclasses
 
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
