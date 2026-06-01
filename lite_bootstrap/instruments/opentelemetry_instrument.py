@@ -23,7 +23,7 @@ if import_checker.is_pyroscope_installed:
 
 
 def _format_span(readable_span: "ReadableSpan") -> str:
-    return typing.cast("str", readable_span.to_json(indent=None)) + os.linesep
+    return typing.cast("str", readable_span.to_json(indent=None)) + "\n"
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
@@ -91,6 +91,17 @@ class OpenTelemetryInstrument(BaseInstrument[OpentelemetryConfig]):
     @staticmethod
     def check_dependencies() -> bool:
         return import_checker.is_opentelemetry_installed
+
+    def _build_excluded_urls(self) -> set[str]:
+        excluded_urls: set[str] = set(getattr(self.bootstrap_config, "opentelemetry_excluded_urls", []))
+        prometheus_path = getattr(self.bootstrap_config, "prometheus_metrics_path", None)
+        if prometheus_path:
+            excluded_urls.add(prometheus_path)
+        if not self.bootstrap_config.opentelemetry_generate_health_check_spans:
+            health_path = getattr(self.bootstrap_config, "health_checks_path", None)
+            if health_path:
+                excluded_urls.add(health_path)
+        return excluded_urls
 
     def bootstrap(self) -> None:
         logging.getLogger("opentelemetry.instrumentation.instrumentor").disabled = True
