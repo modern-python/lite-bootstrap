@@ -4,8 +4,6 @@
 
 You can choose required framework and instruments using this table:
 
-FastMCP has no per-pair (`fastmcp-sentry`, …) or rollup (`fastmcp-all`) extras because they would not pull in new dependencies. Compose what you need yourself, e.g. `lite-bootstrap[fastmcp,fastmcp-metrics,sentry,logging,pyroscope]`.
-
 | Instrument    | Litestar           | Faststream           | FastAPI           | FastMCP             | Free Bootstrapper, without framework |
 |---------------|--------------------|----------------------|-------------------|---------------------|--------------------------------------|
 | sentry        | `litestar-sentry`  | `faststream-sentry`  | `fastapi-sentry`  | `sentry` (compose)  | `sentry`                             |
@@ -16,7 +14,7 @@ FastMCP has no per-pair (`fastmcp-sentry`, …) or rollup (`fastmcp-all`) extras
 | cors          | no extra           | not used             | no extra          | not used            | not used                             |
 | swagger       | no extra           | not used             | no extra          | not used            | not used                             |
 | health-checks | no extra           | no extra             | no extra          | no extra            | not used                             |
-| all           | `litestar-all`     | `faststream-all`     | `fastapi-all`     | no rollup (compose) | `free-all`                           |
+| all           | `litestar-all`     | `faststream-all`     | `fastapi-all`     | `fastmcp-all`       | `free-all`                           |
 
 * not used - means that the instrument is not implemented in the integration.
 * no extra - means that the instrument requires no additional dependencies.

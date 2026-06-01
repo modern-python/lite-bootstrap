@@ -123,6 +123,9 @@ fastmcp-metrics = [
     "lite-bootstrap[fastmcp]",
     "prometheus-client>=0.20",
 ]
+fastmcp-all = [
+    "lite-bootstrap[fastmcp,fastmcp-metrics,sentry,logging,pyroscope]",
+]
 
 [dependency-groups]
 dev = [
