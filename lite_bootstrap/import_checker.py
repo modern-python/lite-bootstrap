@@ -16,3 +16,4 @@ is_litestar_opentelemetry_installed = (
     is_opentelemetry_installed and is_litestar_installed and find_spec("opentelemetry.instrumentation.asgi") is not None
 )
 is_pyroscope_installed = find_spec("pyroscope") is not None
+is_fastmcp_installed = find_spec("fastmcp") is not None
