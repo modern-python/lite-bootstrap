@@ -60,10 +60,6 @@ class FastAPIConfig(
             msg = "fastapi is not installed"
             raise ConfigurationError(msg)
 
-        if self.application is None:
-            msg = "application cannot be None; omit it to auto-create a FastAPI instance"
-            raise ConfigurationError(msg)
-
         if isinstance(self.application, UnsetType):
             application = fastapi.FastAPI(docs_url=self.swagger_path, **self.application_kwargs)
             object.__setattr__(self, "application", application)
