@@ -6,7 +6,7 @@ from structlog.testing import capture_logs
 
 from lite_bootstrap import (
     FreeBootstrapper,
-    FreeBootstrapperConfig,
+    FreeConfig,
     InstrumentNotReadyWarning,
     TeardownError,
 )
@@ -17,8 +17,8 @@ logger = structlog.getLogger(__name__)
 
 
 @pytest.fixture
-def free_bootstrapper_config() -> FreeBootstrapperConfig:
-    return FreeBootstrapperConfig(
+def free_bootstrapper_config() -> FreeConfig:
+    return FreeConfig(
         service_debug=False,
         opentelemetry_instrumentors=[CustomInstrumentor()],
         opentelemetry_log_traces=True,
@@ -27,7 +27,7 @@ def free_bootstrapper_config() -> FreeBootstrapperConfig:
     )
 
 
-def test_free_bootstrap(free_bootstrapper_config: FreeBootstrapperConfig) -> None:
+def test_free_bootstrap(free_bootstrapper_config: FreeConfig) -> None:
     bootstrapper = FreeBootstrapper(bootstrap_config=free_bootstrapper_config)
     bootstrapper.bootstrap()
     try:
@@ -39,7 +39,7 @@ def test_free_bootstrap(free_bootstrapper_config: FreeBootstrapperConfig) -> Non
 def test_free_bootstrap_logging_disabled() -> None:
     with pytest.warns(InstrumentNotReadyWarning) as records:
         FreeBootstrapper(
-            bootstrap_config=FreeBootstrapperConfig(
+            bootstrap_config=FreeConfig(
                 logging_enabled=False,
                 opentelemetry_instrumentors=[CustomInstrumentor()],
                 opentelemetry_log_traces=True,
@@ -53,7 +53,7 @@ def test_free_bootstrap_logging_disabled() -> None:
     assert "PyroscopeInstrument is not ready: pyroscope_endpoint is empty" in messages
 
 
-def test_teardown_error_isolation(free_bootstrapper_config: FreeBootstrapperConfig) -> None:
+def test_teardown_error_isolation(free_bootstrapper_config: FreeConfig) -> None:
     bootstrapper = FreeBootstrapper(bootstrap_config=free_bootstrapper_config)
     bootstrapper.bootstrap()
 
@@ -73,7 +73,7 @@ def test_teardown_error_isolation(free_bootstrapper_config: FreeBootstrapperConf
     assert excinfo.value.errors == [("MagicMock", excinfo.value.__cause__)]
 
 
-def test_teardown_error_aggregates_all_failures(free_bootstrapper_config: FreeBootstrapperConfig) -> None:
+def test_teardown_error_aggregates_all_failures(free_bootstrapper_config: FreeConfig) -> None:
     bootstrapper = FreeBootstrapper(bootstrap_config=free_bootstrapper_config)
     bootstrapper.bootstrap()
 
@@ -104,13 +104,13 @@ def test_teardown_error_aggregates_all_failures(free_bootstrapper_config: FreeBo
     ],
 )
 def test_free_bootstrapper_with_missing_instrument_dependency(
-    free_bootstrapper_config: FreeBootstrapperConfig, package_name: str
+    free_bootstrapper_config: FreeConfig, package_name: str
 ) -> None:
     with emulate_package_missing(package_name), pytest.warns(UserWarning, match=package_name):
         FreeBootstrapper(bootstrap_config=free_bootstrapper_config)
 
 
-def test_teardown_is_idempotent(free_bootstrapper_config: FreeBootstrapperConfig) -> None:
+def test_teardown_is_idempotent(free_bootstrapper_config: FreeConfig) -> None:
     bootstrapper = FreeBootstrapper(bootstrap_config=free_bootstrapper_config)
     bootstrapper.bootstrap()
 

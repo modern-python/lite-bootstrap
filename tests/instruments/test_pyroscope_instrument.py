@@ -10,7 +10,7 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 import lite_bootstrap.instruments.opentelemetry_instrument as otel_module
-from lite_bootstrap import FreeBootstrapperConfig
+from lite_bootstrap import FreeConfig
 from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryInstrument
 from lite_bootstrap.instruments.pyroscope_instrument import PyroscopeConfig, PyroscopeInstrument
 
@@ -52,7 +52,7 @@ def test_pyroscope_instrument_bootstrap_and_teardown() -> None:
 
 
 def test_pyroscope_bootstrap_uses_opentelemetry_service_name() -> None:
-    config = FreeBootstrapperConfig(
+    config = FreeConfig(
         service_name="fallback",
         pyroscope_endpoint="http://pyroscope:4040",
         opentelemetry_service_name="otel-name",
@@ -78,7 +78,7 @@ def test_pyroscope_standalone_config_accepts_otel_fields() -> None:
 
 
 def test_pyroscope_bootstrap_merges_namespace_tag() -> None:
-    config = FreeBootstrapperConfig(
+    config = FreeConfig(
         service_name="svc",
         pyroscope_endpoint="http://pyroscope:4040",
         pyroscope_tags={"env": "prod"},
@@ -165,7 +165,7 @@ def test_pyroscope_span_processor_on_start_remote_parent() -> None:
 
 def test_pyroscope_otel_adds_span_processor_when_configured() -> None:
     """OTel instrument adds PyroscopeSpanProcessor when pyroscope_endpoint is set."""
-    config = FreeBootstrapperConfig(
+    config = FreeConfig(
         service_name="test-svc",
         opentelemetry_log_traces=True,
         pyroscope_endpoint="http://pyroscope:4040",
