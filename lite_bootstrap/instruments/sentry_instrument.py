@@ -33,7 +33,7 @@ class SentryConfig(BaseConfig):
     sentry_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     sentry_tags: dict[str, str] | None = None
     sentry_default_integrations: bool = True
-    sentry_before_send: typing.Callable[[typing.Any, typing.Any], typing.Any | None] | None = None
+    sentry_before_send: "sentry_types.EventProcessor | None" = None
 
 
 def enrich_sentry_event_from_structlog_log(
@@ -78,7 +78,7 @@ def wrap_before_send_callbacks(
         event: "sentry_types.Event", hint: "sentry_types.Hint"
     ) -> typing.Optional["sentry_types.Event"]:
         for callback in callbacks:
-            if not callback:
+            if callback is None:
                 continue
 
             temp_event = callback(event, hint)
