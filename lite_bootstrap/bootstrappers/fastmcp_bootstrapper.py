@@ -128,8 +128,6 @@ class FastMcpLoggingInstrument(LoggingInstrument):
         super().bootstrap()
         if self.bootstrap_config.logging_turn_off_middleware:
             return
-        if not import_checker.is_structlog_installed:
-            return
         self.bootstrap_config.application.add_middleware(FastMcpLoggingMiddleware())
 
 
