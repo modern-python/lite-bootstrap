@@ -8,7 +8,7 @@ from fastmcp.server.middleware import MiddlewareContext
 from starlette import status
 from starlette.testclient import TestClient
 
-from lite_bootstrap import FastMcpBootstrapper, FastMcpConfig
+from lite_bootstrap import BootstrapperNotReadyError, FastMcpBootstrapper, FastMcpConfig
 from lite_bootstrap.bootstrappers.fastmcp_bootstrapper import FastMcpLoggingMiddleware
 from tests.conftest import emulate_package_missing, emulate_package_missing_with_module_reload
 
@@ -27,7 +27,10 @@ def test_fastmcp_bootstrap_returns_same_application() -> None:
 
 
 def test_fastmcp_bootstrapper_not_ready() -> None:
-    with emulate_package_missing("fastmcp"), pytest.raises(RuntimeError, match="fastmcp is not installed"):
+    with (
+        emulate_package_missing("fastmcp"),
+        pytest.raises(BootstrapperNotReadyError, match="fastmcp is not installed"),
+    ):
         FastMcpBootstrapper(bootstrap_config=FastMcpConfig())
 
 
