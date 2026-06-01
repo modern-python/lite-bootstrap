@@ -7,7 +7,7 @@ import structlog
 from starlette import status
 from starlette.testclient import TestClient
 
-from lite_bootstrap import FastAPIBootstrapper, FastAPIConfig
+from lite_bootstrap import ConfigurationError, FastAPIBootstrapper, FastAPIConfig
 from tests.conftest import CustomInstrumentor, SentryTestTransport, emulate_package_missing
 
 
@@ -82,6 +82,11 @@ def test_fastapi_bootstrap_std_logger(fastapi_config: FastAPIConfig, capsys: pyt
 def test_fastapi_bootstrapper_not_ready() -> None:
     with emulate_package_missing("fastapi"), pytest.raises(RuntimeError, match="fastapi is not installed"):
         FastAPIBootstrapper(bootstrap_config=FastAPIConfig())
+
+
+def test_fastapi_config_rejects_none_application() -> None:
+    with pytest.raises(ConfigurationError, match="application cannot be None"):
+        FastAPIConfig(application=None)  # ty: ignore[invalid-argument-type]
 
 
 def test_fastapi_bootstrapper_docs_url_differ(fastapi_config: FastAPIConfig) -> None:
