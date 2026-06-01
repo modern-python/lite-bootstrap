@@ -1,21 +1,29 @@
 import dataclasses
 import logging
-import logging.handlers
 import sys
 import typing
 
-import orjson
-
 from lite_bootstrap import import_checker
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
+from lite_bootstrap.instruments.logging_factory import (
+    AddressProtocol,
+    RequestProtocol,
+    ScopeType,
+    _MemoryLoggerFactoryConfig,
+    _serialize_log_with_orjson_to_string,
+)
 
 
 if typing.TYPE_CHECKING:
     from structlog.typing import EventDict, WrappedLogger
 
+    from lite_bootstrap.instruments.logging_factory import MemoryLoggerFactory
+
 
 if import_checker.is_structlog_installed:
     import structlog
+
+    from lite_bootstrap.instruments.logging_factory import MemoryLoggerFactory
 
 
 if import_checker.is_opentelemetry_installed:
@@ -40,65 +48,15 @@ else:  # pragma: no cover
         return event_dict
 
 
-ScopeType = typing.MutableMapping[str, typing.Any]
-
-
-class AddressProtocol(typing.Protocol):
-    host: str
-    port: int
-
-
-class RequestProtocol(typing.Protocol):
-    client: AddressProtocol
-    scope: ScopeType
-    method: str
-
-
-if import_checker.is_structlog_installed:
-
-    class MemoryLoggerFactory(structlog.stdlib.LoggerFactory):
-        def __init__(
-            self,
-            *args: typing.Any,  # noqa: ANN401
-            logging_buffer_capacity: int,
-            logging_flush_level: int,
-            logging_log_level: int,
-            log_stream: typing.Any = sys.stdout,  # noqa: ANN401
-            **kwargs: typing.Any,  # noqa: ANN401
-        ) -> None:
-            super().__init__(*args, **kwargs)
-            self.logging_buffer_capacity = logging_buffer_capacity
-            self.logging_flush_level = logging_flush_level
-            self.logging_log_level = logging_log_level
-            self.log_stream = log_stream
-            self._created_handlers: list[tuple[logging.Logger, logging.handlers.MemoryHandler]] = []
-
-        def __call__(self, *args: typing.Any) -> logging.Logger:  # noqa: ANN401
-            logger: typing.Final = super().__call__(*args)
-            stream_handler: typing.Final = logging.StreamHandler(stream=self.log_stream)
-            handler: typing.Final = logging.handlers.MemoryHandler(
-                capacity=self.logging_buffer_capacity,
-                flushLevel=self.logging_flush_level,
-                target=stream_handler,
-            )
-            logger.addHandler(handler)
-            logger.setLevel(self.logging_log_level)
-            logger.propagate = False
-            self._created_handlers.append((logger, handler))
-            return logger
-
-        def close_handlers(self) -> None:
-            for created_logger, handler in self._created_handlers:
-                created_logger.removeHandler(handler)
-                created_logger.propagate = True
-                target = handler.target
-                handler.close()
-                if target is not None:
-                    target.close()
-            self._created_handlers.clear()
-
-    def _serialize_log_with_orjson_to_string(value: typing.Any, **kwargs: typing.Any) -> str:  # noqa: ANN401
-        return orjson.dumps(value, **kwargs).decode()
+__all__ = [
+    "AddressProtocol",
+    "LoggingConfig",
+    "LoggingInstrument",
+    "MemoryLoggerFactory",
+    "RequestProtocol",
+    "ScopeType",
+    "tracer_injection",
+]
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
@@ -143,6 +101,7 @@ class LoggingInstrument(BaseInstrument[LoggingConfig]):
         return import_checker.is_structlog_installed
 
     def _unset_handlers(self) -> None:
+        """Clear handlers on the named loggers. Mutation is permanent; teardown() does not restore."""
         for unset_handlers_logger in self.bootstrap_config.logging_unset_handlers:
             logging.getLogger(unset_handlers_logger).handlers = []
 
@@ -160,9 +119,11 @@ class LoggingInstrument(BaseInstrument[LoggingConfig]):
         cached: MemoryLoggerFactory | None = self._logger_factory
         if cached is None:
             cached = MemoryLoggerFactory(
-                logging_buffer_capacity=self.bootstrap_config.logging_buffer_capacity,
-                logging_flush_level=self.bootstrap_config.logging_flush_level,
-                logging_log_level=self.bootstrap_config.logging_log_level,
+                config=_MemoryLoggerFactoryConfig(
+                    logging_buffer_capacity=self.bootstrap_config.logging_buffer_capacity,
+                    logging_flush_level=self.bootstrap_config.logging_flush_level,
+                    logging_log_level=self.bootstrap_config.logging_log_level,
+                ),
             )
             object.__setattr__(self, "_logger_factory", cached)
         return cached
@@ -199,6 +160,10 @@ class LoggingInstrument(BaseInstrument[LoggingConfig]):
         self._configure_foreign_loggers()
 
     def teardown(self) -> None:
+        """Reset structlog and root logger.
+
+        Root logger level is unconditionally set to WARNING; pre-existing user configuration is overwritten.
+        """
         structlog.reset_defaults()
         root_logger = logging.getLogger()
         for h in root_logger.handlers[:]:
