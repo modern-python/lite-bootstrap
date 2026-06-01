@@ -27,15 +27,18 @@ class BaseConfig:
         return cls(**prepared_data)
 
 
+ConfigT = typing.TypeVar("ConfigT", bound=BaseConfig)
+
+
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
-class BaseInstrument(abc.ABC):
-    bootstrap_config: BaseConfig
+class BaseInstrument(abc.ABC, typing.Generic[ConfigT]):
+    bootstrap_config: ConfigT
     not_ready_message = ""
     missing_dependency_message = ""
 
-    def bootstrap(self) -> None: ...  # noqa: B027
+    def bootstrap(self) -> None: ...
 
-    def teardown(self) -> None: ...  # noqa: B027
+    def teardown(self) -> None: ...
 
     def is_ready(self) -> bool:
         return True

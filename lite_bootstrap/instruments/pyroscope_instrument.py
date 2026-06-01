@@ -19,8 +19,7 @@ class PyroscopeConfig(OpenTelemetryServiceFieldsConfig):
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
-class PyroscopeInstrument(BaseInstrument):
-    bootstrap_config: PyroscopeConfig
+class PyroscopeInstrument(BaseInstrument[PyroscopeConfig]):
     not_ready_message = "pyroscope_endpoint is empty"
     missing_dependency_message = "pyroscope is not installed"
 

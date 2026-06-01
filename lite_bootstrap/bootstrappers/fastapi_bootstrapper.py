@@ -109,11 +109,6 @@ class FastAPIHealthChecksInstrument(HealthChecksInstrument):
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
-class FastAPILoggingInstrument(LoggingInstrument):
-    bootstrap_config: FastAPIConfig
-
-
-@dataclasses.dataclass(kw_only=True, frozen=True)
 class FastAPIOpenTelemetryInstrument(OpenTelemetryInstrument):
     bootstrap_config: FastAPIConfig
 
@@ -136,11 +131,6 @@ class FastAPIOpenTelemetryInstrument(OpenTelemetryInstrument):
     def teardown(self) -> None:
         FastAPIInstrumentor.uninstrument_app(self.bootstrap_config.application)
         super().teardown()
-
-
-@dataclasses.dataclass(kw_only=True, frozen=True)
-class FastAPISentryInstrument(SentryInstrument):
-    bootstrap_config: FastAPIConfig
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
@@ -188,9 +178,9 @@ class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI"]):
         FastAPICorsInstrument,
         FastAPIOpenTelemetryInstrument,
         PyroscopeInstrument,
-        FastAPISentryInstrument,
+        SentryInstrument,
         FastAPIHealthChecksInstrument,
-        FastAPILoggingInstrument,
+        LoggingInstrument,
         FastAPIPrometheusInstrument,
         FastAPISwaggerInstrument,
     ]
