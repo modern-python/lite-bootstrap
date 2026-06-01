@@ -32,6 +32,7 @@ BaseBootstrapper (abc.ABC)
     ├── FastAPIBootstrapper
     ├── LitestarBootstrapper
     ├── FastStreamBootstrapper
+    ├── FastMcpBootstrapper
     └── FreeBootstrapper
 ```
 

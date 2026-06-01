@@ -19,5 +19,6 @@ Those instruments can be bootstrapped for:
 - [LiteStar](integrations/litestar)
 - [FastStream](integrations/faststream)
 - [FastAPI](integrations/fastapi)
+- [FastMCP](integrations/fastmcp)
 - [services and scripts without frameworks](integrations/free)
 ---
