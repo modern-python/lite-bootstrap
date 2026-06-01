@@ -10,7 +10,7 @@ from starlette.testclient import TestClient
 
 from lite_bootstrap import FastMcpBootstrapper, FastMcpConfig
 from lite_bootstrap.bootstrappers.fastmcp_bootstrapper import FastMcpLoggingMiddleware
-from tests.conftest import emulate_package_missing
+from tests.conftest import emulate_package_missing, emulate_package_missing_with_module_reload
 
 
 def test_fastmcp_config_default_application() -> None:
@@ -210,4 +210,46 @@ def test_fastmcp_logging_middleware_disabled_via_flag() -> None:
     try:
         assert _find_mcp_logging_middleware(application) == []
     finally:
+        bootstrapper.teardown()
+
+
+@pytest.mark.parametrize(
+    "package_name",
+    [
+        "sentry_sdk",
+        "structlog",
+        "prometheus_client",
+    ],
+)
+def test_fastmcp_bootstrapper_with_missing_instrument_dependency(package_name: str) -> None:
+    with emulate_package_missing(package_name), pytest.warns(UserWarning, match=package_name):
+        FastMcpBootstrapper(bootstrap_config=FastMcpConfig())
+
+
+def test_fastmcp_bootstrap_without_prometheus_client() -> None:
+    # Regression guard mirroring the FastStream prometheus-missing test: ensures
+    # FastMcpPrometheusInstrument.check_dependencies() prevents construction-time
+    # failure when prometheus_client is absent.
+    with emulate_package_missing_with_module_reload(
+        "prometheus_client",
+        ["lite_bootstrap.bootstrappers.fastmcp_bootstrapper"],
+    ):
+        with pytest.warns(UserWarning, match="prometheus_client"):
+            bootstrapper = FastMcpBootstrapper(bootstrap_config=FastMcpConfig())
+        bootstrapper.bootstrap()
+        bootstrapper.teardown()
+
+
+def test_fastmcp_bootstrap_without_structlog() -> None:
+    # Regression guard: FastMcpLoggingInstrument.bootstrap() must short-circuit
+    # the middleware registration when structlog is absent, because the
+    # middleware references fastmcp_access_logger which only exists inside
+    # the structlog guard.
+    with emulate_package_missing_with_module_reload(
+        "structlog",
+        ["lite_bootstrap.bootstrappers.fastmcp_bootstrapper"],
+    ):
+        with pytest.warns(UserWarning, match="structlog"):
+            bootstrapper = FastMcpBootstrapper(bootstrap_config=FastMcpConfig())
+        bootstrapper.bootstrap()
         bootstrapper.teardown()
