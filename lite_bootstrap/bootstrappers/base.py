@@ -74,6 +74,8 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
     def is_ready(self) -> bool: ...
 
     def bootstrap(self) -> ApplicationT:
+        if self.is_bootstrapped:
+            return self._prepare_application()
         self.is_bootstrapped = True
         for one_instrument in self.instruments:
             one_instrument.bootstrap()
