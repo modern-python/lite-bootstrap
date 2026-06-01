@@ -76,6 +76,8 @@ if import_checker.is_litestar_opentelemetry_installed:
         def __init__(self, tracer_provider: "TracerProvider", excluded_urls: set[str]) -> None:
             self._tracer_provider = tracer_provider
             self._excluded_urls = ",".join(excluded_urls)
+            # Cache keyed by id(next_app); Litestar's ASGI app instances are stable for
+            # the middleware lifetime, so id-reuse-after-GC isn't a concern.
             self._otel_apps: dict[int, ASGIApp] = {}
 
         async def handle(
@@ -177,14 +179,6 @@ class LitestarLoggingInstrument(LoggingInstrument):
 @dataclasses.dataclass(kw_only=True, frozen=True)
 class LitestarOpenTelemetryInstrument(OpenTelemetryInstrument):
     bootstrap_config: LitestarConfig
-
-    def _build_excluded_urls(self) -> set[str]:
-        excluded_urls = set(self.bootstrap_config.opentelemetry_excluded_urls)
-        excluded_urls.add(self.bootstrap_config.prometheus_metrics_path)
-        if not self.bootstrap_config.opentelemetry_generate_health_check_spans:
-            excluded_urls.add(self.bootstrap_config.health_checks_path)
-
-        return excluded_urls
 
     def bootstrap(self) -> None:
         super().bootstrap()
