@@ -424,6 +424,19 @@ Unconditionally resets root logger level to WARNING after closing handlers.
 If a user had configured a different default outside the bootstrapper,
 this is destructive. Acceptable for the intended use case, but undocumented.
 
+### LOW-10 · `OpentelemetryConfig` capitalization inconsistency
+
+**File:** `instruments/opentelemetry_instrument.py:36`
+
+`OpentelemetryConfig` (lowercase `t`) doesn't match the conventional
+`OpenTelemetry` capitalization. PR6 introduced
+`OpenTelemetryServiceFieldsConfig` (uppercase `T`) as a mixin parent,
+making the inconsistency more visible — same module, two casings for the
+same product name. Backfilled from PR6's code review and tracked into
+PR15 alongside LOW-7. Rename with a silent backward-compat alias
+(`OpentelemetryConfig = OpenTelemetryConfig`) to preserve existing
+imports.
+
 ---
 
 ## Appendix — Notes on scope

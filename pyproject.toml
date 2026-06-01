@@ -173,3 +173,16 @@ exclude_also = [
     "if typing.TYPE_CHECKING:",
     "except ImportError:"
 ]
+
+# Pyright is not the enforced type checker (`ty` is). This block silences false-positive
+# diagnostics produced by patterns the project deliberately uses. See CLAUDE.md > "Type checking".
+[tool.pyright]
+# Conditional `if import_checker.is_X_installed: import X` blocks aren't modeled by Pyright;
+# the runtime invariant is maintained by BaseBootstrapper._register_or_skip.
+reportPossiblyUnbound = "none"
+# Framework instrument subclasses narrow `bootstrap_config` covariantly (e.g.,
+# FastAPICorsInstrument: FastAPIConfig overriding CorsInstrument: CorsConfig).
+reportIncompatibleVariableOverride = "none"
+# sentry_sdk._types.Event TypedDict accesses in enrich_sentry_event_from_structlog_log
+# are guarded with .get() truthiness checks before indexing.
+reportTypedDictNotRequiredAccess = "none"
