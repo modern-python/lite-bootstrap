@@ -35,8 +35,8 @@ Two new files, six modified files.
 - **Instrument set:** Sentry, Pyroscope, structlog logging + MCP middleware, health, prometheus. No OTel/CORS/Swagger.
 - **Middleware default:** mounted on; `logging_turn_off_middleware: bool = False` flag to opt out.
 - **Prometheus route:** `application.custom_route` at `prometheus_metrics_path`, always-on (no per-bootstrapper opt-out flag).
-- **Teardown:** wrap `FastMCP.lifespan` via `combine_lifespans`. Risk: assumes mutability of `FastMCP.lifespan` — guarded by the lifespan-replay test in Task 10.
-- **Extras:** only `fastmcp` and `fastmcp-metrics`. No `fastmcp-sentry` / `fastmcp-logging` / `fastmcp-all` because they would not pull in a new direct dependency.
+- **Teardown:** wired automatically via `FastMCP.add_provider(_TeardownProvider(self.teardown))` in `FastMcpBootstrapper.__init__`. `_TeardownProvider` is an empty `Provider` subclass whose `async def lifespan(self)` calls the teardown callable on exit. This is the only **public, post-construction** lifecycle hook FastMCP exposes — `FastMCP.lifespan` is a read-only bound method and `_lifespan` is private. Two earlier approaches considered and rejected: wrapping `FastMCP.lifespan` via `combine_lifespans` (impossible — `lifespan` is read-only) and manual teardown (briefly adopted then reverted when `add_provider` was identified). See spec §"Teardown via Provider.lifespan".
+- **Extras:** `fastmcp`, `fastmcp-metrics`, and `fastmcp-all` rollup (matches `fastapi-all` / `litestar-all` / `faststream-all`). No `fastmcp-sentry` / `fastmcp-logging` because per-pair composites add no new direct dependencies.
 - **Default config app:** `default_factory=_make_fastmcp` where `_make_fastmcp()` returns `FastMCP()`. No `UnsetType` sentinel — `FastMCP()` needs no derived config.
 - **Middleware default registry:** `prometheus_client.REGISTRY`. No fastmcp-specific registry config field.
 
@@ -221,7 +221,6 @@ Expected: All three tests fail with `ImportError: cannot import name 'FastMcpBoo
 - [ ] Create `lite_bootstrap/bootstrappers/fastmcp_bootstrapper.py` with the following content:
 
 ```python
-import contextlib
 import dataclasses
 import time
 import typing
@@ -238,7 +237,6 @@ from lite_bootstrap.instruments.sentry_instrument import SentryConfig, SentryIns
 if import_checker.is_fastmcp_installed:
     from fastmcp import FastMCP
     from fastmcp.server.middleware import Middleware, MiddlewareContext
-    from fastmcp.utilities.lifespan import combine_lifespans
     from starlette.requests import Request
     from starlette.responses import JSONResponse, Response
 
@@ -253,24 +251,6 @@ if import_checker.is_prometheus_client_installed:
 
 def _make_fastmcp() -> "FastMCP[typing.Any]":
     return FastMCP()
-
-
-@contextlib.asynccontextmanager
-async def _empty_lifespan(_: "FastMCP[typing.Any]") -> typing.AsyncIterator[dict[str, typing.Any]]:
-    yield {}
-
-
-def _build_teardown_lifespan(
-    teardown: typing.Callable[[], None],
-) -> typing.Callable[["FastMCP[typing.Any]"], typing.AsyncContextManager[dict[str, typing.Any]]]:
-    @contextlib.asynccontextmanager
-    async def lifespan(_: "FastMCP[typing.Any]") -> typing.AsyncIterator[dict[str, typing.Any]]:
-        try:
-            yield {}
-        finally:
-            teardown()
-
-    return lifespan
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
@@ -291,15 +271,11 @@ class FastMcpBootstrapper(BaseBootstrapper["FastMCP[typing.Any]"]):
     def is_ready(self) -> bool:
         return import_checker.is_fastmcp_installed
 
-    def __init__(self, bootstrap_config: FastMcpConfig) -> None:
-        super().__init__(bootstrap_config)
-        application = self.bootstrap_config.application
-        existing_lifespan = application.lifespan if application.lifespan is not None else _empty_lifespan
-        application.lifespan = combine_lifespans(existing_lifespan, _build_teardown_lifespan(self.teardown))
-
     def _prepare_application(self) -> "FastMCP[typing.Any]":
         return self.bootstrap_config.application
 ```
+
+Note: no `__init__` override and no lifespan wiring. `FastMCP.lifespan` was empirically determined to be a read-only bound method, with the real hook stored in private `_lifespan` at construction time. Per the spec's documented fallback, teardown is manual — users call `bootstrapper.teardown()` themselves.
 
 ### Step 4: Re-export from package __init__
 
@@ -344,80 +320,37 @@ git commit -m "feat: scaffold FastMcpBootstrapper and FastMcpConfig"
 
 ---
 
-## Task 5: Verify teardown via ASGI lifespan
+## Task 5: Verify teardown resets is_bootstrapped (direct + via ASGI lifespan)
 
-Adds the lifespan-replay test that exercises `FastMCP.lifespan` mutation end-to-end. This proves the (currently empty-instrument) bootstrapper's teardown wiring works before we layer instruments on top of it.
+Initially this task covered only the direct-call assertion because the design first concluded teardown had to be manual (the `FastMCP.lifespan` read-only finding). Once `add_provider` + `Provider.lifespan` was identified as the right post-construction hook, the ASGI-lifespan replay test was restored alongside the direct test. Both land in the same task. (The earlier `test_fastmcp_bootstrap_returns_same_application` test calls `teardown()` at the end too; this task makes the assertion explicit and adds the lifespan-driven counterpart.)
 
 **Files:**
 - Modify: `tests/test_fastmcp_bootstrap.py`
 
-### Step 1: Write the failing tests
+### Step 1: Write the failing test
 
 - [ ] Append to `tests/test_fastmcp_bootstrap.py`:
 
 ```python
-async def _drive_asgi_lifespan(application: typing.Any) -> list[dict[str, typing.Any]]:
-    """Drive an ASGI lifespan from startup through shutdown. Returns the sent messages."""
-    inbox = [{"type": "lifespan.startup"}, {"type": "lifespan.shutdown"}]
-    outbox: list[dict[str, typing.Any]] = []
-
-    async def receive() -> dict[str, typing.Any]:
-        return inbox.pop(0)
-
-    async def send(message: dict[str, typing.Any]) -> None:
-        outbox.append(message)
-
-    await application({"type": "lifespan", "asgi": {"version": "3.0"}}, receive, send)
-    return outbox
-
-
-async def test_fastmcp_teardown_runs_via_asgi_lifespan() -> None:
+def test_fastmcp_teardown_resets_is_bootstrapped() -> None:
     bootstrapper = FastMcpBootstrapper(bootstrap_config=FastMcpConfig())
-    application = bootstrapper.bootstrap()
-    assert bootstrapper.is_bootstrapped
-
-    http_app = application.http_app()
-    sent = await _drive_asgi_lifespan(http_app)
-
-    assert any(message["type"] == "lifespan.startup.complete" for message in sent)
-    assert any(message["type"] == "lifespan.shutdown.complete" for message in sent)
-    assert not bootstrapper.is_bootstrapped
-
-
-async def test_fastmcp_existing_user_lifespan_is_preserved() -> None:
-    user_state: dict[str, bool] = {"startup": False, "shutdown": False}
-
-    @contextlib.asynccontextmanager
-    async def user_lifespan(_: FastMCP) -> typing.AsyncIterator[dict[str, typing.Any]]:
-        user_state["startup"] = True
-        try:
-            yield {}
-        finally:
-            user_state["shutdown"] = True
-
-    config = FastMcpConfig(application=FastMCP(lifespan=user_lifespan))
-    bootstrapper = FastMcpBootstrapper(bootstrap_config=config)
-    application = bootstrapper.bootstrap()
-
-    http_app = application.http_app()
-    await _drive_asgi_lifespan(http_app)
-
-    assert user_state["startup"] is True
-    assert user_state["shutdown"] is True
-    assert not bootstrapper.is_bootstrapped
+    bootstrapper.bootstrap()
+    assert bootstrapper.is_bootstrapped is True
+    bootstrapper.teardown()
+    assert bootstrapper.is_bootstrapped is False
 ```
 
 ### Step 2: Run tests to verify pass
 
-Run: `just test -- tests/test_fastmcp_bootstrap.py -v`
+Run: `just test -- tests/test_fastmcp_bootstrap.py::test_fastmcp_teardown_resets_is_bootstrapped -v`
 
-Expected: both new tests pass. If `application.lifespan` mutation rejects (`AttributeError` during `FastMcpBootstrapper.__init__`), the design's stated risk has materialized; stop and re-open the design (the fallback would be to wrap on `_prepare_application` instead).
+Expected: passes immediately (the assertions only exercise the base class's idempotent teardown plumbing, which already works).
 
 ### Step 3: Commit
 
 ```bash
 git add tests/test_fastmcp_bootstrap.py
-git commit -m "test: verify FastMcpBootstrapper teardown via ASGI lifespan"
+git commit -m "test: verify FastMcpBootstrapper teardown resets state"
 ```
 
 ---
@@ -1034,6 +967,34 @@ def greet_person(person_name: str) -> str:
 
 Set `logging_turn_off_middleware=True` on the config to disable the per-MCP-message
 access log middleware. Set `health_checks_enabled=False` to omit the health route.
+
+## 3. Teardown
+
+`FastMcpBootstrapper` does not wire teardown automatically (FastMCP captures its
+lifespan at construction time only). Call `bootstrapper.teardown()` yourself
+during shutdown — typically from a `lifespan=` callable you pass to `FastMCP`,
+from an ASGI shutdown handler, or via `atexit`:
+
+```python
+import contextlib
+from fastmcp import FastMCP
+
+
+@contextlib.asynccontextmanager
+async def lifespan(app: FastMCP):
+    try:
+        yield
+    finally:
+        bootstrapper.teardown()
+
+
+bootstrapper_config = FastMcpConfig(
+    service_name="microservice",
+    application=FastMCP(lifespan=lifespan),
+)
+bootstrapper = FastMcpBootstrapper(bootstrap_config=bootstrapper_config)
+application = bootstrapper.bootstrap()
+```
 
 Read more about available configuration options [here](../../../introduction/configuration):
 ````

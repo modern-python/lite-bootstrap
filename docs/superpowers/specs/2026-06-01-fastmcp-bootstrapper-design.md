@@ -12,7 +12,9 @@ This is a design spec, not an implementation plan. Per-PR sequencing and task-by
 
 - Match the behavior shipped by microbootstrap PR141: Sentry, Pyroscope, structlog-based logging (with an MCP-aware access middleware), an HTTP health endpoint, and an HTTP Prometheus endpoint.
 - Match the lite-bootstrap architectural conventions (frozen-dataclass configs composed via multiple inheritance, framework-subclass instruments, `instruments_types` ClassVar, optional-import guards via `import_checker`).
-- Improve over PR141 by wiring `teardown()` through the FastMCP lifespan rather than relying on the user to call it manually.
+- Improve over PR141 by wiring `teardown()` through FastMCP's `Provider.lifespan` hook so it runs automatically on ASGI shutdown.
+
+> **Execution note (2026-06-01):** the design first tried to wrap `FastMCP.lifespan` via `combine_lifespans`. Implementation discovered `FastMCP.lifespan` is a read-only bound method and the runtime hook (`_lifespan`) is captured at constructor time only, so post-construction wrapping is impossible. We briefly fell back to "manual teardown" (matching microbootstrap PR141) but then identified `FastMCP.add_provider()` + `Provider.lifespan` as the correct post-construction hook — public, documented, invoked during ASGI startup/shutdown. Adopted; see §"Bootstrapper" and §"Tests" below. The PR's final code uses this approach.
 
 ## Non-goals
 
@@ -80,7 +82,7 @@ Instrument order (Pyroscope → Sentry → Health → Logging → Prometheus) mi
 
 - **Custom HTTP routes**: `@application.custom_route(path, methods=["GET"], name=..., include_in_schema=...)` registers Starlette-style handlers that surface on `application.http_app()`. Custom routes bypass `AuthProvider`, which is correct behavior for health and metrics endpoints.
 - **MCP protocol middleware**: `application.add_middleware(middleware_instance)` registers a FastMCP `Middleware` subclass that runs on every MCP message (tools/list, tool/call, resources/list, etc.). This is distinct from Starlette HTTP middleware passed via `application.http_app(middleware=[...])`. We use the former because we want per-method MCP-level access logs.
-- **Lifespan**: `FastMCP(lifespan=...)` accepts an `@asynccontextmanager` callable, and FastMCP exposes `fastmcp.utilities.lifespan.combine_lifespans(*lifespans)` for stacking. The lifespan is invoked when the user calls `application.http_app()` (or `application.run(transport="http")`). For stdio transport the lifespan is invoked as well, per FastMCP's transport runner.
+- **Lifecycle hook — `Provider.lifespan`**: FastMCP exposes no `on_shutdown`-style API. `FastMCP(lifespan=...)` is constructor-only (the runtime hook is the private `_lifespan` attribute, captured at construction time). The only **public, post-construction** hook is `app.add_provider(provider)`: each registered provider's `async def lifespan(self)` runs as an async context manager during the server's ASGI lifespan startup/shutdown. The bootstrapper registers an empty internal `_TeardownProvider` whose `lifespan` calls `self.teardown()` on exit. Documented in FastMCP under "Custom Provider — Lifecycle Management".
 
 ---
 
@@ -168,21 +170,27 @@ class FastMcpBootstrapper(BaseBootstrapper["FastMCP[typing.Any]"]):
 
     def __init__(self, bootstrap_config: FastMcpConfig) -> None:
         super().__init__(bootstrap_config)
-        application = self.bootstrap_config.application
-        application.lifespan = combine_lifespans(application.lifespan, _build_teardown_lifespan(self.teardown))
+        self.bootstrap_config.application.add_provider(_TeardownProvider(self.teardown))
 
     def _prepare_application(self) -> "FastMCP[typing.Any]":
         return self.bootstrap_config.application
 ```
 
-`_build_teardown_lifespan(teardown_callable)` is a module-level helper returning an `@asynccontextmanager` that yields `{}` on enter and calls `teardown_callable()` on exit. Combined with the user's existing lifespan via `combine_lifespans` so user setup/teardown still runs.
+`_TeardownProvider` is a module-private `Provider` subclass whose `lifespan` async-cm wraps a `try/yield/finally` that calls the supplied teardown callable on exit. Registered automatically from `__init__` so users don't need to call `bootstrap_config.application.add_provider(...)` themselves.
 
-### Teardown wiring risk
+### Teardown via Provider.lifespan
 
-This design assumes `FastMCP.lifespan` is a settable attribute on a constructed instance. Evidence from the FastMCP docs: `FastMCP(lifespan=...)` is the documented constructor arg, and `combine_lifespans` is the documented stacking helper, but post-construction mutation isn't explicitly documented either way. If FastMCP makes `lifespan` read-only in a future release, the assignment raises `AttributeError` at bootstrap time — loud and obvious. Mitigation:
+`FastMCP.lifespan` is a bound method on the `AggregateProvider` mixin (not a settable attribute), and the actual runtime hook is the private `_lifespan` attribute set at constructor time only. Setting `app.lifespan = ...` succeeds but has zero runtime effect — FastMCP's transport runners read `_lifespan` directly.
 
-- The test `test_fastmcp_teardown_runs_via_asgi_lifespan` exercises the full ASGI startup → shutdown cycle and asserts `bootstrapper.is_bootstrapped` flips back to `False`. Any FastMCP-side regression breaks this test immediately.
-- If the read-only future ever materializes, the fallback is to wrap the application in a "lifespan-injecting" factory at `_prepare_application` time, or to document that teardown is manual (microbootstrap PR141's posture). The spec does not pre-build that fallback — YAGNI.
+The public alternative: `app.add_provider(provider)` accepts a provider post-construction, and FastMCP invokes each registered provider's `async def lifespan(self)` as part of the server's ASGI lifespan startup/shutdown sequence. Verified empirically: registering a `Provider` after construction and driving the ASGI lifespan startup → shutdown does execute the provider's `lifespan` exit branch.
+
+This gives us a documented, public hook with the right semantics. Trade-off: `Provider` is FastMCP's general extension abstraction (for tools/resources/prompts) and using it solely for a shutdown callback is semantically thin — a one-line comment in the source notes that this is the only public post-construction hook for the purpose.
+
+Resolution paths considered and rejected:
+
+- **Mutate `app._lifespan` directly** — works today, but reaches into private API.
+- **Rebuild the user's `FastMCP` with a composed `lifespan=`** — intrusive; breaks the "user owns the FastMCP" contract.
+- **No automatic wiring (manual teardown)** — adopted briefly, then reverted when `add_provider` was identified.
 
 ---
 
@@ -194,7 +202,6 @@ Top-level conditional imports inside `lite_bootstrap/bootstrappers/fastmcp_boots
 if import_checker.is_fastmcp_installed:
     from fastmcp import FastMCP
     from fastmcp.server.middleware import Middleware, MiddlewareContext
-    from fastmcp.utilities.lifespan import combine_lifespans
     from starlette.requests import Request
     from starlette.responses import JSONResponse, Response
 
@@ -224,9 +231,9 @@ Async tests rely on the project's existing `asyncio_mode = "auto"` pytest-asynci
 8. **`test_fastmcp_logging_middleware_disabled_via_flag`** — `logging_turn_off_middleware=True`, assert no `FastMcpLoggingMiddleware` in `application.middleware`.
 9. **`test_fastmcp_logging_middleware_logs_method_source_type_and_duration`** — drive `on_message` directly with a hand-built `MiddlewareContext` and `monkeypatch.setattr` the `fastmcp_access_logger`; assert `info(...)` called once with `method="tools/list"`, `mcp={"method": ..., "source": ..., "type": ...}`, and an integer `duration`.
 10. **`test_fastmcp_logging_middleware_logs_exception_on_failure`** — `call_next` raises a custom exception; assert `exception(...)` called once and the exception propagates.
-11. **`test_fastmcp_teardown_runs_via_asgi_lifespan`** — boot, drive the ASGI `lifespan` startup+shutdown of `application.http_app()` via the lifespan protocol on `httpx.AsyncClient`; assert `bootstrapper.is_bootstrapped is False` after shutdown.
-12. **`test_fastmcp_existing_user_lifespan_is_preserved`** — user passes `application=FastMCP(lifespan=user_lifespan)` where `user_lifespan` flips a sentinel; assert both that the sentinel flips AND `bootstrapper.is_bootstrapped` is False after shutdown.
-13. **`test_fastmcp_bootstrapper_not_ready_when_fastmcp_missing`** — `monkeypatch.setattr(import_checker, "is_fastmcp_installed", False)`, assert `BootstrapperNotReadyError` raised with `"fastmcp is not installed"`.
+11. **`test_fastmcp_teardown_resets_is_bootstrapped`** — boot, call `bootstrapper.teardown()` directly, assert `bootstrapper.is_bootstrapped is False`.
+12. **`test_fastmcp_teardown_runs_via_asgi_lifespan`** — boot, drive the ASGI lifespan startup → shutdown of `application.http_app()` via a hand-rolled ASGI driver, assert `bootstrapper.is_bootstrapped is False` after shutdown (proves the `_TeardownProvider` registration runs through FastMCP's provider lifecycle).
+13. **`test_fastmcp_bootstrapper_not_ready_when_fastmcp_missing`** — `emulate_package_missing("fastmcp")`, assert `BootstrapperNotReadyError` raised with `"fastmcp is not installed"`.
 
 Tests 9 and 10 hand-build `MiddlewareContext` instances and monkeypatch the module-level logger — this matches the test style microbootstrap PR141 uses (`tests/middlewares/test_fastmcp.py`).
 

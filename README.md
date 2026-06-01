@@ -22,6 +22,7 @@ Those instruments can be bootstrapped for:
 - [LiteStar](https://lite-bootstrap.readthedocs.io/integrations/litestar)
 - [FastStream](https://lite-bootstrap.readthedocs.io/integrations/faststream)
 - [FastAPI](https://lite-bootstrap.readthedocs.io/integrations/fastapi)
+- [FastMCP](https://lite-bootstrap.readthedocs.io/integrations/fastmcp)
 - [services and scripts without frameworks](https://lite-bootstrap.readthedocs.io/integrations/free)
 ---
 

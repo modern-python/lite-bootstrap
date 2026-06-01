@@ -34,6 +34,15 @@ def broker() -> RedisBroker:
 def build_faststream_config(
     broker: BrokerUsecase[typing.Any, typing.Any] | None = None,
 ) -> FastStreamConfig:
+    asgi_kwargs: dict[str, typing.Any] = {
+        "asyncapi_path": faststream.asgi.AsyncAPIRoute("/docs/"),
+        "specification": faststream.AsyncAPI(),
+    }
+    application = (
+        faststream.asgi.AsgiFastStream(broker, **asgi_kwargs)
+        if broker is not None
+        else faststream.asgi.AsgiFastStream(**asgi_kwargs)
+    )
     return FastStreamConfig(
         service_name="microservice",
         service_version="2.0.0",
@@ -48,11 +57,7 @@ def build_faststream_config(
         sentry_additional_params={"transport": SentryTestTransport()},
         health_checks_path="/custom-health/",
         logging_buffer_capacity=0,
-        application=faststream.asgi.AsgiFastStream(
-            broker,
-            asyncapi_path=faststream.asgi.AsyncAPIRoute("/docs/"),
-            specification=faststream.AsyncAPI(),
-        ),
+        application=application,
     )
 
 

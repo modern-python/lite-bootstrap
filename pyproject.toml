@@ -18,6 +18,7 @@ keywords = [
     "litestar",
     "faststream",
     "structlog",
+    "fastmcp",
 ]
 classifiers = [
     "Programming Language :: Python :: 3.10",
@@ -114,6 +115,16 @@ faststream-metrics = [
 faststream-all = [
     "lite-bootstrap[faststream-sentry,faststream-otl,faststream-logging,faststream-metrics,pyroscope]",
     "lite-bootstrap[sentry,otl,logging,faststream,faststream-metrics,pyroscope]"
+]
+fastmcp = [
+    "fastmcp",
+]
+fastmcp-metrics = [
+    "lite-bootstrap[fastmcp]",
+    "prometheus-client>=0.20",
+]
+fastmcp-all = [
+    "lite-bootstrap[fastmcp,fastmcp-metrics,sentry,logging,pyroscope]",
 ]
 
 [dependency-groups]
