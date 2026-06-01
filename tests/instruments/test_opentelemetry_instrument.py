@@ -4,7 +4,7 @@ import pytest
 
 from lite_bootstrap.instruments.opentelemetry_instrument import (
     InstrumentorWithParams,
-    OpentelemetryConfig,
+    OpenTelemetryConfig,
     OpenTelemetryInstrument,
 )
 from tests.conftest import CustomInstrumentor
@@ -12,7 +12,7 @@ from tests.conftest import CustomInstrumentor
 
 def test_opentelemetry_instrument() -> None:
     opentelemetry_instrument = OpenTelemetryInstrument(
-        bootstrap_config=OpentelemetryConfig(
+        bootstrap_config=OpenTelemetryConfig(
             opentelemetry_instrumentors=[
                 InstrumentorWithParams(instrumentor=CustomInstrumentor(), additional_params={"key": "value"}),
                 CustomInstrumentor(),
@@ -28,7 +28,7 @@ def test_opentelemetry_instrument() -> None:
 
 def test_opentelemetry_instrument_empty_instruments() -> None:
     opentelemetry_instrument = OpenTelemetryInstrument(
-        bootstrap_config=OpentelemetryConfig(
+        bootstrap_config=OpenTelemetryConfig(
             opentelemetry_log_traces=True,
         )
     )
@@ -40,7 +40,7 @@ def test_opentelemetry_instrument_empty_instruments() -> None:
 
 def test_opentelemetry_instrument_teardown_shuts_down_tracer_provider() -> None:
     instrument = OpenTelemetryInstrument(
-        bootstrap_config=OpentelemetryConfig(opentelemetry_log_traces=True),
+        bootstrap_config=OpenTelemetryConfig(opentelemetry_log_traces=True),
     )
     instrument.bootstrap()
     tracer_provider = instrument._tracer_provider  # noqa: SLF001
@@ -55,7 +55,7 @@ def test_opentelemetry_instrument_teardown_shuts_down_tracer_provider() -> None:
 
 def test_opentelemetry_instrument_teardown_resets_tracer_provider_when_shutdown_raises() -> None:
     instrument = OpenTelemetryInstrument(
-        bootstrap_config=OpentelemetryConfig(opentelemetry_log_traces=True),
+        bootstrap_config=OpenTelemetryConfig(opentelemetry_log_traces=True),
     )
     instrument.bootstrap()
     tracer_provider = instrument._tracer_provider  # noqa: SLF001

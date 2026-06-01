@@ -39,7 +39,7 @@ class OpenTelemetryServiceFieldsConfig(BaseConfig):
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
-class OpentelemetryConfig(OpenTelemetryServiceFieldsConfig):
+class OpenTelemetryConfig(OpenTelemetryServiceFieldsConfig):
     opentelemetry_container_name: str | None = dataclasses.field(
         default_factory=lambda: os.environ.get("HOSTNAME") or None
     )
@@ -78,7 +78,7 @@ if import_checker.is_opentelemetry_installed and import_checker.is_pyroscope_ins
 
 
 @dataclasses.dataclass(kw_only=True, slots=True)
-class OpenTelemetryInstrument(BaseInstrument[OpentelemetryConfig]):
+class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
     not_ready_message = "opentelemetry_endpoint is empty and opentelemetry_log_traces is False"
     missing_dependency_message = "opentelemetry is not installed"
     _tracer_provider: "TracerProvider | None" = dataclasses.field(
@@ -153,3 +153,7 @@ class OpenTelemetryInstrument(BaseInstrument[OpentelemetryConfig]):
                 self._tracer_provider.shutdown()
             finally:
                 self._tracer_provider = None
+
+
+# Backward-compatible alias preserved for users importing the old (lowercase t) spelling.
+OpentelemetryConfig = OpenTelemetryConfig

@@ -8,7 +8,7 @@ from opentelemetry.trace import get_tracer
 
 from lite_bootstrap.instruments.logging_factory import _MemoryLoggerFactoryConfig
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument, MemoryLoggerFactory
-from lite_bootstrap.instruments.opentelemetry_instrument import OpentelemetryConfig, OpenTelemetryInstrument
+from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryConfig, OpenTelemetryInstrument
 from tests.conftest import LoggingMock
 
 
@@ -51,7 +51,7 @@ def test_logging_instrument_tracer_injection(logging_mock: LoggingMock) -> None:
         )
     )
     opentelemetry_instrument = OpenTelemetryInstrument(
-        bootstrap_config=OpentelemetryConfig(
+        bootstrap_config=OpenTelemetryConfig(
             opentelemetry_log_traces=True,
         )
     )

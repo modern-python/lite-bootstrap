@@ -1,6 +1,6 @@
 from lite_bootstrap.bootstrappers.fastapi_bootstrapper import FastAPIBootstrapper, FastAPIConfig
 from lite_bootstrap.bootstrappers.faststream_bootstrapper import FastStreamBootstrapper, FastStreamConfig
-from lite_bootstrap.bootstrappers.free_bootstrapper import FreeBootstrapper, FreeBootstrapperConfig
+from lite_bootstrap.bootstrappers.free_bootstrapper import FreeBootstrapper, FreeBootstrapperConfig, FreeConfig
 from lite_bootstrap.bootstrappers.litestar_bootstrapper import LitestarBootstrapper, LitestarConfig
 from lite_bootstrap.exceptions import (
     BootstrapperNotReadyError,
@@ -23,6 +23,7 @@ __all__ = [
     "FastStreamConfig",
     "FreeBootstrapper",
     "FreeBootstrapperConfig",
+    "FreeConfig",
     "InstrumentDependencyMissingWarning",
     "InstrumentNotReadyWarning",
     "InstrumentSkippedWarning",

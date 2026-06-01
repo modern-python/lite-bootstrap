@@ -12,7 +12,7 @@ from lite_bootstrap.instruments.healthchecks_instrument import (
     HealthCheckTypedDict,
 )
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument
-from lite_bootstrap.instruments.opentelemetry_instrument import OpentelemetryConfig, OpenTelemetryInstrument
+from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryConfig, OpenTelemetryInstrument
 from lite_bootstrap.instruments.prometheus_instrument import (
     PrometheusConfig as PrometheusBootstrapperConfig,
 )
@@ -104,7 +104,7 @@ class LitestarConfig(
     CorsConfig,
     HealthChecksConfig,
     LoggingConfig,
-    OpentelemetryConfig,
+    OpenTelemetryConfig,
     PrometheusBootstrapperConfig,
     PyroscopeConfig,
     SentryConfig,
