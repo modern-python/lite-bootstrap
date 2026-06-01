@@ -6,6 +6,7 @@ import pytest
 import structlog
 from opentelemetry.trace import get_tracer
 
+from lite_bootstrap.instruments.logging_factory import _MemoryLoggerFactoryConfig
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument, MemoryLoggerFactory
 from lite_bootstrap.instruments.opentelemetry_instrument import OpentelemetryConfig, OpenTelemetryInstrument
 from tests.conftest import LoggingMock
@@ -87,10 +88,12 @@ def test_memory_logger_factory_info() -> None:
     test_stream = StringIO()
 
     logger_factory = MemoryLoggerFactory(
-        logging_buffer_capacity=test_capacity,
-        logging_flush_level=test_flush_level,
-        logging_log_level=logging.INFO,
-        log_stream=test_stream,
+        config=_MemoryLoggerFactoryConfig(
+            logging_buffer_capacity=test_capacity,
+            logging_flush_level=test_flush_level,
+            logging_log_level=logging.INFO,
+            log_stream=test_stream,
+        ),
     )
     test_logger = logger_factory()
     test_message = "test message"
@@ -110,15 +113,35 @@ def test_memory_logger_factory_error() -> None:
     test_stream = StringIO()
 
     logger_factory = MemoryLoggerFactory(
-        logging_buffer_capacity=test_capacity,
-        logging_flush_level=test_flush_level,
-        logging_log_level=logging.INFO,
-        log_stream=test_stream,
+        config=_MemoryLoggerFactoryConfig(
+            logging_buffer_capacity=test_capacity,
+            logging_flush_level=test_flush_level,
+            logging_log_level=logging.INFO,
+            log_stream=test_stream,
+        ),
     )
     test_logger = logger_factory()
     error_message = "error message"
     test_logger.error(error_message)
     assert error_message in test_stream.getvalue()
+
+
+def test_logging_instrument_lifecycle_replay(logging_mock: LoggingMock) -> None:
+    instrument = LoggingInstrument(
+        bootstrap_config=LoggingConfig(
+            logging_buffer_capacity=0,
+            logging_extra_processors=[logging_mock],
+        ),
+    )
+    try:
+        instrument.bootstrap()
+        instrument.teardown()
+        instrument.bootstrap()
+        logger = structlog.getLogger(__name__)
+        logger.info("after replay")
+        assert any(e.get("event") == "after replay" for e in logging_mock.entries)
+    finally:
+        instrument.teardown()
 
 
 def test_logging_instrument_teardown_resets_factory_when_close_handlers_raises() -> None:

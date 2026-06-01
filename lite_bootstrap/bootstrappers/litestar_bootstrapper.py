@@ -158,22 +158,21 @@ class LitestarLoggingInstrument(LoggingInstrument):
 
     def bootstrap(self) -> None:
         self._unset_handlers()
-        if import_checker.is_structlog_installed and import_checker.is_litestar_installed:
-            self.bootstrap_config.application_config.plugins.append(
-                StructlogPlugin(
-                    config=StructlogConfig(
-                        structlog_logging_config=StructLoggingConfig(
-                            processors=self.structlog_processors,
-                            logger_factory=self.memory_logger_factory,
-                            wrapper_class=structlog.stdlib.BoundLogger,
-                            cache_logger_on_first_use=True,
-                            pretty_print_tty=False,
-                            standard_lib_logging_config=None,
-                        ),
+        self.bootstrap_config.application_config.plugins.append(
+            StructlogPlugin(
+                config=StructlogConfig(
+                    structlog_logging_config=StructLoggingConfig(
+                        processors=self.structlog_processors,
+                        logger_factory=self.memory_logger_factory,
+                        wrapper_class=structlog.stdlib.BoundLogger,
+                        cache_logger_on_first_use=True,
+                        pretty_print_tty=False,
+                        standard_lib_logging_config=None,
                     ),
-                )
+                ),
             )
-            self._configure_foreign_loggers()
+        )
+        self._configure_foreign_loggers()
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
