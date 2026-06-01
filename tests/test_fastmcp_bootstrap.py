@@ -21,3 +21,11 @@ def test_fastmcp_bootstrap_returns_same_application() -> None:
 def test_fastmcp_bootstrapper_not_ready() -> None:
     with emulate_package_missing("fastmcp"), pytest.raises(RuntimeError, match="fastmcp is not installed"):
         FastMcpBootstrapper(bootstrap_config=FastMcpConfig())
+
+
+def test_fastmcp_teardown_resets_is_bootstrapped() -> None:
+    bootstrapper = FastMcpBootstrapper(bootstrap_config=FastMcpConfig())
+    bootstrapper.bootstrap()
+    assert bootstrapper.is_bootstrapped is True
+    bootstrapper.teardown()
+    assert bootstrapper.is_bootstrapped is False
