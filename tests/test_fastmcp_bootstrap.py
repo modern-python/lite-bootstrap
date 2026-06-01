@@ -187,3 +187,27 @@ def test_fastmcp_prometheus_path_is_configurable() -> None:
         assert default_response.status_code == status.HTTP_404_NOT_FOUND
     finally:
         bootstrapper.teardown()
+
+
+def _find_mcp_logging_middleware(application: "FastMCP") -> list[FastMcpLoggingMiddleware]:
+    return [m for m in application.middleware if isinstance(m, FastMcpLoggingMiddleware)]
+
+
+def test_fastmcp_logging_middleware_is_mounted_by_default() -> None:
+    config = _make_test_config()
+    bootstrapper = FastMcpBootstrapper(bootstrap_config=config)
+    application = bootstrapper.bootstrap()
+    try:
+        assert len(_find_mcp_logging_middleware(application)) == 1
+    finally:
+        bootstrapper.teardown()
+
+
+def test_fastmcp_logging_middleware_disabled_via_flag() -> None:
+    config = _make_test_config(logging_turn_off_middleware=True)
+    bootstrapper = FastMcpBootstrapper(bootstrap_config=config)
+    application = bootstrapper.bootstrap()
+    try:
+        assert _find_mcp_logging_middleware(application) == []
+    finally:
+        bootstrapper.teardown()
