@@ -1,26 +1,23 @@
 # Usage with `FastMCP`
 
-## 1. Install `lite-bootstrap` with the FastMCP extras and any instruments you want:
-
-`lite-bootstrap` does not ship a `fastmcp-all` rollup extra — compose the extras
-you need explicitly.
+## 1. Install `lite-bootstrap[fastmcp-all]`:
 
 === "uv"
 
       ```bash
-      uv add 'lite-bootstrap[fastmcp,fastmcp-metrics,sentry,logging,pyroscope]'
+      uv add lite-bootstrap[fastmcp-all]
       ```
 
 === "pip"
 
       ```bash
-      pip install 'lite-bootstrap[fastmcp,fastmcp-metrics,sentry,logging,pyroscope]'
+      pip install lite-bootstrap[fastmcp-all]
       ```
 
 === "poetry"
 
       ```bash
-      poetry add 'lite-bootstrap[fastmcp,fastmcp-metrics,sentry,logging,pyroscope]'
+      poetry add lite-bootstrap[fastmcp-all]
       ```
 
 Read more about available extras [here](../../../introduction/installation):
@@ -53,32 +50,8 @@ def greet_person(person_name: str) -> str:
 Set `logging_turn_off_middleware=True` on the config to disable the per-MCP-message
 access log middleware. Set `health_checks_enabled=False` to omit the health route.
 
-## 3. Teardown
-
-`FastMcpBootstrapper` does not wire teardown automatically (FastMCP captures its
-lifespan at construction time only). Call `bootstrapper.teardown()` yourself
-during shutdown — typically from a `lifespan=` callable you pass to `FastMCP`,
-from an ASGI shutdown handler, or via `atexit`:
-
-```python
-import contextlib
-from fastmcp import FastMCP
-
-
-@contextlib.asynccontextmanager
-async def lifespan(app: FastMCP):
-    try:
-        yield
-    finally:
-        bootstrapper.teardown()
-
-
-bootstrapper_config = FastMcpConfig(
-    service_name="microservice",
-    application=FastMCP(lifespan=lifespan),
-)
-bootstrapper = FastMcpBootstrapper(bootstrap_config=bootstrapper_config)
-application = bootstrapper.bootstrap()
-```
+Teardown is wired through FastMCP's provider lifecycle — `bootstrapper.teardown()`
+runs automatically when the FastMCP server's ASGI lifespan shuts down (i.e. when
+the application that serves `application.http_app()` shuts down).
 
 Read more about available configuration options [here](../../../introduction/configuration):

@@ -1,3 +1,4 @@
+import contextlib
 import dataclasses
 import time
 import typing
@@ -14,6 +15,7 @@ from lite_bootstrap.instruments.sentry_instrument import SentryConfig, SentryIns
 if import_checker.is_fastmcp_installed:
     from fastmcp import FastMCP
     from fastmcp.server.middleware import Middleware, MiddlewareContext
+    from fastmcp.server.providers import Provider
     from starlette.requests import Request
     from starlette.responses import JSONResponse, Response
 
@@ -31,6 +33,18 @@ def _make_fastmcp() -> "FastMCP[typing.Any]":
 
 
 if import_checker.is_fastmcp_installed:
+
+    class _TeardownProvider(Provider):
+        def __init__(self, teardown: typing.Callable[[], None]) -> None:
+            super().__init__()
+            self._teardown = teardown
+
+        @contextlib.asynccontextmanager
+        async def lifespan(self) -> typing.AsyncIterator[None]:
+            try:
+                yield
+            finally:
+                self._teardown()
 
     class FastMcpLoggingMiddleware(Middleware):
         async def on_message(
@@ -134,6 +148,10 @@ class FastMcpBootstrapper(BaseBootstrapper["FastMCP[typing.Any]"]):
 
     def is_ready(self) -> bool:
         return import_checker.is_fastmcp_installed
+
+    def __init__(self, bootstrap_config: FastMcpConfig) -> None:
+        super().__init__(bootstrap_config)
+        self.bootstrap_config.application.add_provider(_TeardownProvider(self.teardown))
 
     def _prepare_application(self) -> "FastMCP[typing.Any]":
         return self.bootstrap_config.application

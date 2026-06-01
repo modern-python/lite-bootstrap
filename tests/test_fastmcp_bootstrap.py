@@ -1,4 +1,5 @@
 import typing
+import uuid
 from unittest.mock import MagicMock
 
 import prometheus_client
@@ -40,6 +41,32 @@ def test_fastmcp_teardown_resets_is_bootstrapped() -> None:
     assert bootstrapper.is_bootstrapped is True
     bootstrapper.teardown()
     assert bootstrapper.is_bootstrapped is False
+
+
+async def _drive_asgi_lifespan(application: typing.Any) -> list[dict[str, typing.Any]]:  # noqa: ANN401
+    inbox = [{"type": "lifespan.startup"}, {"type": "lifespan.shutdown"}]
+    outbox: list[dict[str, typing.Any]] = []
+
+    async def receive() -> dict[str, typing.Any]:
+        return inbox.pop(0)
+
+    async def send(message: dict[str, typing.Any]) -> None:
+        outbox.append(message)
+
+    await application({"type": "lifespan", "asgi": {"version": "3.0"}}, receive, send)
+    return outbox
+
+
+async def test_fastmcp_teardown_runs_via_asgi_lifespan() -> None:
+    bootstrapper = FastMcpBootstrapper(bootstrap_config=FastMcpConfig())
+    application = bootstrapper.bootstrap()
+    assert bootstrapper.is_bootstrapped
+
+    sent = await _drive_asgi_lifespan(application.http_app())
+
+    assert any(msg["type"] == "lifespan.startup.complete" for msg in sent)
+    assert any(msg["type"] == "lifespan.shutdown.complete" for msg in sent)
+    assert not bootstrapper.is_bootstrapped
 
 
 async def test_fastmcp_logging_middleware_logs_success(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -157,12 +184,8 @@ def test_fastmcp_health_check_disabled_when_flag_false() -> None:
 
 
 def test_fastmcp_prometheus_route_exposes_registered_metric() -> None:
-    counter_name = "fastmcp_plan_test_requests_total"
-    try:
-        counter = prometheus_client.Counter(counter_name, "FastMCP plan test counter.")
-    except ValueError:
-        collector = prometheus_client.REGISTRY._names_to_collectors[counter_name]  # noqa: SLF001
-        counter = typing.cast(prometheus_client.Counter, collector)
+    counter_name = f"fastmcp_plan_test_requests_{uuid.uuid4().hex}_total"
+    counter = prometheus_client.Counter(counter_name, "FastMCP plan test counter.")
     counter.inc()
 
     config = _make_test_config()
