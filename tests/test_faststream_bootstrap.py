@@ -1,5 +1,7 @@
+import dataclasses
 import logging
 import typing
+from unittest.mock import AsyncMock, patch
 
 import faststream.asgi
 import pytest
@@ -159,3 +161,23 @@ def test_faststream_bootstrap_without_opentelemetry(broker: RedisBroker) -> None
     ):
         bootstrapper = FastStreamBootstrapper(bootstrap_config=bootstrap_config)
         bootstrapper.bootstrap()
+
+
+async def test_faststream_health_check_uses_configured_broker_timeout(broker: RedisBroker) -> None:
+    expected_timeout = 12.5
+    config = dataclasses.replace(
+        build_faststream_config(broker=broker),
+        faststream_health_check_broker_timeout=expected_timeout,
+    )
+    bootstrapper = FastStreamBootstrapper(bootstrap_config=config)
+    application = bootstrapper.bootstrap()
+    try:
+        with (
+            patch.object(broker, "ping", new=AsyncMock(return_value=True)) as mock_ping,
+            TestClient(app=application) as test_client,
+        ):
+            response = test_client.get(config.health_checks_path)
+            assert response.status_code == status.HTTP_200_OK
+        mock_ping.assert_called_once_with(timeout=expected_timeout)
+    finally:
+        bootstrapper.teardown()

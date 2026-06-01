@@ -68,6 +68,7 @@ class FastStreamConfig(
     opentelemetry_middleware_cls: type[FastStreamTelemetryMiddlewareProtocol] | None = None
     prometheus_middleware_cls: type[FastStreamPrometheusMiddlewareProtocol] | None = None
     faststream_log_level: int = logging.WARNING
+    faststream_health_check_broker_timeout: float = 5.0
 
 
 @dataclasses.dataclass(kw_only=True, slots=True)
@@ -101,7 +102,9 @@ class FastStreamHealthChecksInstrument(HealthChecksInstrument):
         if not self.bootstrap_config.application or not self.bootstrap_config.application.broker:
             return False
 
-        return await self.bootstrap_config.application.broker.ping(timeout=5)
+        return await self.bootstrap_config.application.broker.ping(
+            timeout=self.bootstrap_config.faststream_health_check_broker_timeout,
+        )
 
 
 @dataclasses.dataclass(kw_only=True)
