@@ -1,7 +1,12 @@
+import typing
+from unittest.mock import MagicMock
+
 import pytest
 from fastmcp import FastMCP
+from fastmcp.server.middleware import MiddlewareContext
 
 from lite_bootstrap import FastMcpBootstrapper, FastMcpConfig
+from lite_bootstrap.bootstrappers.fastmcp_bootstrapper import FastMcpLoggingMiddleware
 from tests.conftest import emulate_package_missing
 
 
@@ -29,3 +34,64 @@ def test_fastmcp_teardown_resets_is_bootstrapped() -> None:
     assert bootstrapper.is_bootstrapped is True
     bootstrapper.teardown()
     assert bootstrapper.is_bootstrapped is False
+
+
+async def test_fastmcp_logging_middleware_logs_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_logger = MagicMock()
+    monkeypatch.setattr(
+        "lite_bootstrap.bootstrappers.fastmcp_bootstrapper.fastmcp_access_logger",
+        fake_logger,
+    )
+    middleware = FastMcpLoggingMiddleware()
+    context = MiddlewareContext(
+        message={"payload": "test"},
+        method="tools/list",
+        source="client",
+        type="request",
+    )
+
+    async def call_next(received: MiddlewareContext[typing.Any]) -> dict[str, str]:
+        assert received is context
+        return {"status": "ok"}
+
+    result = await middleware.on_message(context, call_next)
+
+    assert result == {"status": "ok"}
+    fake_logger.info.assert_called_once()
+    call_kwargs = fake_logger.info.call_args
+    assert call_kwargs.args[0] == "tools/list"
+    assert call_kwargs.kwargs["mcp"] == {
+        "method": "tools/list",
+        "source": "client",
+        "type": "request",
+    }
+    assert isinstance(call_kwargs.kwargs["duration"], int)
+
+
+async def test_fastmcp_logging_middleware_logs_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_logger = MagicMock()
+    monkeypatch.setattr(
+        "lite_bootstrap.bootstrappers.fastmcp_bootstrapper.fastmcp_access_logger",
+        fake_logger,
+    )
+    middleware = FastMcpLoggingMiddleware()
+    context = MiddlewareContext(
+        message={"payload": "test"},
+        method="tools/call",
+        source="client",
+        type="request",
+    )
+
+    class CustomError(RuntimeError):
+        pass
+
+    error_message = "boom"
+
+    async def call_next(_: MiddlewareContext[typing.Any]) -> None:
+        raise CustomError(error_message)
+
+    with pytest.raises(CustomError, match="boom"):
+        await middleware.on_message(context, call_next)
+
+    fake_logger.exception.assert_called_once()
+    fake_logger.info.assert_not_called()
