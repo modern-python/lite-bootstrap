@@ -23,15 +23,16 @@ class PyroscopeInstrument(BaseInstrument[PyroscopeConfig]):
     not_ready_message = "pyroscope_endpoint is empty"
     missing_dependency_message = "pyroscope is not installed"
 
-    def is_ready(self) -> bool:
-        return bool(self.bootstrap_config.pyroscope_endpoint)
+    @classmethod
+    def is_configured(cls, bootstrap_config: "PyroscopeConfig") -> bool:
+        return bool(bootstrap_config.pyroscope_endpoint)
 
     @staticmethod
     def check_dependencies() -> bool:
         return import_checker.is_pyroscope_installed
 
     def bootstrap(self) -> None:
-        # is_ready() guarantees pyroscope_endpoint is set; assert documents the precondition
+        # is_configured() guarantees pyroscope_endpoint is set; assert documents the precondition
         # for type narrowing and for direct callers that bypass the bootstrapper.
         assert self.bootstrap_config.pyroscope_endpoint is not None
         namespace = self.bootstrap_config.opentelemetry_namespace

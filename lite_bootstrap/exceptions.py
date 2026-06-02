@@ -25,7 +25,3 @@ class InstrumentSkippedWarning(UserWarning):
 
 class InstrumentDependencyMissingWarning(InstrumentSkippedWarning):
     """Emitted when an instrument is skipped because its optional dependency is not installed."""
-
-
-class InstrumentNotReadyWarning(InstrumentSkippedWarning):
-    """Emitted when an instrument is skipped because its config indicates it should not run."""

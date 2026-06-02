@@ -1,15 +1,17 @@
+import logging
+import warnings
 from unittest.mock import MagicMock
 
 import pytest
 import structlog
-from structlog.testing import capture_logs
 
 from lite_bootstrap import (
     FreeBootstrapper,
     FreeConfig,
-    InstrumentNotReadyWarning,
     TeardownError,
 )
+from lite_bootstrap.instruments.logging_instrument import LoggingInstrument
+from lite_bootstrap.instruments.pyroscope_instrument import PyroscopeInstrument
 from tests.conftest import CustomInstrumentor, SentryTestTransport, emulate_package_missing
 
 
@@ -37,23 +39,22 @@ def test_free_bootstrap(free_bootstrapper_config: FreeConfig) -> None:
 
 
 def test_free_bootstrap_logging_disabled() -> None:
-    with pytest.warns(InstrumentNotReadyWarning) as records:
-        FreeBootstrapper(
-            bootstrap_config=FreeConfig(
-                logging_enabled=False,
-                opentelemetry_instrumentors=[CustomInstrumentor()],
-                opentelemetry_log_traces=True,
-                sentry_dsn="https://testdsn@localhost/1",
-                sentry_additional_params={"transport": SentryTestTransport()},
-                logging_buffer_capacity=0,
-            ),
-        )
-    messages = [str(r.message) for r in records]
-    assert "LoggingInstrument is not ready: logging_enabled is False" in messages
-    assert "PyroscopeInstrument is not ready: pyroscope_endpoint is empty" in messages
+    bootstrapper = FreeBootstrapper(
+        bootstrap_config=FreeConfig(
+            logging_enabled=False,
+            opentelemetry_instrumentors=[CustomInstrumentor()],
+            opentelemetry_log_traces=True,
+            sentry_dsn="https://testdsn@localhost/1",
+            sentry_additional_params={"transport": SentryTestTransport()},
+            logging_buffer_capacity=0,
+        ),
+    )
+    skipped_classes = {cls for cls, _ in bootstrapper.skipped_instruments}
+    assert LoggingInstrument in skipped_classes
+    assert PyroscopeInstrument in skipped_classes
 
 
-def test_teardown_error_isolation(free_bootstrapper_config: FreeConfig) -> None:
+def test_teardown_error_isolation(free_bootstrapper_config: FreeConfig, caplog: pytest.LogCaptureFixture) -> None:
     bootstrapper = FreeBootstrapper(bootstrap_config=free_bootstrapper_config)
     bootstrapper.bootstrap()
 
@@ -63,13 +64,16 @@ def test_teardown_error_isolation(free_bootstrapper_config: FreeConfig) -> None:
     good = MagicMock()
     bootstrapper.instruments = [bad, good]
 
-    with capture_logs() as cap_logs, pytest.raises(TeardownError, match="boom") as excinfo:
+    with (
+        caplog.at_level(logging.WARNING, logger="lite_bootstrap.bootstrappers.base"),
+        pytest.raises(TeardownError, match="boom") as excinfo,
+    ):
         bootstrapper.teardown()
 
     # Both instruments attempted teardown despite the error (LIFO: good first, bad second).
     good.teardown.assert_called_once()
     bad.teardown.assert_called_once()
-    assert any("boom" in entry.get("event", "") for entry in cap_logs)
+    assert any("boom" in r.message for r in caplog.records)
     assert excinfo.value.errors == [("MagicMock", excinfo.value.__cause__)]
 
 
@@ -139,3 +143,60 @@ def test_bootstrap_is_idempotent(free_bootstrapper_config: FreeConfig) -> None:
     first.bootstrap.assert_called_once()
     second.bootstrap.assert_called_once()
     assert bootstrapper.is_bootstrapped
+
+
+def test_free_bootstrap_emits_summary_log(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(logging.INFO, logger="lite_bootstrap.bootstrappers.base"):
+        FreeBootstrapper(
+            bootstrap_config=FreeConfig(
+                sentry_dsn="https://testdsn@localhost/1",
+                sentry_additional_params={"transport": SentryTestTransport()},
+            ),
+        )
+    summary_records = [r for r in caplog.records if "FreeBootstrapper" in r.message]
+    assert summary_records, "expected a summary log entry mentioning FreeBootstrapper"
+    summary = summary_records[-1].message
+    assert "  configured:" in summary
+    assert "  skipped:" in summary
+
+
+def test_build_summary_format() -> None:
+    bootstrapper = FreeBootstrapper(
+        bootstrap_config=FreeConfig(
+            sentry_dsn="https://testdsn@localhost/1",
+            sentry_additional_params={"transport": SentryTestTransport()},
+            logging_enabled=False,
+            logging_buffer_capacity=0,
+        ),
+    )
+    summary = bootstrapper.build_summary()
+    assert summary.startswith("FreeBootstrapper:")
+    assert "  configured:" in summary
+    assert "  skipped:" in summary
+    assert "    - SentryInstrument" in summary
+    assert "    - LoggingInstrument: logging_enabled is False" in summary
+
+
+def test_config_skip_emits_no_warning() -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # any UserWarning becomes a test failure
+        bootstrapper = FreeBootstrapper(
+            bootstrap_config=FreeConfig(
+                logging_enabled=False,
+                logging_buffer_capacity=0,
+            ),
+        )
+    assert LoggingInstrument in {cls for cls, _ in bootstrapper.skipped_instruments}
+
+
+def test_build_summary_renders_none_for_empty_sections() -> None:
+    bootstrapper = FreeBootstrapper(
+        bootstrap_config=FreeConfig(
+            sentry_dsn="https://testdsn@localhost/1",
+            sentry_additional_params={"transport": SentryTestTransport()},
+        ),
+    )
+    bootstrapper.instruments = []
+    bootstrapper.skipped_instruments = []
+    summary = bootstrapper.build_summary()
+    assert summary == "FreeBootstrapper:\n  configured:\n    (none)\n  skipped:\n    (none)"

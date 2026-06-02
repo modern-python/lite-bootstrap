@@ -18,7 +18,6 @@ class CorsConfig(BaseConfig):
 class CorsInstrument(BaseInstrument[CorsConfig]):
     not_ready_message = "cors_allowed_origins or cors_allowed_origin_regex must be provided"
 
-    def is_ready(self) -> bool:
-        return bool(self.bootstrap_config.cors_allowed_origins) or bool(
-            self.bootstrap_config.cors_allowed_origin_regex,
-        )
+    @classmethod
+    def is_configured(cls, bootstrap_config: "CorsConfig") -> bool:
+        return bool(bootstrap_config.cors_allowed_origins) or bool(bootstrap_config.cors_allowed_origin_regex)

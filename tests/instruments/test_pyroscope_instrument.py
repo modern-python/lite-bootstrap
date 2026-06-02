@@ -23,14 +23,14 @@ def _make_config(endpoint: str | None = "http://pyroscope:4040") -> PyroscopeCon
     return PyroscopeConfig(service_name="test-service", pyroscope_endpoint=endpoint)
 
 
-def test_pyroscope_instrument_not_ready_without_endpoint() -> None:
-    instrument = PyroscopeInstrument(bootstrap_config=_make_config(endpoint=None))
-    assert not instrument.is_ready()
+def test_pyroscope_instrument_not_configured_without_endpoint() -> None:
+    config = _make_config(endpoint=None)
+    assert not PyroscopeInstrument.is_configured(config)
 
 
-def test_pyroscope_instrument_is_ready() -> None:
-    instrument = PyroscopeInstrument(bootstrap_config=_make_config())
-    assert instrument.is_ready()
+def test_pyroscope_instrument_is_configured() -> None:
+    config = _make_config()
+    assert PyroscopeInstrument.is_configured(config)
 
 
 def test_pyroscope_check_dependencies() -> None:

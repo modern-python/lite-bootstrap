@@ -85,8 +85,9 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
         default_factory=lambda: None, init=False, repr=False, compare=False
     )
 
-    def is_ready(self) -> bool:
-        return bool(self.bootstrap_config.opentelemetry_endpoint or self.bootstrap_config.opentelemetry_log_traces)
+    @classmethod
+    def is_configured(cls, bootstrap_config: "OpenTelemetryConfig") -> bool:
+        return bool(bootstrap_config.opentelemetry_endpoint or bootstrap_config.opentelemetry_log_traces)
 
     @staticmethod
     def check_dependencies() -> bool:

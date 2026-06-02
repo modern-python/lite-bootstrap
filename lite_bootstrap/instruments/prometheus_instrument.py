@@ -16,7 +16,8 @@ class PrometheusConfig(BaseConfig):
 class PrometheusInstrument(BaseInstrument[PrometheusConfig]):
     not_ready_message = "prometheus_metrics_path is empty or not valid"
 
-    def is_ready(self) -> bool:
-        return bool(self.bootstrap_config.prometheus_metrics_path) and is_valid_path(
-            self.bootstrap_config.prometheus_metrics_path
+    @classmethod
+    def is_configured(cls, bootstrap_config: "PrometheusConfig") -> bool:
+        return bool(bootstrap_config.prometheus_metrics_path) and is_valid_path(
+            bootstrap_config.prometheus_metrics_path
         )

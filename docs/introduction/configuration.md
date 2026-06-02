@@ -193,28 +193,33 @@ Additional params:
 - `health_checks_path`
 - `health_checks_include_in_schema`
 
-## Skipped instrument warnings
+## Skipped instruments
 
-When a bootstrapper is constructed, each registered instrument is checked. If it can't run, the instrument is skipped and a `UserWarning` subclass is emitted so the skip is visible at the call site:
+When a bootstrapper is constructed, each registered instrument is checked twice:
 
-- `InstrumentDependencyMissingWarning` — the instrument's optional package is not installed (e.g. `[sentry]` extra missing).
-- `InstrumentNotReadyWarning` — the instrument's required config is missing or disabled (e.g. `sentry_dsn` not set, `logging_enabled=False`, `pyroscope_endpoint` empty).
-- `InstrumentSkippedWarning` — base class for both, useful if you want to filter every skip with one rule.
+1. **`is_configured(config)`** (classmethod, runs before instantiation) — returns False if the user's config indicates this instrument shouldn't run (e.g. `sentry_dsn` empty, `logging_enabled=False`, `pyroscope_endpoint` empty). When False, the instrument is **silently skipped** and recorded in `bootstrapper.skipped_instruments: list[tuple[type, str]]` — each entry is the instrument class plus its `not_ready_message`.
 
-Both go through Python's `warnings` module, so they show up in stderr by default and can be filtered, captured, or escalated like any other warning. Example — silence intentional opt-outs but keep dependency-missing warnings loud:
+2. **`check_dependencies()`** — runs only if `is_configured()` returned True. If the instrument's optional package is missing, an `InstrumentDependencyMissingWarning` is emitted. This is a real "configured but dependency missing" deployment surprise.
 
-```python
-import warnings
-from lite_bootstrap import InstrumentNotReadyWarning
+After the loop, the bootstrapper emits one INFO-level summary log listing configured + skipped instruments. Default Python logging suppresses INFO; opt in via `logging.basicConfig(level=logging.INFO)`.
 
-warnings.filterwarnings("ignore", category=InstrumentNotReadyWarning)
-```
-
-Or treat any skip as an error in CI:
+Filter the dep-missing warning the same way as any `UserWarning`:
 
 ```python
 import warnings
-from lite_bootstrap import InstrumentSkippedWarning
+from lite_bootstrap import InstrumentDependencyMissingWarning
 
-warnings.filterwarnings("error", category=InstrumentSkippedWarning)
+warnings.filterwarnings("ignore", category=InstrumentDependencyMissingWarning)
 ```
+
+`InstrumentSkippedWarning` is kept as the base class for forward-compatibility (additional skip categories may emerge); today, `InstrumentDependencyMissingWarning` is its only concrete subclass.
+
+To inspect skipped instruments programmatically:
+
+```python
+bootstrapper = FastAPIBootstrapper(bootstrap_config=config)
+for cls, reason in bootstrapper.skipped_instruments:
+    print(f"{cls.__name__}: {reason}")
+```
+
+To get a human-readable view of the same information at any later point (e.g. for debugging from a REPL or a health endpoint), call `bootstrapper.build_summary()`. It returns the multi-line string that the INFO summary log emits — useful when log levels are filtered or when you want to render the bootstrapper state inline.

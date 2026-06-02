@@ -240,16 +240,18 @@ def test_fastmcp_logging_middleware_disabled_via_flag() -> None:
 
 
 @pytest.mark.parametrize(
-    "package_name",
+    ("package_name", "extra_config"),
     [
-        "sentry_sdk",
-        "structlog",
-        "prometheus_client",
+        ("sentry_sdk", {"sentry_dsn": "https://testdsn@localhost/1"}),
+        ("structlog", {}),
+        ("prometheus_client", {}),
     ],
 )
-def test_fastmcp_bootstrapper_with_missing_instrument_dependency(package_name: str) -> None:
+def test_fastmcp_bootstrapper_with_missing_instrument_dependency(
+    package_name: str, extra_config: dict[str, typing.Any]
+) -> None:
     with emulate_package_missing(package_name), pytest.warns(UserWarning, match=package_name):
-        FastMcpBootstrapper(bootstrap_config=FastMcpConfig())
+        FastMcpBootstrapper(bootstrap_config=FastMcpConfig(**extra_config))
 
 
 def test_fastmcp_bootstrap_without_prometheus_client() -> None:
