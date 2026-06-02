@@ -93,8 +93,9 @@ class LoggingInstrument(BaseInstrument[LoggingConfig]):
             structlog.processors.UnicodeDecoder(),
         ]
 
-    def is_ready(self) -> bool:
-        return self.bootstrap_config.logging_enabled
+    @classmethod
+    def is_configured(cls, bootstrap_config: "LoggingConfig") -> bool:
+        return bootstrap_config.logging_enabled
 
     @staticmethod
     def check_dependencies() -> bool:

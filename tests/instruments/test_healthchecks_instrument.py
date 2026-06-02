@@ -1,15 +1,15 @@
 from lite_bootstrap.instruments.healthchecks_instrument import HealthChecksConfig, HealthChecksInstrument
 
 
-def test_healthchecks_instrument_ready_by_default() -> None:
-    instrument = HealthChecksInstrument(bootstrap_config=HealthChecksConfig())
-    assert instrument.is_ready()
+def test_healthchecks_instrument_configured_by_default() -> None:
+    config = HealthChecksConfig()
+    assert HealthChecksInstrument.is_configured(config)
 
 
-def test_healthchecks_instrument_not_ready_when_disabled() -> None:
-    instrument = HealthChecksInstrument(bootstrap_config=HealthChecksConfig(health_checks_enabled=False))
-    assert not instrument.is_ready()
-    assert instrument.not_ready_message == "health_checks_enabled is False"
+def test_healthchecks_instrument_not_configured_when_disabled() -> None:
+    config = HealthChecksConfig(health_checks_enabled=False)
+    assert not HealthChecksInstrument.is_configured(config)
+    assert HealthChecksInstrument.not_ready_message == "health_checks_enabled is False"
 
 
 def test_healthchecks_render_data_default() -> None:

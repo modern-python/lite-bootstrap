@@ -7,9 +7,10 @@ from structlog.testing import capture_logs
 from lite_bootstrap import (
     FreeBootstrapper,
     FreeConfig,
-    InstrumentNotReadyWarning,
     TeardownError,
 )
+from lite_bootstrap.instruments.logging_instrument import LoggingInstrument
+from lite_bootstrap.instruments.pyroscope_instrument import PyroscopeInstrument
 from tests.conftest import CustomInstrumentor, SentryTestTransport, emulate_package_missing
 
 
@@ -37,20 +38,19 @@ def test_free_bootstrap(free_bootstrapper_config: FreeConfig) -> None:
 
 
 def test_free_bootstrap_logging_disabled() -> None:
-    with pytest.warns(InstrumentNotReadyWarning) as records:
-        FreeBootstrapper(
-            bootstrap_config=FreeConfig(
-                logging_enabled=False,
-                opentelemetry_instrumentors=[CustomInstrumentor()],
-                opentelemetry_log_traces=True,
-                sentry_dsn="https://testdsn@localhost/1",
-                sentry_additional_params={"transport": SentryTestTransport()},
-                logging_buffer_capacity=0,
-            ),
-        )
-    messages = [str(r.message) for r in records]
-    assert "LoggingInstrument is not ready: logging_enabled is False" in messages
-    assert "PyroscopeInstrument is not ready: pyroscope_endpoint is empty" in messages
+    bootstrapper = FreeBootstrapper(
+        bootstrap_config=FreeConfig(
+            logging_enabled=False,
+            opentelemetry_instrumentors=[CustomInstrumentor()],
+            opentelemetry_log_traces=True,
+            sentry_dsn="https://testdsn@localhost/1",
+            sentry_additional_params={"transport": SentryTestTransport()},
+            logging_buffer_capacity=0,
+        ),
+    )
+    skipped_classes = {cls for cls, _ in bootstrapper.skipped_instruments}
+    assert LoggingInstrument in skipped_classes
+    assert PyroscopeInstrument in skipped_classes
 
 
 def test_teardown_error_isolation(free_bootstrapper_config: FreeConfig) -> None:
@@ -139,3 +139,18 @@ def test_bootstrap_is_idempotent(free_bootstrapper_config: FreeConfig) -> None:
     first.bootstrap.assert_called_once()
     second.bootstrap.assert_called_once()
     assert bootstrapper.is_bootstrapped
+
+
+def test_free_bootstrap_emits_summary_log() -> None:
+    with capture_logs() as cap_logs:
+        FreeBootstrapper(
+            bootstrap_config=FreeConfig(
+                sentry_dsn="https://testdsn@localhost/1",
+                sentry_additional_params={"transport": SentryTestTransport()},
+            ),
+        )
+    summary_entries = [e for e in cap_logs if "FreeBootstrapper" in e.get("event", "")]
+    assert summary_entries, "expected a summary log entry mentioning FreeBootstrapper"
+    summary_event = summary_entries[-1]["event"]
+    assert "configured=" in summary_event
+    assert "skipped=" in summary_event

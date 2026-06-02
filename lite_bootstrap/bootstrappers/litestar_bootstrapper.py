@@ -218,8 +218,9 @@ class LitestarSwaggerInstrument(SwaggerInstrument):
     bootstrap_config: LitestarConfig
     not_ready_message = "swagger_path is empty or not valid"
 
-    def is_ready(self) -> bool:
-        return bool(self.bootstrap_config.swagger_path) and is_valid_path(self.bootstrap_config.swagger_path)
+    @classmethod
+    def is_configured(cls, bootstrap_config: "LitestarConfig") -> bool:  # ty: ignore[invalid-method-override]
+        return bool(bootstrap_config.swagger_path) and is_valid_path(bootstrap_config.swagger_path)
 
     def bootstrap(self) -> None:
         render_plugins: typing.Final = (

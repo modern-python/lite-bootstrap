@@ -6,7 +6,6 @@ import warnings
 from lite_bootstrap.exceptions import (
     BootstrapperNotReadyError,
     InstrumentDependencyMissingWarning,
-    InstrumentNotReadyWarning,
     TeardownError,
 )
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
@@ -16,9 +15,23 @@ from lite_bootstrap.types import ApplicationT
 try:
     import structlog
 
-    logger = structlog.getLogger(__name__)
+    _structlog_available = True
 except ImportError:
-    logger = logging.getLogger(__name__)
+    _structlog_available = False
+
+
+def _get_logger() -> typing.Any:  # noqa: ANN401
+    """Get a fresh logger instance each call.
+
+    We deliberately avoid a module-level cached logger because structlog's
+    `cache_logger_on_first_use=True` (set by LoggingInstrument.bootstrap) memoizes the
+    BoundLogger and its processor chain on first use — making it impossible for
+    `structlog.testing.capture_logs()` to override the binding after the cache is set.
+    Returning a fresh proxy per call keeps the structlog pipeline reactive to config changes.
+    """
+    if _structlog_available:
+        return structlog.get_logger(__name__)
+    return logging.getLogger(__name__)
 
 
 InstrumentT = typing.TypeVar("InstrumentT", bound=BaseInstrument)
@@ -27,6 +40,7 @@ InstrumentT = typing.TypeVar("InstrumentT", bound=BaseInstrument)
 class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
     instruments_types: typing.ClassVar[list[type[BaseInstrument]]]
     instruments: list[BaseInstrument]
+    skipped_instruments: list[tuple[type[BaseInstrument], str]]
     bootstrap_config: BaseConfig
 
     def __init__(self, bootstrap_config: BaseConfig) -> None:
@@ -37,31 +51,29 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
 
         self.bootstrap_config = bootstrap_config
         self.instruments = []
+        self.skipped_instruments = []
         for instrument_type in self.instruments_types:
-            if (instrument := self._register_or_skip(instrument_type)) is not None:
-                self.instruments.append(instrument)
+            # Config-level skip first: silent (no warning). Runs before instantiation so a
+            # missing-optional-dep doesn't fail in a dataclass default_factory before we
+            # can decide the user opted out.
+            if not instrument_type.is_configured(self.bootstrap_config):
+                self.skipped_instruments.append((instrument_type, instrument_type.not_ready_message))
+                continue
+            # Dep-missing for a CONFIGURED instrument is a genuine deployment surprise.
+            if not instrument_type.check_dependencies():
+                warnings.warn(
+                    instrument_type.missing_dependency_message,
+                    category=InstrumentDependencyMissingWarning,
+                    stacklevel=3,
+                )
+                continue
+            self.instruments.append(instrument_type(bootstrap_config=self.bootstrap_config))
 
-    def _register_or_skip(self, instrument_type: type[BaseInstrument]) -> BaseInstrument | None:
-        # Check dependencies before instantiation: an instrument's __init__
-        # may reference symbols gated behind an optional import (e.g. a
-        # default_factory that calls into the missing package), which would
-        # raise NameError before the check_dependencies skip could run.
-        if not instrument_type.check_dependencies():
-            warnings.warn(
-                instrument_type.missing_dependency_message,
-                category=InstrumentDependencyMissingWarning,
-                stacklevel=4,
-            )
-            return None
-        instrument = instrument_type(bootstrap_config=self.bootstrap_config)
-        if not instrument.is_ready():
-            warnings.warn(
-                f"{instrument_type.__name__} is not ready: {instrument.not_ready_message}",
-                category=InstrumentNotReadyWarning,
-                stacklevel=4,
-            )
-            return None
-        return instrument
+        _get_logger().info(
+            f"{type(self).__name__}: "
+            f"configured={[type(i).__name__ for i in self.instruments]}, "
+            f"skipped={[(cls.__name__, reason) for cls, reason in self.skipped_instruments]}"
+        )
 
     @property
     @abc.abstractmethod
@@ -91,7 +103,7 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
                 one_instrument.teardown()
             except Exception as e:  # noqa: BLE001, PERF203
                 name = type(one_instrument).__name__
-                logger.warning(f"Error tearing down {name}: {e}")
+                _get_logger().warning(f"Error tearing down {name}: {e}")
                 errors.append((name, e))
         if errors:
             raise TeardownError(errors) from errors[0][1]

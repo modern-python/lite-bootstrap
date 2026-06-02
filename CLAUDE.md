@@ -26,7 +26,7 @@ BaseConfig (frozen dataclass, kw_only)
     └── Framework configs compose multiple instrument configs via multiple inheritance
 
 BaseInstrument[ConfigT] (generic, non-frozen dataclass with slots)
-    └── Instrument subclasses: lifecycle via bootstrap() / teardown() / is_ready()
+    └── Instrument subclasses: lifecycle via bootstrap() / teardown(); skip check via is_configured() classmethod
 
 BaseBootstrapper (abc.ABC)
     ├── FastAPIBootstrapper
@@ -39,6 +39,7 @@ BaseBootstrapper (abc.ABC)
 ### Key design decisions
 
 - **Optional dependencies**: Each instrument checks for its optional package via `import_checker.py` (`importlib.util.find_spec`). Instruments are skipped silently if the package is absent. Optional packages are imported inside `if import_checker.is_X_installed:` blocks; static analyzers that don't model this guard will report spurious "possibly unbound" diagnostics — the project uses `ty` which handles the pattern correctly.
+- **Instrument skip ordering**: `BaseBootstrapper.__init__` runs `instrument_type.is_configured(config)` first (silent skip if the user's config indicates the instrument shouldn't run — populates `bootstrapper.skipped_instruments: list[tuple[type, str]]`); then `check_dependencies()` (emits `InstrumentDependencyMissingWarning` only for configured-but-dep-missing — the genuine deployment surprise); then instantiates. One `logger.info` summary line at the end lists configured + skipped instruments. The bootstrappers/base.py logger is obtained fresh per call (`_get_logger()`) instead of cached at module level, so `structlog.testing.capture_logs()` can override processors at test time even after `LoggingInstrument.bootstrap()` sets `cache_logger_on_first_use=True`.
 - **Frozen configs, non-frozen instruments**: All `*Config` classes are `@dataclasses.dataclass(kw_only=True, frozen=True)`. All `*Instrument` classes lose `frozen=True` because two instruments (`LoggingInstrument`, `OpenTelemetryInstrument`) cache mutable runtime state (`_logger_factory`, `_tracer_provider`); Python's dataclass rules require the whole hierarchy to be non-frozen. `from_dict()` and `from_object()` filter unknown keys before constructing.
 - **`FastAPIConfig.application` uses an `UnsetType` sentinel**: shared in `lite_bootstrap/types.py` as `UnsetType` + `UNSET` (singleton). `FastAPIConfig.__post_init__` checks `isinstance(self.application, UnsetType)` and replaces with a constructed `FastAPI()` via `object.__setattr__` (config stays frozen for user-facing immutability). A one-line comment in `__post_init__` documents the freeze bypass.
 - **Instrument registry**: `BaseBootstrapper` holds a list of instrument instances; it calls `bootstrap()` on each in order and `teardown()` in reverse during shutdown.
@@ -78,7 +79,7 @@ Install via `pip install lite-bootstrap[<group>]` or `uv add lite-bootstrap[<gro
 - **No `# noqa: PLR2004`**: extract magic values to named locals. Example: `expected_max_age = 600; assert config.cors_max_age == expected_max_age` (not `assert config.cors_max_age == 600  # noqa: PLR2004`).
 - **Backward-compat aliases for renames**: when renaming a public class, add a silent module-level alias (`OldName = NewName`) at the end of the file. Re-export both names from `__init__.py` if the old name was publicly exported. Aliases are class assignments, not subclasses — same class object, so `isinstance` behavior is preserved.
 - **Frozen-config bypass in `__post_init__`**: it's acceptable to use `object.__setattr__(self, "field", value)` inside a frozen config's `__post_init__` to set a field that requires other config values to construct. Document with a one-line comment naming the trade-off (user-facing immutability vs. construction-time mutation).
-- **Optional-import guard pattern**: top-level conditional imports (`if import_checker.is_X_installed: import X`) keep optional dependencies actually optional. Code that references `X` is only reached when `check_dependencies()` has already returned True; the runtime invariant is maintained by `BaseBootstrapper._register_or_skip`. See "Type checking" below for why Pyright dislikes this pattern.
+- **Optional-import guard pattern**: top-level conditional imports (`if import_checker.is_X_installed: import X`) keep optional dependencies actually optional. Code that references `X` is only reached when `check_dependencies()` has already returned True; the runtime invariant is maintained by the inline `is_configured → check_dependencies → instantiate` flow in `BaseBootstrapper.__init__`. See "Type checking" below.
 
 ### Type checking
 

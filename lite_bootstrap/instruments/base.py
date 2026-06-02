@@ -39,7 +39,9 @@ class BaseInstrument(typing.Generic[ConfigT]):
 
     def teardown(self) -> None: ...
 
-    def is_ready(self) -> bool:
+    @classmethod
+    def is_configured(cls, bootstrap_config: ConfigT) -> bool:  # noqa: ARG003
+        """Return True if config indicates this instrument should be active. Default: always active."""
         return True
 
     @staticmethod

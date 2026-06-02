@@ -30,8 +30,9 @@ class HealthChecksConfig(BaseConfig):
 class HealthChecksInstrument(BaseInstrument[HealthChecksConfig]):
     not_ready_message = "health_checks_enabled is False"
 
-    def is_ready(self) -> bool:
-        return self.bootstrap_config.health_checks_enabled
+    @classmethod
+    def is_configured(cls, bootstrap_config: "HealthChecksConfig") -> bool:
+        return bootstrap_config.health_checks_enabled
 
     def render_health_check_data(self) -> HealthCheckTypedDict:
         return self.bootstrap_config.health_check_data

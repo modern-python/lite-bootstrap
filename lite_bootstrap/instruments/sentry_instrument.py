@@ -96,8 +96,9 @@ class SentryInstrument(BaseInstrument[SentryConfig]):
     not_ready_message = "sentry_dsn is empty"
     missing_dependency_message = "sentry_sdk is not installed"
 
-    def is_ready(self) -> bool:
-        return bool(self.bootstrap_config.sentry_dsn)
+    @classmethod
+    def is_configured(cls, bootstrap_config: "SentryConfig") -> bool:
+        return bool(bootstrap_config.sentry_dsn)
 
     @staticmethod
     def check_dependencies() -> bool:

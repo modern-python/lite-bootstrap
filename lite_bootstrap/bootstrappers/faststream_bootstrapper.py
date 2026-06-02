@@ -125,8 +125,9 @@ class FastStreamOpenTelemetryInstrument(OpenTelemetryInstrument):
     bootstrap_config: FastStreamConfig
     not_ready_message = OpenTelemetryInstrument.not_ready_message + " or opentelemetry_middleware_cls is empty"
 
-    def is_ready(self) -> bool:
-        return super().is_ready() and bool(self.bootstrap_config.opentelemetry_middleware_cls)
+    @classmethod
+    def is_configured(cls, bootstrap_config: "FastStreamConfig") -> bool:  # ty: ignore[invalid-method-override]
+        return super().is_configured(bootstrap_config) and bool(bootstrap_config.opentelemetry_middleware_cls)
 
     def bootstrap(self) -> None:
         if self.bootstrap_config.opentelemetry_middleware_cls and self.bootstrap_config.application.broker:
@@ -148,12 +149,9 @@ class FastStreamPrometheusInstrument(PrometheusInstrument):
     not_ready_message = PrometheusInstrument.not_ready_message + " or prometheus_middleware_cls is missing"
     missing_dependency_message = "prometheus_client is not installed"
 
-    def is_ready(self) -> bool:
-        return (
-            super().is_ready()
-            and import_checker.is_prometheus_client_installed
-            and bool(self.bootstrap_config.prometheus_middleware_cls)
-        )
+    @classmethod
+    def is_configured(cls, bootstrap_config: "FastStreamConfig") -> bool:  # ty: ignore[invalid-method-override]
+        return super().is_configured(bootstrap_config) and bool(bootstrap_config.prometheus_middleware_cls)
 
     @staticmethod
     def check_dependencies() -> bool:
