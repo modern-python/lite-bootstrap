@@ -29,8 +29,6 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
 
         Useful for INFO-level diagnostic logging (called once by ``__init__``) and for
         post-construction debugging (e.g. from a REPL or a health endpoint).
-
-        Raises ``AttributeError`` if called before ``__init__`` completes.
         """
         lines = [f"{type(self).__name__}:", "  configured:"]
         if self.instruments:
@@ -70,7 +68,8 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
                 continue
             self.instruments.append(instrument_type(bootstrap_config=self.bootstrap_config))
 
-        logger.info(self.build_summary())
+        if logger.isEnabledFor(logging.INFO):
+            logger.info(self.build_summary())
 
     @property
     @abc.abstractmethod
