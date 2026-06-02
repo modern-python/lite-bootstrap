@@ -15,23 +15,21 @@ from lite_bootstrap.types import ApplicationT
 try:
     import structlog
 
-    _structlog_available = True
-except ImportError:
-    _structlog_available = False
+    def _get_logger() -> typing.Any:  # noqa: ANN401
+        """Get a fresh structlog proxy each call.
 
-
-def _get_logger() -> typing.Any:  # noqa: ANN401
-    """Get a fresh logger instance each call.
-
-    We deliberately avoid a module-level cached logger because structlog's
-    `cache_logger_on_first_use=True` (set by LoggingInstrument.bootstrap) memoizes the
-    BoundLogger and its processor chain on first use — making it impossible for
-    `structlog.testing.capture_logs()` to override the binding after the cache is set.
-    Returning a fresh proxy per call keeps the structlog pipeline reactive to config changes.
-    """
-    if _structlog_available:
+        We deliberately avoid a module-level cached logger because structlog's
+        `cache_logger_on_first_use=True` (set by LoggingInstrument.bootstrap) memoizes the
+        BoundLogger and its processor chain on first use — making it impossible for
+        `structlog.testing.capture_logs()` to override the binding after the cache is set.
+        Returning a fresh proxy per call keeps the structlog pipeline reactive to config changes.
+        """
         return structlog.get_logger(__name__)
-    return logging.getLogger(__name__)
+
+except ImportError:
+
+    def _get_logger() -> typing.Any:  # noqa: ANN401
+        return logging.getLogger(__name__)
 
 
 InstrumentT = typing.TypeVar("InstrumentT", bound=BaseInstrument)
