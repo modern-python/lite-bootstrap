@@ -164,7 +164,8 @@ def test_faststream_bootstrap_without_opentelemetry(broker: RedisBroker) -> None
         "opentelemetry",
         ["lite_bootstrap.bootstrappers.faststream_bootstrapper"],
     ):
-        bootstrapper = FastStreamBootstrapper(bootstrap_config=bootstrap_config)
+        with pytest.warns(UserWarning, match="opentelemetry"):
+            bootstrapper = FastStreamBootstrapper(bootstrap_config=bootstrap_config)
         bootstrapper.bootstrap()
 
 

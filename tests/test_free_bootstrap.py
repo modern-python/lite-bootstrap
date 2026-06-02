@@ -187,3 +187,16 @@ def test_config_skip_emits_no_warning() -> None:
             ),
         )
     assert LoggingInstrument in {cls for cls, _ in bootstrapper.skipped_instruments}
+
+
+def test_build_summary_renders_none_for_empty_sections() -> None:
+    bootstrapper = FreeBootstrapper(
+        bootstrap_config=FreeConfig(
+            sentry_dsn="https://testdsn@localhost/1",
+            sentry_additional_params={"transport": SentryTestTransport()},
+        ),
+    )
+    bootstrapper.instruments = []
+    bootstrapper.skipped_instruments = []
+    summary = bootstrapper.build_summary()
+    assert summary == "FreeBootstrapper:\n  configured:\n    (none)\n  skipped:\n    (none)"
