@@ -145,3 +145,35 @@ The arc shipped what it set out to ship. 3 critical bugs closed, 5 design issues
 The methodology was also heavier than the work in places. The next time this team takes on an audit, the lightweight-plan template (action #1) and pre-flight grep (action #2) would meaningfully reduce overhead without giving up the review gates that caught real bugs.
 
 The most underrated factor: the user remained in the loop as a quality reviewer. Without the cascade catch, the UnsetType contribution, the noqa policy, and the unreachable-guard cleanup, the codebase would have shipped a lower-quality version of these 15 PRs. The subagent loop produces consistent execution but does not produce judgment.
+
+---
+
+## Addendum (2026-06-02): PR #107 instrument skip rework
+
+A second large refactor shipped after the original arc closed: PR #107, replacing `InstrumentNotReadyWarning` with `is_configured()` classmethod + structured `skipped_instruments` + summary log. Same methodology (brainstorm → spec → plan → subagent execution). Surfaced three new datapoints worth recording.
+
+### What worked
+
+- **Mid-design pivot to the right pattern.** During brainstorming the user pushed back on `is_configured` taking `bootstrap_config` as an arg ("why does it need it if config is on self?"). That question forced the design conversation through pre-#88 history (instance method + instantiation first) and led to confirming the classmethod-with-arg design was correct. Without the pushback I would have proposed the design without explaining the cascade of constraints.
+- **The lightweight template + combined-review pattern (action items #1 and #7 from the original retro) was validated again.** PR16 was the first test; PR #107's combined review structure followed the same pattern even though it didn't end up running formally (the subagent disconnect made the formal review unnecessary — I verified inline).
+- **Real-time spec correction (action #4) was honored.** During execution the design pivoted from `_get_logger()` to stdlib `logging` + public `build_summary()` method. A new spec doc (`2026-06-02-stdlib-logging-and-build-summary-design.md`) was written for the pivot rather than letting the doc drift from reality.
+
+### What didn't work
+
+- **Long-running subagent dispatches are fragile.** The implementer dispatch ran ~60 minutes (94 tool uses) before the socket dropped. Work was orphaned mid-flow — the production code edits were done but verification, commit, and docs (Task 9) were not. Recovery worked, but a smaller scope per dispatch would have lost less work.
+- **`_get_logger()` was a defensive workaround, not a design.** I introduced it to fix structlog's `cache_logger_on_first_use=True` caching interaction with `capture_logs()` at test time. It made the tests pass but produced an ugly API. The user's subsequent pivot — switch the bootstrapper to stdlib `logging` and expose `build_summary()` as a public method — was the actual right answer. `caplog` (pytest's stdlib-logging capture fixture) was the right test mechanism, which the original plan flagged but the subagent ignored in favor of `capture_logs()`. The lesson: when a fix feels like fighting the framework, the framework choice is probably wrong.
+- **LSP violations on framework instrument override parameter types are an emergent pattern.** Three `# ty: ignore[invalid-method-override]` were needed for `FastStreamOpenTelemetryInstrument.is_configured`, `FastStreamPrometheusInstrument.is_configured`, and `LitestarSwaggerInstrument.is_configured` because they narrow `bootstrap_config` to framework-specific types. The pattern was acceptable for `bootstrap_config:` field overrides (covariant) but ty enforces strict invariance on method parameters. Worth noting in CLAUDE.md if more `classmethod` overrides arise.
+
+### Key insight
+
+**The subagent does mechanical migration; design quality comes from human review iteration.** PR #107 needed 5 user follow-up commits after my work to reach the shipped design (`fa135d2`, `41d83bb`, `c14c455`, `4f051d6`, `86b43ef`). Each addressed a quality concern: silent-skip contract test, build_summary docstring tightening, empty-section handling, faststream warning leak fix, `isEnabledFor` guard on the summary log. None of these were in the original plan; all came from review iteration after the mechanical work landed.
+
+This matches the original retro's closing observation. Worth restating concretely: the subagent loop reliably produces a green-tests implementation of the spec, but the spec is rarely the right design. The design emerges during review.
+
+### New action items
+
+| # | Action | Cost | Priority |
+|---|--------|------|----------|
+| 8 | When a fix requires a defensive workaround in production code to make tests pass, step back and ask whether the test mechanism (or the framework choice) is wrong. `_get_logger()` is the case study. | Low | High |
+| 9 | Cap single-dispatch subagent scope. The 94-tool-use, ~60-minute dispatch for PR #107 was too long. Either split into checkpointed sub-dispatches or set an explicit "implement only Tasks N–M, stop and report" boundary so progress doesn't get orphaned if the connection drops. | Low | High |
+| 10 | Document the LSP-violation pattern for classmethod overrides in CLAUDE.md alongside the existing covariant-narrowing note. `# ty: ignore[invalid-method-override]` is now established convention. | Low | Low |
