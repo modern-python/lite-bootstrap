@@ -156,8 +156,8 @@ def test_free_bootstrap_emits_summary_log(caplog: pytest.LogCaptureFixture) -> N
     summary_records = [r for r in caplog.records if "FreeBootstrapper" in r.message]
     assert summary_records, "expected a summary log entry mentioning FreeBootstrapper"
     summary = summary_records[-1].message
-    assert "configured:" in summary
-    assert "skipped:" in summary
+    assert "  configured:" in summary
+    assert "  skipped:" in summary
 
 
 def test_build_summary_format() -> None:
