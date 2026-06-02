@@ -1,4 +1,5 @@
 import logging
+import warnings
 from unittest.mock import MagicMock
 
 import pytest
@@ -174,3 +175,15 @@ def test_build_summary_format() -> None:
     assert "  skipped:" in summary
     assert "    - SentryInstrument" in summary
     assert "    - LoggingInstrument: logging_enabled is False" in summary
+
+
+def test_config_skip_emits_no_warning() -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # any UserWarning becomes a test failure
+        bootstrapper = FreeBootstrapper(
+            bootstrap_config=FreeConfig(
+                logging_enabled=False,
+                logging_buffer_capacity=0,
+            ),
+        )
+    assert LoggingInstrument in {cls for cls, _ in bootstrapper.skipped_instruments}
