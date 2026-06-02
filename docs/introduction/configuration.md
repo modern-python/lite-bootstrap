@@ -221,3 +221,5 @@ bootstrapper = FastAPIBootstrapper(bootstrap_config=config)
 for cls, reason in bootstrapper.skipped_instruments:
     print(f"{cls.__name__}: {reason}")
 ```
+
+To get a human-readable view of the same information at any later point (e.g. for debugging from a REPL or a health endpoint), call `bootstrapper.build_summary()`. It returns the multi-line string that the INFO summary log emits — useful when log levels are filtered or when you want to render the bootstrapper state inline.

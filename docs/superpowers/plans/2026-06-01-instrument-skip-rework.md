@@ -1,5 +1,7 @@
 # Instrument Skip Rework Implementation Plan
 
+> **Note (2026-06-02):** the `_get_logger()` fresh-per-call decision documented below was revised by `docs/superpowers/specs/2026-06-02-stdlib-logging-and-build-summary-design.md`. The summary-log goal is unchanged; the implementation switched to stdlib `logging` with a public `build_summary()` method.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace `InstrumentNotReadyWarning` with a pre-instantiation `is_configured` classmethod check. Skipped-due-to-config becomes silent at the warning level; structured `bootstrapper.skipped_instruments` introspection + one INFO summary log provide diagnostic visibility. `InstrumentDependencyMissingWarning` continues to fire for the genuine "configured but dependency missing" deployment-surprise case.
