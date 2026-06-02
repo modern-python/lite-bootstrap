@@ -12,24 +12,7 @@ from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 from lite_bootstrap.types import ApplicationT
 
 
-try:
-    import structlog
-
-    def _get_logger() -> typing.Any:  # noqa: ANN401
-        """Get a fresh structlog proxy each call.
-
-        We deliberately avoid a module-level cached logger because structlog's
-        `cache_logger_on_first_use=True` (set by LoggingInstrument.bootstrap) memoizes the
-        BoundLogger and its processor chain on first use — making it impossible for
-        `structlog.testing.capture_logs()` to override the binding after the cache is set.
-        Returning a fresh proxy per call keeps the structlog pipeline reactive to config changes.
-        """
-        return structlog.get_logger(__name__)
-
-except ImportError:
-
-    def _get_logger() -> typing.Any:  # noqa: ANN401
-        return logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 InstrumentT = typing.TypeVar("InstrumentT", bound=BaseInstrument)
@@ -40,6 +23,24 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
     instruments: list[BaseInstrument]
     skipped_instruments: list[tuple[type[BaseInstrument], str]]
     bootstrap_config: BaseConfig
+
+    def build_summary(self) -> str:
+        """Return a multi-line human-readable summary of configured + skipped instruments.
+
+        Useful for INFO-level diagnostic logging (called once by ``__init__``) and for
+        post-construction debugging (e.g. from a REPL or a health endpoint).
+        """
+        lines = [f"{type(self).__name__}:", "  configured:"]
+        if self.instruments:
+            lines.extend(f"    - {type(i).__name__}" for i in self.instruments)
+        else:
+            lines.append("    (none)")
+        lines.append("  skipped:")
+        if self.skipped_instruments:
+            lines.extend(f"    - {cls.__name__}: {reason}" for cls, reason in self.skipped_instruments)
+        else:
+            lines.append("    (none)")
+        return "\n".join(lines)
 
     def __init__(self, bootstrap_config: BaseConfig) -> None:
         self.is_bootstrapped = False
@@ -67,11 +68,7 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
                 continue
             self.instruments.append(instrument_type(bootstrap_config=self.bootstrap_config))
 
-        _get_logger().info(
-            f"{type(self).__name__}: "
-            f"configured={[type(i).__name__ for i in self.instruments]}, "
-            f"skipped={[(cls.__name__, reason) for cls, reason in self.skipped_instruments]}"
-        )
+        logger.info(self.build_summary())
 
     @property
     @abc.abstractmethod
@@ -101,7 +98,7 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
                 one_instrument.teardown()
             except Exception as e:  # noqa: BLE001, PERF203
                 name = type(one_instrument).__name__
-                _get_logger().warning(f"Error tearing down {name}: {e}")
+                logger.warning("Error tearing down %s: %s", name, e)
                 errors.append((name, e))
         if errors:
             raise TeardownError(errors) from errors[0][1]

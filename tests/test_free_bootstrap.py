@@ -1,8 +1,8 @@
+import logging
 from unittest.mock import MagicMock
 
 import pytest
 import structlog
-from structlog.testing import capture_logs
 
 from lite_bootstrap import (
     FreeBootstrapper,
@@ -53,7 +53,7 @@ def test_free_bootstrap_logging_disabled() -> None:
     assert PyroscopeInstrument in skipped_classes
 
 
-def test_teardown_error_isolation(free_bootstrapper_config: FreeConfig) -> None:
+def test_teardown_error_isolation(free_bootstrapper_config: FreeConfig, caplog: pytest.LogCaptureFixture) -> None:
     bootstrapper = FreeBootstrapper(bootstrap_config=free_bootstrapper_config)
     bootstrapper.bootstrap()
 
@@ -63,13 +63,16 @@ def test_teardown_error_isolation(free_bootstrapper_config: FreeConfig) -> None:
     good = MagicMock()
     bootstrapper.instruments = [bad, good]
 
-    with capture_logs() as cap_logs, pytest.raises(TeardownError, match="boom") as excinfo:
+    with (
+        caplog.at_level(logging.WARNING, logger="lite_bootstrap.bootstrappers.base"),
+        pytest.raises(TeardownError, match="boom") as excinfo,
+    ):
         bootstrapper.teardown()
 
     # Both instruments attempted teardown despite the error (LIFO: good first, bad second).
     good.teardown.assert_called_once()
     bad.teardown.assert_called_once()
-    assert any("boom" in entry.get("event", "") for entry in cap_logs)
+    assert any("boom" in r.message for r in caplog.records)
     assert excinfo.value.errors == [("MagicMock", excinfo.value.__cause__)]
 
 
@@ -141,16 +144,33 @@ def test_bootstrap_is_idempotent(free_bootstrapper_config: FreeConfig) -> None:
     assert bootstrapper.is_bootstrapped
 
 
-def test_free_bootstrap_emits_summary_log() -> None:
-    with capture_logs() as cap_logs:
+def test_free_bootstrap_emits_summary_log(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(logging.INFO, logger="lite_bootstrap.bootstrappers.base"):
         FreeBootstrapper(
             bootstrap_config=FreeConfig(
                 sentry_dsn="https://testdsn@localhost/1",
                 sentry_additional_params={"transport": SentryTestTransport()},
             ),
         )
-    summary_entries = [e for e in cap_logs if "FreeBootstrapper" in e.get("event", "")]
-    assert summary_entries, "expected a summary log entry mentioning FreeBootstrapper"
-    summary_event = summary_entries[-1]["event"]
-    assert "configured=" in summary_event
-    assert "skipped=" in summary_event
+    summary_records = [r for r in caplog.records if "FreeBootstrapper" in r.message]
+    assert summary_records, "expected a summary log entry mentioning FreeBootstrapper"
+    summary = summary_records[-1].message
+    assert "configured:" in summary
+    assert "skipped:" in summary
+
+
+def test_build_summary_format() -> None:
+    bootstrapper = FreeBootstrapper(
+        bootstrap_config=FreeConfig(
+            sentry_dsn="https://testdsn@localhost/1",
+            sentry_additional_params={"transport": SentryTestTransport()},
+            logging_enabled=False,
+            logging_buffer_capacity=0,
+        ),
+    )
+    summary = bootstrapper.build_summary()
+    assert summary.startswith("FreeBootstrapper:")
+    assert "  configured:" in summary
+    assert "  skipped:" in summary
+    assert "    - SentryInstrument" in summary
+    assert "    - LoggingInstrument: logging_enabled is False" in summary
