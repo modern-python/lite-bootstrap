@@ -68,6 +68,16 @@ Install via `pip install lite-bootstrap[<group>]` or `uv add lite-bootstrap[<gro
 | `free-all` | sentry + otl + logging |
 | `pyroscope` | pyroscope-io (add to any group) |
 
+## Planning artifacts
+
+Design docs and implementation plans live under `planning/` at the repo root, not under `docs/` (so they're excluded from the mkdocs site automatically):
+
+- `planning/specs/` — design docs / specs (output of brainstorming). Filename: `YYYY-MM-DD-<topic>-design.md`.
+- `planning/plans/` — step-by-step implementation plans (output of writing-plans). Filename: `YYYY-MM-DD-<topic>-plan.md` or `YYYY-MM-DD-pr<N>-<slug>.md` for per-PR plans.
+- `planning/templates/` — local templates (e.g. `lightweight-plan-template.md`).
+
+When superpowers skills default to `docs/superpowers/specs/`, use `planning/specs/` here instead.
+
 ## Code style
 
 - Line length: 120 characters (ruff enforced)
