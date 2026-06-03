@@ -2,8 +2,6 @@ site_name: lite-bootstrap
 repo_url: https://github.com/modern-python/lite-bootstrap
 docs_dir: docs
 edit_uri: edit/main/docs/
-exclude_docs: |
-  superpowers/
 nav:
   - Introduction:
       - Installation: introduction/installation.md
