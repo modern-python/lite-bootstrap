@@ -200,6 +200,17 @@ class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI"]):
         super().__init__(bootstrap_config)
 
         application = _narrow_app(self.bootstrap_config)
+        # FastAPI's lifespan_context is opaque after wrap; tag the app instance directly
+        # rather than squatting in Starlette's user-facing application.state namespace.
+        if getattr(application, "_lite_bootstrap_lifespan_attached", False):
+            warnings.warn(
+                "FastAPI application already has a lite-bootstrap lifespan wrapper attached; "
+                "skipping re-wrap. This FastAPIBootstrapper's teardown will not be invoked on "
+                "ASGI shutdown — construct one FastAPIBootstrapper per application.",
+                stacklevel=2,
+            )
+            return
+        application._lite_bootstrap_lifespan_attached = True  # noqa: SLF001  # ty: ignore[unresolved-attribute]
         old_lifespan_manager = application.router.lifespan_context
         application.router.lifespan_context = _merge_lifespan_context(
             old_lifespan_manager,
