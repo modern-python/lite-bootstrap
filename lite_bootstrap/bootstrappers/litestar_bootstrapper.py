@@ -1,6 +1,8 @@
+import contextlib
 import dataclasses
 import pathlib
 import typing
+import weakref
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
@@ -76,9 +78,10 @@ if import_checker.is_litestar_opentelemetry_installed:
         def __init__(self, tracer_provider: "TracerProvider", excluded_urls: set[str]) -> None:
             self._tracer_provider = tracer_provider
             self._excluded_urls = ",".join(excluded_urls)
-            # Cache keyed by id(next_app); Litestar's ASGI app instances are stable for
-            # the middleware lifetime, so id-reuse-after-GC isn't a concern.
-            self._otel_apps: dict[int, ASGIApp] = {}
+            # WeakKeyDictionary so wrapper apps are evicted when Litestar drops the
+            # next_app reference (hot reload, plugin add/remove, AppConfig rebuild).
+            # Apps that don't support weak references are simply not cached.
+            self._otel_apps: weakref.WeakKeyDictionary[ASGIApp, ASGIApp] = weakref.WeakKeyDictionary()
 
         async def handle(
             self,
@@ -87,16 +90,19 @@ if import_checker.is_litestar_opentelemetry_installed:
             send: "Send",
             next_app: "ASGIApp",
         ) -> None:
-            otel_app = self._otel_apps.get(id(next_app))
+            otel_app: ASGIApp | None = None
+            with contextlib.suppress(TypeError):
+                otel_app = self._otel_apps.get(next_app)
             if otel_app is None:
-                otel_app = OpenTelemetryMiddleware(
+                otel_app = OpenTelemetryMiddleware(  # ty: ignore[invalid-assignment]
                     app=next_app,
                     default_span_details=build_litestar_route_details_from_scope,
                     excluded_urls=self._excluded_urls,
                     tracer_provider=self._tracer_provider,
                 )
-                self._otel_apps[id(next_app)] = otel_app  # ty: ignore[invalid-assignment]
-            await otel_app(scope, receive, send)  # ty: ignore[invalid-argument-type]
+                with contextlib.suppress(TypeError):
+                    self._otel_apps[next_app] = otel_app  # ty: ignore[invalid-assignment]
+            await otel_app(scope, receive, send)  # ty: ignore[call-non-callable]
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
