@@ -1,6 +1,7 @@
 import contextlib
 import sys
 import typing
+import warnings
 from importlib import reload
 
 import pytest
@@ -10,6 +11,17 @@ from sentry_sdk.envelope import Envelope
 from structlog.typing import EventDict, WrappedLogger
 
 from lite_bootstrap import import_checker
+from lite_bootstrap.exceptions import InstrumentSkippedWarning
+
+
+def pytest_configure() -> None:
+    """Escalate InstrumentSkippedWarning (and subclasses) to errors.
+
+    Done here rather than via filterwarnings in pyproject.toml to avoid pytest
+    resolving the warning class before pytest-cov starts coverage, which would
+    cause coverage to miss the lite_bootstrap module-level statements.
+    """
+    warnings.filterwarnings("error", category=InstrumentSkippedWarning)
 
 
 class CustomInstrumentor(BaseInstrumentor):
