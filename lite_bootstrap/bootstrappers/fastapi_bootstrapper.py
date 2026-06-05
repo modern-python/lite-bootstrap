@@ -76,7 +76,9 @@ class FastAPIConfig(
 
 
 def _narrow_app(config: "FastAPIConfig") -> "fastapi.FastAPI":
-    assert not isinstance(config.application, UnsetType)
+    if isinstance(config.application, UnsetType):
+        msg = "FastAPIConfig.application is UNSET; __post_init__ did not run"
+        raise TypeError(msg)
     return config.application
 
 
