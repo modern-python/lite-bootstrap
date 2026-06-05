@@ -4,6 +4,7 @@ import sys
 import typing
 
 from lite_bootstrap import import_checker
+from lite_bootstrap.exceptions import TeardownError
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 from lite_bootstrap.instruments.logging_factory import (
     AddressProtocol,
@@ -164,15 +165,31 @@ class LoggingInstrument(BaseInstrument[LoggingConfig]):
         """Reset structlog and root logger.
 
         Root logger level is unconditionally set to WARNING; pre-existing user configuration is overwritten.
+
+        Best-effort cleanup: errors from individual ``handler.close()`` calls and from the memory
+        logger factory's ``close_handlers()`` are collected and re-raised together via
+        :class:`~lite_bootstrap.exceptions.TeardownError` after the rest of teardown completes,
+        so no single misbehaving cleanup step prevents the instrument from releasing the
+        rest of its resources.
         """
         structlog.reset_defaults()
         root_logger = logging.getLogger()
-        for h in root_logger.handlers[:]:
-            root_logger.removeHandler(h)
-            h.close()
-        root_logger.setLevel(logging.WARNING)
-        if self._logger_factory is not None:
-            try:
-                self._logger_factory.close_handlers()
-            finally:
-                self._logger_factory = None
+        errors: list[tuple[str, BaseException]] = []
+        try:
+            for h in root_logger.handlers[:]:
+                root_logger.removeHandler(h)
+                try:
+                    h.close()
+                except Exception as e:  # noqa: BLE001
+                    errors.append((type(h).__name__, e))
+            root_logger.setLevel(logging.WARNING)
+        finally:
+            if self._logger_factory is not None:
+                try:
+                    self._logger_factory.close_handlers()
+                except Exception as e:  # noqa: BLE001
+                    errors.append(("MemoryLoggerFactory", e))
+                finally:
+                    self._logger_factory = None
+        if errors:
+            raise TeardownError(errors) from errors[0][1]
