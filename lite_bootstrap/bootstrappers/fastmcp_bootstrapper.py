@@ -154,8 +154,9 @@ class FastMcpBootstrapper(BaseBootstrapper["FastMCP[typing.Any]"]):
         super().__init__(bootstrap_config)
         if any(isinstance(p, _TeardownProvider) for p in self.bootstrap_config.application.providers):
             warnings.warn(
-                "FastMCP application already has a _TeardownProvider attached; "
-                "skipping re-attachment. Construct one FastMcpBootstrapper per application.",
+                "FastMCP application already has a _TeardownProvider attached; skipping re-attachment. "
+                "This FastMcpBootstrapper's teardown will not be invoked on ASGI shutdown — "
+                "construct one FastMcpBootstrapper per application.",
                 stacklevel=2,
             )
             return
