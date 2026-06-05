@@ -1,9 +1,12 @@
 import logging
+import typing
 import warnings
 from unittest.mock import patch
 
 import pytest
+from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
 
+from lite_bootstrap.exceptions import TeardownError
 from lite_bootstrap.instruments.opentelemetry_instrument import (
     InstrumentorWithParams,
     OpenTelemetryConfig,
@@ -146,3 +149,37 @@ def test_opentelemetry_config_no_warning_for_unix_socket_endpoint() -> None:
             opentelemetry_endpoint="unix:///var/run/otel.sock",
             opentelemetry_insecure=True,
         )
+
+
+def test_opentelemetry_teardown_aggregates_instrumentor_and_shutdown_errors() -> None:
+    class BoomInstrumentor(BaseInstrumentor):
+        def instrumentation_dependencies(self) -> typing.Collection[str]:
+            return []
+
+        def _instrument(self, **_kwargs: object) -> None: ...
+
+        def _uninstrument(self, **_kwargs: object) -> None:
+            msg = "instrumentor boom"
+            raise RuntimeError(msg)
+
+    instrument = OpenTelemetryInstrument(
+        bootstrap_config=OpenTelemetryConfig(
+            opentelemetry_instrumentors=[BoomInstrumentor()],
+            opentelemetry_log_traces=True,
+        ),
+    )
+    instrument.bootstrap()
+    tracer_provider = instrument._tracer_provider  # noqa: SLF001
+    assert tracer_provider is not None
+
+    with (
+        patch.object(tracer_provider, "shutdown", side_effect=RuntimeError("shutdown boom")),
+        pytest.raises(TeardownError) as excinfo,
+    ):
+        instrument.teardown()
+
+    error_msgs = [str(err) for _, err in excinfo.value.errors]
+    assert any("instrumentor boom" in m for m in error_msgs), error_msgs
+    assert any("shutdown boom" in m for m in error_msgs), error_msgs
+    assert instrument._tracer_provider is None  # noqa: SLF001
+    assert instrument._prior_logger_disabled == {}  # noqa: SLF001
