@@ -96,6 +96,9 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
     _tracer_provider: "TracerProvider | None" = dataclasses.field(
         default_factory=lambda: None, init=False, repr=False, compare=False
     )
+    _prior_logger_disabled: dict[str, bool] = dataclasses.field(
+        default_factory=dict, init=False, repr=False, compare=False
+    )
 
     @classmethod
     def is_configured(cls, bootstrap_config: "OpenTelemetryConfig") -> bool:
@@ -117,8 +120,10 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
         return excluded_urls
 
     def bootstrap(self) -> None:
-        logging.getLogger("opentelemetry.instrumentation.instrumentor").disabled = True
-        logging.getLogger("opentelemetry.trace").disabled = True
+        for logger_name in ("opentelemetry.instrumentation.instrumentor", "opentelemetry.trace"):
+            otel_logger = logging.getLogger(logger_name)
+            self._prior_logger_disabled[logger_name] = otel_logger.disabled
+            otel_logger.disabled = True
         attributes = {
             resources.SERVICE_NAME: self.bootstrap_config.opentelemetry_service_name
             or self.bootstrap_config.service_name,
@@ -161,6 +166,9 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
                 one_instrumentor.instrumentor.uninstrument(**one_instrumentor.additional_params)
             else:
                 one_instrumentor.uninstrument()
+        for logger_name, prior in self._prior_logger_disabled.items():
+            logging.getLogger(logger_name).disabled = prior
+        self._prior_logger_disabled.clear()
         if self._tracer_provider is not None:
             try:
                 self._tracer_provider.shutdown()
