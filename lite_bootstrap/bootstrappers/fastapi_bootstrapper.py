@@ -65,14 +65,11 @@ class FastAPIConfig(
             # FastAPIConfig stays frozen for user-facing immutability; __post_init__ needs
             # to set application after construction, so we bypass the freeze here.
             object.__setattr__(self, "application", application)
-        else:
-            application = self.application
-            if self.application_kwargs:
-                warnings.warn("application_kwargs must be used without application", stacklevel=2)
-
-        application.title = self.service_name
-        application.debug = self.service_debug
-        application.version = self.service_version
+            application.title = self.service_name
+            application.debug = self.service_debug
+            application.version = self.service_version
+        elif self.application_kwargs:
+            warnings.warn("application_kwargs must be used without application", stacklevel=2)
 
 
 def _narrow_app(config: "FastAPIConfig") -> "fastapi.FastAPI":
