@@ -1,9 +1,11 @@
 import dataclasses
 import logging
 import typing
+import uuid
 from unittest.mock import AsyncMock, patch
 
 import faststream.asgi
+import prometheus_client
 import pytest
 import structlog
 from faststream._internal.broker import BrokerUsecase
@@ -198,5 +200,27 @@ async def test_faststream_health_check_uses_configured_broker_timeout(broker: Re
             response = test_client.get(config.health_checks_path)
             assert response.status_code == status.HTTP_200_OK
         mock_ping.assert_called_once_with(timeout=expected_timeout)
+    finally:
+        bootstrapper.teardown()
+
+
+async def test_faststream_prometheus_uses_injected_registry(broker: RedisBroker) -> None:
+    custom_registry = prometheus_client.CollectorRegistry()
+    counter_name = f"injected_counter_{uuid.uuid4().hex}_total"
+    counter = prometheus_client.Counter(counter_name, "Injected registry counter", registry=custom_registry)
+    counter.inc()
+
+    bootstrap_config = dataclasses.replace(
+        build_faststream_config(broker=broker),
+        prometheus_collector_registry=custom_registry,
+    )
+    bootstrapper = FastStreamBootstrapper(bootstrap_config=bootstrap_config)
+    application = bootstrapper.bootstrap()
+    try:
+        with TestClient(app=application) as test_client:
+            async with TestRedisBroker(broker):
+                response = test_client.get(bootstrap_config.prometheus_metrics_path)
+                assert response.status_code == status.HTTP_200_OK
+                assert counter_name.encode() in response.content
     finally:
         bootstrapper.teardown()

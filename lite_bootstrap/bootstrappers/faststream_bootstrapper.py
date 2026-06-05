@@ -67,6 +67,7 @@ class FastStreamConfig(
     application: "AsgiFastStream" = dataclasses.field(default_factory=_make_asgi_faststream)
     opentelemetry_middleware_cls: type[FastStreamTelemetryMiddlewareProtocol] | None = None
     prometheus_middleware_cls: type[FastStreamPrometheusMiddlewareProtocol] | None = None
+    prometheus_collector_registry: "prometheus_client.CollectorRegistry | None" = None
     faststream_log_level: int = logging.WARNING
     faststream_health_check_broker_timeout: float = 5.0
 
@@ -156,11 +157,13 @@ def _make_collector_registry() -> "prometheus_client.CollectorRegistry":
 @dataclasses.dataclass(kw_only=True)
 class FastStreamPrometheusInstrument(PrometheusInstrument):
     bootstrap_config: FastStreamConfig
-    collector_registry: "prometheus_client.CollectorRegistry" = dataclasses.field(
-        default_factory=_make_collector_registry, init=False
-    )
+    collector_registry: "prometheus_client.CollectorRegistry" = dataclasses.field(init=False)
     not_ready_message = PrometheusInstrument.not_ready_message + " or prometheus_middleware_cls is missing"
     missing_dependency_message = "prometheus_client is not installed"
+
+    def __post_init__(self) -> None:
+        injected = self.bootstrap_config.prometheus_collector_registry
+        self.collector_registry = injected if injected is not None else _make_collector_registry()
 
     @classmethod
     def is_configured(cls, bootstrap_config: "FastStreamConfig") -> bool:  # ty: ignore[invalid-method-override]
