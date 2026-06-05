@@ -155,3 +155,14 @@ def test_user_supplied_app_keeps_title_version_debug() -> None:
     assert user_app.title == "user-title"
     assert user_app.version == "9.9.9"
     assert user_app.debug is False
+
+
+def test_fastapi_config_inherits_otel_insecure_warning() -> None:
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        FastAPIConfig(
+            opentelemetry_endpoint="http://collector.example.com:4317",
+            opentelemetry_insecure=True,
+        )
+    matching = [w for w in caught if "unencrypted" in str(w.message)]
+    assert matching, [str(w.message) for w in caught]

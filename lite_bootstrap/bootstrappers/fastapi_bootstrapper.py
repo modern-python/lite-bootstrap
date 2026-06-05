@@ -56,6 +56,8 @@ class FastAPIConfig(
     prometheus_expose_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        # @dataclass(slots=True) replaces the class object, breaking bare super().
+        super(FastAPIConfig, self).__post_init__()
         if not import_checker.is_fastapi_installed:
             msg = "fastapi is not installed"
             raise ConfigurationError(msg)
