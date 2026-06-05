@@ -169,6 +169,19 @@ def test_faststream_bootstrap_without_opentelemetry(broker: RedisBroker) -> None
         bootstrapper.bootstrap()
 
 
+def test_faststream_teardown_restores_broker_params_storage(broker: RedisBroker) -> None:
+    config = build_faststream_config(broker=broker)
+    original_storage = broker.config.logger.params_storage
+    bootstrapper = FastStreamBootstrapper(bootstrap_config=config)
+    bootstrapper.bootstrap()
+    assert isinstance(broker.config.logger.params_storage, ManualLoggerStorage)
+    assert broker.config.logger.params_storage is not original_storage
+
+    bootstrapper.teardown()
+
+    assert broker.config.logger.params_storage is original_storage
+
+
 async def test_faststream_health_check_uses_configured_broker_timeout(broker: RedisBroker) -> None:
     expected_timeout = 12.5
     config = dataclasses.replace(
