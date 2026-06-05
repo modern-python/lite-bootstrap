@@ -1,0 +1,27 @@
+name: security-audit
+
+on:
+  pull_request: {}
+  schedule:
+    - cron: "0 6 * * 1"  # weekly Monday 06:00 UTC
+
+concurrency:
+  group: security-audit-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  pip-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: "**/pyproject.toml"
+      - run: uv python install 3.10
+      - name: Export locked dependencies
+        run: uv export --all-extras --no-hashes > /tmp/requirements.txt
+      - name: Install pip-audit
+        run: uv tool install pip-audit
+      - name: Audit dependencies
+        run: pip-audit --no-deps --disable-pip -r /tmp/requirements.txt

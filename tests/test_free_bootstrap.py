@@ -189,6 +189,20 @@ def test_config_skip_emits_no_warning() -> None:
     assert LoggingInstrument in {cls for cls, _ in bootstrapper.skipped_instruments}
 
 
+def test_missing_dependency_warning_logs_via_logger_too(
+    free_bootstrapper_config: FreeConfig, caplog: pytest.LogCaptureFixture
+) -> None:
+    with (
+        emulate_package_missing("sentry_sdk"),
+        caplog.at_level(logging.WARNING, logger="lite_bootstrap.bootstrappers.base"),
+        pytest.warns(UserWarning, match="sentry_sdk"),
+    ):
+        FreeBootstrapper(bootstrap_config=free_bootstrapper_config)
+
+    matching = [r for r in caplog.records if "sentry_sdk" in r.message and r.levelname == "WARNING"]
+    assert matching, [r.message for r in caplog.records]
+
+
 def test_build_summary_renders_none_for_empty_sections() -> None:
     bootstrapper = FreeBootstrapper(
         bootstrap_config=FreeConfig(
