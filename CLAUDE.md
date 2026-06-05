@@ -38,6 +38,8 @@ BaseBootstrapper (abc.ABC)
 
 ### Key design decisions
 
+Recent design context, bugs, and convention rationale: see `planning/specs/2026-*-bug-audit-*.md` (audits + retros).
+
 - **Optional dependencies**: Each instrument checks for its optional package via `import_checker.py` (`importlib.util.find_spec`). Instruments are skipped silently if the package is absent. Optional packages are imported inside `if import_checker.is_X_installed:` blocks; static analyzers that don't model this guard will report spurious "possibly unbound" diagnostics — the project uses `ty` which handles the pattern correctly.
 - **Instrument skip ordering**: `BaseBootstrapper.__init__` runs `instrument_type.is_configured(config)` first (silent skip if the user's config indicates the instrument shouldn't run — populates `bootstrapper.skipped_instruments: list[tuple[type, str]]`); then `check_dependencies()` (emits `InstrumentDependencyMissingWarning` only for configured-but-dep-missing — the genuine deployment surprise); then instantiates. One `logger.info` summary line at the end lists configured + skipped instruments via `BaseBootstrapper.build_summary()`; that method is also publicly callable for post-construction debugging. Uses stdlib `logging` so it composes cleanly with the user's logging setup and with pytest's `caplog`.
 - **Frozen configs, non-frozen instruments**: All `*Config` classes are `@dataclasses.dataclass(kw_only=True, frozen=True)`. All `*Instrument` classes lose `frozen=True` because two instruments (`LoggingInstrument`, `OpenTelemetryInstrument`) cache mutable runtime state (`_logger_factory`, `_tracer_provider`); Python's dataclass rules require the whole hierarchy to be non-frozen. `from_dict()` and `from_object()` filter unknown keys before constructing.
@@ -50,24 +52,14 @@ BaseBootstrapper (abc.ABC)
 
 ### Module layout
 
-- `lite_bootstrap/bootstrappers/` — framework-specific bootstrappers and their config classes
-- `lite_bootstrap/instruments/` — individual instrument implementations (one file per tool)
-- `lite_bootstrap/helpers/` — utility functions (`fastapi_helpers.py` serves offline Swagger UI assets)
-- `lite_bootstrap/import_checker.py` — detects installed optional packages
-- `lite_bootstrap/types.py` — shared TypeVars and `UnsetType` / `UNSET` sentinel
-- `lite_bootstrap/instruments/logging_factory.py` — `MemoryLoggerFactory`, factory config, structlog serializer, ASGI protocols
+One file per instrument under `lite_bootstrap/instruments/`, one per framework under `lite_bootstrap/bootstrappers/`. Non-obvious files worth knowing:
+
+- `lite_bootstrap/types.py` — `UnsetType` + `UNSET` singleton used as the "user did not supply this" sentinel (notably for `FastAPIConfig.application`).
+- `lite_bootstrap/instruments/logging_factory.py` — `MemoryLoggerFactory`, factory config, structlog serializer, ASGI protocols. Split out of `logging_instrument.py` to keep each file scoped to one job.
 
 ### Optional dependency groups
 
-Install via `pip install lite-bootstrap[<group>]` or `uv add lite-bootstrap[<group>]`:
-
-| Group | Contents |
-|-------|----------|
-| `fastapi-all` | fastapi + sentry + otl + logging + metrics |
-| `litestar-all` | litestar + sentry + otl + logging |
-| `faststream-all` | faststream + sentry + otl + logging |
-| `free-all` | sentry + otl + logging |
-| `pyroscope` | pyroscope-io (add to any group) |
+See `[project.optional-dependencies]` in `pyproject.toml` for the full extras matrix.
 
 ## Planning artifacts
 
