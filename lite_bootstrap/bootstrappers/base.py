@@ -65,6 +65,11 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
                     category=InstrumentDependencyMissingWarning,
                     stacklevel=3,
                 )
+                logger.warning(
+                    "instrument %s skipped: %s",
+                    instrument_type.__name__,
+                    instrument_type.missing_dependency_message,
+                )
                 continue
             self.instruments.append(instrument_type(bootstrap_config=self.bootstrap_config))
 
