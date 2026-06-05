@@ -1,3 +1,4 @@
+import logging
 from unittest.mock import patch
 
 import pytest
@@ -68,3 +69,23 @@ def test_opentelemetry_instrument_teardown_resets_tracer_provider_when_shutdown_
         instrument.teardown()
 
     assert instrument._tracer_provider is None  # noqa: SLF001
+
+
+def test_opentelemetry_teardown_restores_disabled_loggers() -> None:
+    instrumentor_logger = logging.getLogger("opentelemetry.instrumentation.instrumentor")
+    trace_logger = logging.getLogger("opentelemetry.trace")
+    # Capture pre-bootstrap state so the assertion is independent of test order.
+    prior_instrumentor_disabled = instrumentor_logger.disabled
+    prior_trace_disabled = trace_logger.disabled
+
+    instrument = OpenTelemetryInstrument(
+        bootstrap_config=OpenTelemetryConfig(opentelemetry_log_traces=True),
+    )
+    instrument.bootstrap()
+    assert instrumentor_logger.disabled is True
+    assert trace_logger.disabled is True
+
+    instrument.teardown()
+
+    assert instrumentor_logger.disabled is prior_instrumentor_disabled
+    assert trace_logger.disabled is prior_trace_disabled

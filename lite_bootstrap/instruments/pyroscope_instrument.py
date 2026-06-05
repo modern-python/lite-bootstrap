@@ -32,9 +32,11 @@ class PyroscopeInstrument(BaseInstrument[PyroscopeConfig]):
         return import_checker.is_pyroscope_installed
 
     def bootstrap(self) -> None:
-        # is_configured() guarantees pyroscope_endpoint is set; assert documents the precondition
-        # for type narrowing and for direct callers that bypass the bootstrapper.
-        assert self.bootstrap_config.pyroscope_endpoint is not None
+        # is_configured() guarantees pyroscope_endpoint is set when called via the
+        # bootstrapper. Direct callers bypassing is_configured see an explicit raise.
+        if self.bootstrap_config.pyroscope_endpoint is None:
+            msg = "pyroscope_endpoint is unset; PyroscopeInstrument.is_configured() should have returned False"
+            raise RuntimeError(msg)
         namespace = self.bootstrap_config.opentelemetry_namespace
         tags = ({"service_namespace": namespace} if namespace else {}) | self.bootstrap_config.pyroscope_tags
         pyroscope.configure(

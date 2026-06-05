@@ -6,6 +6,7 @@ import pytest
 import structlog
 from opentelemetry.trace import get_tracer
 
+from lite_bootstrap.exceptions import TeardownError
 from lite_bootstrap.instruments.logging_factory import _MemoryLoggerFactoryConfig
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument, MemoryLoggerFactory
 from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryConfig, OpenTelemetryInstrument
@@ -154,8 +155,60 @@ def test_logging_instrument_teardown_resets_factory_when_close_handlers_raises()
 
     with (
         patch.object(factory, "close_handlers", side_effect=RuntimeError("boom")),
-        pytest.raises(RuntimeError, match="boom"),
+        pytest.raises(TeardownError) as excinfo,
     ):
         instrument.teardown()
 
+    assert any("boom" in str(err) for _, err in excinfo.value.errors)
+    assert instrument._logger_factory is None  # noqa: SLF001
+
+
+def test_logging_instrument_teardown_aggregates_handler_close_errors() -> None:
+    instrument = LoggingInstrument(
+        bootstrap_config=LoggingConfig(logging_buffer_capacity=0),
+    )
+    instrument.bootstrap()
+    root_logger = logging.getLogger()
+
+    # Find the StreamHandler added by _configure_foreign_loggers and patch its close.
+    bootstrap_added = [h for h in root_logger.handlers if isinstance(h, logging.StreamHandler)]
+    assert bootstrap_added, "bootstrap should have added at least one StreamHandler to root"
+    target_handler = bootstrap_added[0]
+
+    with (
+        patch.object(target_handler, "close", side_effect=RuntimeError("boom")),
+        pytest.raises(TeardownError, match="boom") as excinfo,
+    ):
+        instrument.teardown()
+    assert isinstance(excinfo.value.__cause__, RuntimeError)
+    assert any("boom" in str(err) for _, err in excinfo.value.errors)
+
+    # After teardown despite the raise, post-loop cleanup must have completed:
+    assert instrument._logger_factory is None  # noqa: SLF001
+    assert root_logger.level == logging.WARNING
+    # And the broken handler must have been removed from root despite raising.
+    assert target_handler not in root_logger.handlers
+
+
+def test_logging_instrument_teardown_aggregates_handler_and_factory_errors() -> None:
+    instrument = LoggingInstrument(
+        bootstrap_config=LoggingConfig(logging_buffer_capacity=0),
+    )
+    instrument.bootstrap()
+    root_logger = logging.getLogger()
+    factory = instrument._logger_factory  # noqa: SLF001
+    assert factory is not None
+
+    target_handler = next(h for h in root_logger.handlers if isinstance(h, logging.StreamHandler))
+
+    with (
+        patch.object(target_handler, "close", side_effect=RuntimeError("handler boom")),
+        patch.object(factory, "close_handlers", side_effect=RuntimeError("factory boom")),
+        pytest.raises(TeardownError) as excinfo,
+    ):
+        instrument.teardown()
+
+    error_msgs = [str(err) for _, err in excinfo.value.errors]
+    assert any("handler boom" in m for m in error_msgs), error_msgs
+    assert any("factory boom" in m for m in error_msgs), error_msgs
     assert instrument._logger_factory is None  # noqa: SLF001

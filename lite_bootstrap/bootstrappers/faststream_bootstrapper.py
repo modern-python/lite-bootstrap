@@ -110,6 +110,8 @@ class FastStreamHealthChecksInstrument(HealthChecksInstrument):
 @dataclasses.dataclass(kw_only=True)
 class FastStreamLoggingInstrument(LoggingInstrument):
     bootstrap_config: FastStreamConfig
+    _prior_broker_params_storage: typing.Any = dataclasses.field(default=None, init=False, repr=False, compare=False)
+    _broker_logger_replaced: bool = dataclasses.field(default=False, init=False, repr=False, compare=False)
 
     def bootstrap(self) -> None:
         super().bootstrap()
@@ -117,7 +119,18 @@ class FastStreamLoggingInstrument(LoggingInstrument):
         if broker is not None and import_checker.is_structlog_installed and import_checker.is_faststream_installed:
             logger = structlog.get_logger("faststream")
             logger.setLevel(self.bootstrap_config.faststream_log_level)
+            self._prior_broker_params_storage = broker.config.logger.params_storage
             broker.config.logger.params_storage = ManualLoggerStorage(logger)
+            self._broker_logger_replaced = True
+
+    def teardown(self) -> None:
+        if self._broker_logger_replaced:
+            broker = self.bootstrap_config.application.broker
+            if broker is not None:
+                broker.config.logger.params_storage = self._prior_broker_params_storage
+            self._broker_logger_replaced = False
+            self._prior_broker_params_storage = None
+        super().teardown()
 
 
 @dataclasses.dataclass(kw_only=True)

@@ -1,5 +1,6 @@
 import dataclasses
 import logging
+import warnings
 
 import fastapi
 import pytest
@@ -8,6 +9,8 @@ from starlette import status
 from starlette.testclient import TestClient
 
 from lite_bootstrap import FastAPIBootstrapper, FastAPIConfig
+from lite_bootstrap.bootstrappers.fastapi_bootstrapper import _narrow_app
+from lite_bootstrap.types import UNSET
 from tests.conftest import CustomInstrumentor, SentryTestTransport, emulate_package_missing
 
 
@@ -111,3 +114,30 @@ def test_fastapi_bootstrapper_with_missing_instrument_dependency(
 ) -> None:
     with emulate_package_missing(package_name), pytest.warns(UserWarning, match=package_name):
         FastAPIBootstrapper(bootstrap_config=fastapi_config)
+
+
+def test_second_fastapi_bootstrapper_on_same_app_warns_not_stacks(fastapi_config: FastAPIConfig) -> None:
+    application = fastapi.FastAPI()
+    config_a = dataclasses.replace(fastapi_config, application=application)
+    FastAPIBootstrapper(bootstrap_config=config_a)
+    lifespan_after_first = application.router.lifespan_context
+
+    config_b = dataclasses.replace(fastapi_config, application=application)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        FastAPIBootstrapper(bootstrap_config=config_b)
+
+    matching = [w for w in caught if "already has a lite-bootstrap lifespan" in str(w.message)]
+    assert matching, "expected warning about existing lite-bootstrap lifespan"
+    assert application.router.lifespan_context is lifespan_after_first, (
+        "second bootstrapper must not re-wrap the lifespan"
+    )
+
+
+def test_narrow_app_raises_when_application_unset() -> None:
+    # Build a config and forcibly reset application to UNSET to simulate the
+    # invariant violation `_narrow_app` was guarding with an assert.
+    config = FastAPIConfig()
+    object.__setattr__(config, "application", UNSET)
+    with pytest.raises(TypeError, match="application is UNSET"):
+        _narrow_app(config)

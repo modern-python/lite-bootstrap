@@ -34,19 +34,21 @@ def minimal_sentry_config(sentry_mock: SentryTestTransport) -> SentryConfig:
 
 
 def test_sentry_instrument_with_raise(minimal_sentry_config: SentryConfig, sentry_mock: SentryTestTransport) -> None:
-    SentryInstrument(bootstrap_config=minimal_sentry_config).bootstrap()
+    instrument = SentryInstrument(bootstrap_config=minimal_sentry_config)
+    instrument.bootstrap()
 
     try:
         std_logger.error("some error")
         assert len(sentry_mock.mock_envelopes) == 1
     finally:
-        sentry_sdk.init()
+        instrument.teardown()
 
 
 def test_sentry_instrument_with_structlog_error(
     minimal_sentry_config: SentryConfig, sentry_mock: SentryTestTransport, logging_mock: LoggingMock
 ) -> None:
-    SentryInstrument(bootstrap_config=minimal_sentry_config).bootstrap()
+    sentry_instrument = SentryInstrument(bootstrap_config=minimal_sentry_config)
+    sentry_instrument.bootstrap()
     logging_instrument = LoggingInstrument(
         bootstrap_config=LoggingConfig(
             logging_unset_handlers=["uvicorn"],
@@ -62,8 +64,18 @@ def test_sentry_instrument_with_structlog_error(
         logger.error("some error, skipping sentry", skip_sentry=True)
         assert len(sentry_mock.mock_envelopes) == 1
     finally:
-        sentry_sdk.init()
         logging_instrument.teardown()
+        sentry_instrument.teardown()
+
+
+def test_sentry_teardown_disables_sdk(minimal_sentry_config: SentryConfig) -> None:
+    instrument = SentryInstrument(bootstrap_config=minimal_sentry_config)
+    instrument.bootstrap()
+    assert sentry_sdk.get_client().dsn == minimal_sentry_config.sentry_dsn
+
+    instrument.teardown()
+
+    assert sentry_sdk.get_client().dsn is None
 
 
 def test_sentry_instrument_empty_dsn() -> None:
