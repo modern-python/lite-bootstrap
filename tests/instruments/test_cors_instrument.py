@@ -1,3 +1,6 @@
+import pytest
+
+from lite_bootstrap.exceptions import ConfigurationError
 from lite_bootstrap.instruments.cors_instrument import CorsConfig, CorsInstrument
 
 
@@ -39,3 +42,37 @@ def test_cors_instrument_config_defaults() -> None:
 
 def test_cors_check_dependencies() -> None:
     assert CorsInstrument.check_dependencies() is True
+
+
+@pytest.mark.parametrize(
+    ("origins", "regex"),
+    [
+        (["*"], None),
+        ([], ".*"),
+        ([], r".+"),
+        (["*", "http://safe.example.com"], None),
+    ],
+)
+def test_cors_config_rejects_wildcard_with_credentials(origins: list[str], regex: str | None) -> None:
+    with pytest.raises(ConfigurationError, match="Unsafe CORS"):
+        CorsConfig(
+            cors_allowed_origins=origins,
+            cors_allowed_origin_regex=regex,
+            cors_allowed_credentials=True,
+        )
+
+
+def test_cors_config_accepts_credentials_with_explicit_origins() -> None:
+    config = CorsConfig(
+        cors_allowed_origins=["http://example.com"],
+        cors_allowed_credentials=True,
+    )
+    assert config.cors_allowed_credentials is True
+
+
+def test_cors_config_accepts_wildcard_without_credentials() -> None:
+    config = CorsConfig(
+        cors_allowed_origins=["*"],
+        cors_allowed_credentials=False,
+    )
+    assert config.cors_allowed_origins == ["*"]
