@@ -1,6 +1,9 @@
 import dataclasses
+import warnings
 
-from lite_bootstrap import FastAPIConfig
+import pytest
+
+from lite_bootstrap import FastAPIConfig, FastStreamConfig, FreeConfig, LitestarConfig
 from lite_bootstrap.instruments.base import BaseConfig
 from tests.conftest import CustomInstrumentor
 
@@ -92,3 +95,15 @@ def test_from_dict_drops_unknown_keys_silently() -> None:
 def test_from_dict_explicit_none_overrides_default() -> None:
     config = BaseConfig.from_dict({"service_name": None})
     assert config.service_name is None
+
+
+@pytest.mark.parametrize("config_cls", [FreeConfig, LitestarConfig, FastStreamConfig, FastAPIConfig])
+def test_otel_insecure_warning_fires_through_config_cascade(config_cls: type) -> None:
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        config_cls(
+            opentelemetry_endpoint="http://collector.example.com:4317",
+            opentelemetry_insecure=True,
+        )
+    matching = [w for w in caught if "unencrypted" in str(w.message)]
+    assert matching, f"{config_cls.__name__}: {[str(w.message) for w in caught]}"

@@ -24,6 +24,16 @@ Those instruments can be bootstrapped for:
 - [FastAPI](https://lite-bootstrap.readthedocs.io/integrations/fastapi)
 - [FastMCP](https://lite-bootstrap.readthedocs.io/integrations/fastmcp)
 - [services and scripts without frameworks](https://lite-bootstrap.readthedocs.io/integrations/free)
+
+## Lifecycle constraints
+
+A few constraints that aren't obvious from the API:
+
+- **One bootstrapper per application instance.** Constructing two `FastAPIBootstrapper`s around the same `fastapi.FastAPI` (or two `FastMcpBootstrapper`s around the same `FastMCP`) stacks teardown hooks and re-wraps the lifespan. The library warns and skips the second attachment, but the second bootstrapper's `teardown()` won't fire on ASGI shutdown.
+- **One `OpenTelemetryInstrument` per process.** `bootstrap()` calls `opentelemetry.trace.set_tracer_provider(...)`, which the OTel SDK enforces as set-once — subsequent calls log a warning and have no effect. `teardown()` flushes spans and closes exporters but can't reset the process-global pointer.
+- **`teardown()` is idempotent.** `BaseBootstrapper.teardown()` short-circuits if not bootstrapped; per-instrument teardown methods are safe to call multiple times.
+- **Partial teardown failures are aggregated.** If an instrument's teardown raises, the bootstrapper continues with the rest of the instruments and raises `TeardownError` at the end with all collected failures.
+
 ---
 
 Usage examples:

@@ -126,13 +126,15 @@ class FastStreamLoggingInstrument(LoggingInstrument):
             self._broker_logger_replaced = True
 
     def teardown(self) -> None:
-        if self._broker_logger_replaced:
-            broker = self.bootstrap_config.application.broker
-            if broker is not None:
-                broker.config.logger.params_storage = self._prior_broker_params_storage
-            self._broker_logger_replaced = False
-            self._prior_broker_params_storage = None
-        super().teardown()
+        try:
+            if self._broker_logger_replaced:
+                broker = self.bootstrap_config.application.broker
+                if broker is not None:
+                    broker.config.logger.params_storage = self._prior_broker_params_storage
+                self._broker_logger_replaced = False
+                self._prior_broker_params_storage = None
+        finally:
+            super().teardown()
 
 
 @dataclasses.dataclass(kw_only=True)

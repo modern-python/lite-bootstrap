@@ -6,6 +6,7 @@ import urllib.parse
 import warnings
 
 from lite_bootstrap import import_checker
+from lite_bootstrap.exceptions import TeardownError
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 
 
@@ -193,19 +194,27 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
                 one_instrumentor.instrument(tracer_provider=tracer_provider)
 
     def teardown(self) -> None:
+        errors: list[tuple[str, BaseException]] = []
         for one_instrumentor in self.bootstrap_config.opentelemetry_instrumentors:
-            if isinstance(one_instrumentor, InstrumentorWithParams):
-                one_instrumentor.instrumentor.uninstrument(**one_instrumentor.additional_params)
-            else:
-                one_instrumentor.uninstrument()
+            try:
+                if isinstance(one_instrumentor, InstrumentorWithParams):
+                    one_instrumentor.instrumentor.uninstrument(**one_instrumentor.additional_params)
+                else:
+                    one_instrumentor.uninstrument()
+            except Exception as e:  # noqa: BLE001, PERF203
+                errors.append((type(one_instrumentor).__name__, e))
         for logger_name, prior in self._prior_logger_disabled.items():
             logging.getLogger(logger_name).disabled = prior
         self._prior_logger_disabled.clear()
         if self._tracer_provider is not None:
             try:
                 self._tracer_provider.shutdown()
+            except Exception as e:  # noqa: BLE001
+                errors.append(("TracerProvider", e))
             finally:
                 self._tracer_provider = None
+        if errors:
+            raise TeardownError(errors) from errors[0][1]
 
 
 # Backward-compatible alias preserved for users importing the old (lowercase t) spelling.

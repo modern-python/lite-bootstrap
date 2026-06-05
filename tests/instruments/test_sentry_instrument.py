@@ -1,6 +1,7 @@
 import copy
 import logging
 import typing
+from unittest.mock import patch
 
 import pytest
 import sentry_sdk
@@ -134,3 +135,17 @@ class TestSentryEnrichEventFromStructlog:
     )
     def test_modify(self, event_before: "sentry_types.Event", event_after: "sentry_types.Event") -> None:
         assert enrich_sentry_event_from_structlog_log(event_before, {}) == event_after
+
+
+def test_sentry_teardown_runs_init_when_flush_raises(minimal_sentry_config: SentryConfig) -> None:
+    instrument = SentryInstrument(bootstrap_config=minimal_sentry_config)
+    instrument.bootstrap()
+
+    with (
+        patch("sentry_sdk.flush", side_effect=RuntimeError("flush boom")),
+        pytest.raises(RuntimeError, match="flush boom"),
+    ):
+        instrument.teardown()
+
+    # init() still ran (in the finally), so SDK is now disabled.
+    assert sentry_sdk.get_client().dsn is None

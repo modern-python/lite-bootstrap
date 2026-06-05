@@ -17,7 +17,10 @@ from starlette import status
 from starlette.testclient import TestClient
 
 from lite_bootstrap import FastStreamBootstrapper, FastStreamConfig
-from lite_bootstrap.bootstrappers.faststream_bootstrapper import FastStreamOpenTelemetryInstrument
+from lite_bootstrap.bootstrappers.faststream_bootstrapper import (
+    FastStreamLoggingInstrument,
+    FastStreamOpenTelemetryInstrument,
+)
 from tests.conftest import (
     CustomInstrumentor,
     SentryTestTransport,
@@ -236,3 +239,31 @@ async def test_faststream_prometheus_uses_injected_registry(broker: RedisBroker)
                 assert counter_name.encode() in response.content
     finally:
         bootstrapper.teardown()
+
+
+def test_faststream_logging_teardown_runs_super_when_broker_write_raises(broker: RedisBroker) -> None:
+    bootstrap_config = build_faststream_config(broker=broker)
+    instrument = FastStreamLoggingInstrument(bootstrap_config=bootstrap_config)
+    instrument.bootstrap()
+
+    # Make broker.config.logger.params_storage raise on write by promoting the instance to a
+    # subclass that shadows params_storage with a property whose setter always raises.
+    logger_state = broker.config.logger
+
+    class _BrokenLoggerState(type(logger_state)):  # ty: ignore[unsupported-base]
+        @property  # type: ignore[override]
+        def params_storage(self) -> object:  # pragma: no cover
+            return None
+
+        @params_storage.setter
+        def params_storage(self, _value: object) -> None:
+            msg = "broker write boom"
+            raise RuntimeError(msg)
+
+    logger_state.__class__ = _BrokenLoggerState
+
+    # super().teardown() still runs (LoggingInstrument's structlog reset); broker write raises last.
+    with pytest.raises(RuntimeError, match="broker write boom"):
+        instrument.teardown()
+    # If super().teardown() ran, structlog defaults were reset — no exception below.
+    structlog.get_logger("verify-reset")

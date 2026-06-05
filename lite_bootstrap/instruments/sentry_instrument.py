@@ -130,5 +130,7 @@ class SentryInstrument(BaseInstrument[SentryConfig]):
         cleans up after a bootstrap so the same process can be torn down and re-tested
         without leaking the previous DSN/transport into subsequent code.
         """
-        sentry_sdk.flush(timeout=2)
-        sentry_sdk.init()
+        try:
+            sentry_sdk.flush(timeout=2)
+        finally:
+            sentry_sdk.init()
