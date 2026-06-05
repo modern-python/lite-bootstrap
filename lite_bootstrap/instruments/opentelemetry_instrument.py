@@ -79,6 +79,18 @@ if import_checker.is_opentelemetry_installed and import_checker.is_pyroscope_ins
 
 @dataclasses.dataclass(kw_only=True, slots=True)
 class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
+    """OpenTelemetry tracing instrument.
+
+    Lifecycle note: ``bootstrap()`` calls ``opentelemetry.trace.set_tracer_provider``,
+    which the OTel SDK enforces as **set-once per process** (subsequent calls log
+    "Overriding of current TracerProvider is not allowed" and have no effect).
+    ``teardown()`` calls ``shutdown()`` on the provider, which flushes batched
+    spans and closes exporters, but it cannot reset the process-global pointer —
+    callers of ``opentelemetry.trace.get_tracer_provider()`` after teardown will
+    still receive the shut-down provider. The supported lifecycle is one
+    ``OpenTelemetryInstrument`` per process; do not bootstrap a second instance.
+    """
+
     not_ready_message = "opentelemetry_endpoint is empty and opentelemetry_log_traces is False"
     missing_dependency_message = "opentelemetry is not installed"
     _tracer_provider: "TracerProvider | None" = dataclasses.field(
