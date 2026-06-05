@@ -57,10 +57,21 @@ class OpenTelemetryConfig(OpenTelemetryServiceFieldsConfig):
     opentelemetry_generate_health_check_spans: bool = True
 
     def __post_init__(self) -> None:
+        host = self._parse_remote_insecure_host()
+        if host is not None:
+            warnings.warn(
+                f"OTLP exporter sending traces unencrypted to non-local host {host!r}; "
+                "set opentelemetry_insecure=False or use a localhost/unix endpoint.",
+                stacklevel=2,
+            )
+        super().__post_init__()
+
+    def _parse_remote_insecure_host(self) -> str | None:
+        """Return the host name if the endpoint is insecure AND non-local; else None."""
         if not self.opentelemetry_endpoint or not self.opentelemetry_insecure:
-            return
+            return None
         if self.opentelemetry_endpoint.startswith("unix://"):
-            return
+            return None
         # urlparse treats schemeless input as `path`, misparsing `host:port` forms.
         # Prepend `//` so urlparse always sees a network-location-style input.
         raw = self.opentelemetry_endpoint
@@ -69,12 +80,8 @@ class OpenTelemetryConfig(OpenTelemetryServiceFieldsConfig):
         parsed = urllib.parse.urlparse(raw)
         host = (parsed.hostname or "").lower()
         if host in _LOCAL_HOSTS:
-            return
-        warnings.warn(
-            f"OTLP exporter sending traces unencrypted to non-local host {host!r}; "
-            "set opentelemetry_insecure=False or use a localhost/unix endpoint.",
-            stacklevel=2,
-        )
+            return None
+        return host
 
 
 if import_checker.is_opentelemetry_installed and import_checker.is_pyroscope_installed:

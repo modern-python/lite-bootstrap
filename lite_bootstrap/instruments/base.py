@@ -12,6 +12,14 @@ class BaseConfig:
     service_environment: str | None = None
     service_debug: bool = True
 
+    def __post_init__(self) -> None:
+        """Terminate the MRO __post_init__ cascade safely.
+
+        Subclasses call super().__post_init__() to propagate through multiple-inheritance
+        chains (e.g. FastAPIConfig → CorsConfig → OpenTelemetryConfig → BaseConfig).
+        Without this no-op, the chain would raise AttributeError on object.
+        """
+
     @classmethod
     def from_dict(cls, data: dict[str, typing.Any]) -> typing_extensions.Self:
         """Build a config from a dict; unknown keys are silently dropped, explicit None overrides defaults."""
