@@ -17,6 +17,7 @@ from starlette import status
 from starlette.testclient import TestClient
 
 from lite_bootstrap import FastStreamBootstrapper, FastStreamConfig
+from lite_bootstrap.bootstrappers.faststream_bootstrapper import FastStreamOpenTelemetryInstrument
 from tests.conftest import (
     CustomInstrumentor,
     SentryTestTransport,
@@ -202,6 +203,17 @@ async def test_faststream_health_check_uses_configured_broker_timeout(broker: Re
         mock_ping.assert_called_once_with(timeout=expected_timeout)
     finally:
         bootstrapper.teardown()
+
+
+def test_faststream_opentelemetry_excluded_urls_in_built_set(broker: RedisBroker) -> None:
+    bootstrap_config = dataclasses.replace(
+        build_faststream_config(broker=broker),
+        opentelemetry_excluded_urls=["/foo", "/bar"],
+    )
+    instrument = FastStreamOpenTelemetryInstrument(bootstrap_config=bootstrap_config)
+    excluded = instrument._build_excluded_urls()  # noqa: SLF001
+    assert "/foo" in excluded
+    assert "/bar" in excluded
 
 
 async def test_faststream_prometheus_uses_injected_registry(broker: RedisBroker) -> None:

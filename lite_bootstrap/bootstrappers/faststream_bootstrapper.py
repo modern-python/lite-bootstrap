@@ -66,6 +66,7 @@ class FastStreamConfig(
 ):
     application: "AsgiFastStream" = dataclasses.field(default_factory=_make_asgi_faststream)
     opentelemetry_middleware_cls: type[FastStreamTelemetryMiddlewareProtocol] | None = None
+    opentelemetry_excluded_urls: list[str] = dataclasses.field(default_factory=list)
     prometheus_middleware_cls: type[FastStreamPrometheusMiddlewareProtocol] | None = None
     prometheus_collector_registry: "prometheus_client.CollectorRegistry | None" = None
     faststream_log_level: int = logging.WARNING
