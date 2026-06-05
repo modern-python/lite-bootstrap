@@ -141,3 +141,28 @@ def test_narrow_app_raises_when_application_unset() -> None:
     object.__setattr__(config, "application", UNSET)
     with pytest.raises(TypeError, match="application is UNSET"):
         _narrow_app(config)
+
+
+def test_user_supplied_app_keeps_title_version_debug() -> None:
+    user_app = fastapi.FastAPI(title="user-title", version="9.9.9", debug=False)
+    config = FastAPIConfig(
+        application=user_app,
+        service_name="lite-name",
+        service_version="1.0.0",
+        service_debug=True,
+    )
+    assert config.application is user_app
+    assert user_app.title == "user-title"
+    assert user_app.version == "9.9.9"
+    assert user_app.debug is False
+
+
+def test_fastapi_config_inherits_otel_insecure_warning() -> None:
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        FastAPIConfig(
+            opentelemetry_endpoint="http://collector.example.com:4317",
+            opentelemetry_insecure=True,
+        )
+    matching = [w for w in caught if "unencrypted" in str(w.message)]
+    assert matching, [str(w.message) for w in caught]

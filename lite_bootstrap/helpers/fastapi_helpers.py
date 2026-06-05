@@ -1,8 +1,10 @@
 import pathlib
 import typing
+import warnings
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.exceptions import ConfigurationError
+from lite_bootstrap.helpers.path import is_valid_path
 
 
 if import_checker.is_fastapi_installed:
@@ -11,6 +13,26 @@ if import_checker.is_fastapi_installed:
     from fastapi.responses import HTMLResponse
     from fastapi.staticfiles import StaticFiles
     from starlette.routing import Route
+
+
+def _safe_root_path(scope_root_path: str) -> str:
+    """Strip trailing slash and validate against the project's path allowlist.
+
+    An empty ``root_path`` is the normal case (no proxy prefix) and is allowed without warning.
+    Any other path that fails the ``is_valid_path`` regex is rejected (falls back to empty) so
+    that proxy-header-derived root paths can't inject HTML into the offline-docs response.
+    """
+    candidate = scope_root_path.rstrip("/")
+    if not candidate:
+        return ""
+    if not is_valid_path(candidate):
+        warnings.warn(
+            f"root_path {candidate!r} contains characters outside the valid-path allowlist; "
+            "falling back to empty root_path to prevent HTML injection in offline docs.",
+            stacklevel=3,
+        )
+        return ""
+    return candidate
 
 
 def enable_offline_docs(
@@ -36,7 +58,7 @@ def enable_offline_docs(
 
     @app.get(docs_url, include_in_schema=False)
     async def custom_swagger_ui_html(request: Request) -> HTMLResponse:
-        root_path = request.scope.get("root_path", "").rstrip("/")
+        root_path = _safe_root_path(request.scope.get("root_path", ""))
         return get_swagger_ui_html(
             openapi_url=f"{root_path}{app_openapi_url}",
             title=f"{app.title} - Swagger UI",
@@ -51,7 +73,7 @@ def enable_offline_docs(
 
     @app.get(redoc_url, include_in_schema=False)
     async def redoc_html(request: Request) -> HTMLResponse:
-        root_path = request.scope.get("root_path", "").rstrip("/")
+        root_path = _safe_root_path(request.scope.get("root_path", ""))
         return get_redoc_html(
             openapi_url=f"{root_path}{app_openapi_url}",
             title=f"{app.title} - ReDoc",

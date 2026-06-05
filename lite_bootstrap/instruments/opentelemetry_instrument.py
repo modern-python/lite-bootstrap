@@ -2,6 +2,8 @@ import dataclasses
 import logging
 import os
 import typing
+import urllib.parse
+import warnings
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
@@ -38,6 +40,9 @@ class OpenTelemetryServiceFieldsConfig(BaseConfig):
     opentelemetry_namespace: str | None = None
 
 
+_LOCAL_HOSTS: typing.Final[frozenset[str]] = frozenset({"localhost", "127.0.0.1", "::1", ""})
+
+
 @dataclasses.dataclass(kw_only=True, frozen=True)
 class OpenTelemetryConfig(OpenTelemetryServiceFieldsConfig):
     opentelemetry_container_name: str | None = dataclasses.field(
@@ -50,6 +55,33 @@ class OpenTelemetryConfig(OpenTelemetryServiceFieldsConfig):
     )
     opentelemetry_log_traces: bool = False
     opentelemetry_generate_health_check_spans: bool = True
+
+    def __post_init__(self) -> None:
+        host = self._parse_remote_insecure_host()
+        if host is not None:
+            warnings.warn(
+                f"OTLP exporter sending traces unencrypted to non-local host {host!r}; "
+                "set opentelemetry_insecure=False or use a localhost/unix endpoint.",
+                stacklevel=2,
+            )
+        super().__post_init__()
+
+    def _parse_remote_insecure_host(self) -> str | None:
+        """Return the host name if the endpoint is insecure AND non-local; else None."""
+        if not self.opentelemetry_endpoint or not self.opentelemetry_insecure:
+            return None
+        if self.opentelemetry_endpoint.startswith("unix://"):
+            return None
+        # urlparse treats schemeless input as `path`, misparsing `host:port` forms.
+        # Prepend `//` so urlparse always sees a network-location-style input.
+        raw = self.opentelemetry_endpoint
+        if "://" not in raw:
+            raw = f"//{raw}"
+        parsed = urllib.parse.urlparse(raw)
+        host = (parsed.hostname or "").lower()
+        if host in _LOCAL_HOSTS:
+            return None
+        return host
 
 
 if import_checker.is_opentelemetry_installed and import_checker.is_pyroscope_installed:

@@ -1,4 +1,5 @@
 import logging
+import warnings
 from unittest.mock import patch
 
 import pytest
@@ -89,3 +90,59 @@ def test_opentelemetry_teardown_restores_disabled_loggers() -> None:
 
     assert instrumentor_logger.disabled is prior_instrumentor_disabled
     assert trace_logger.disabled is prior_trace_disabled
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "localhost:4317",
+        "127.0.0.1:4317",
+        "[::1]:4317",
+        "http://localhost:4317",
+        "https://127.0.0.1:4317",
+    ],
+)
+def test_opentelemetry_config_no_warning_for_local_endpoints(endpoint: str) -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        OpenTelemetryConfig(opentelemetry_endpoint=endpoint, opentelemetry_insecure=True)
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "collector.example.com:4317",
+        "http://collector.example.com:4317",
+        "grpc://collector.example.com:4317",
+    ],
+)
+def test_opentelemetry_config_warns_for_remote_endpoints(endpoint: str) -> None:
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        OpenTelemetryConfig(opentelemetry_endpoint=endpoint, opentelemetry_insecure=True)
+    matching = [w for w in caught if "unencrypted" in str(w.message)]
+    assert matching, f"endpoint {endpoint!r}: {[str(w.message) for w in caught]}"
+
+
+def test_opentelemetry_config_no_warning_when_insecure_false() -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        OpenTelemetryConfig(
+            opentelemetry_endpoint="https://collector.example.com:4317",
+            opentelemetry_insecure=False,
+        )
+
+
+def test_opentelemetry_config_no_warning_when_endpoint_unset() -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        OpenTelemetryConfig(opentelemetry_log_traces=True)
+
+
+def test_opentelemetry_config_no_warning_for_unix_socket_endpoint() -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        OpenTelemetryConfig(
+            opentelemetry_endpoint="unix:///var/run/otel.sock",
+            opentelemetry_insecure=True,
+        )

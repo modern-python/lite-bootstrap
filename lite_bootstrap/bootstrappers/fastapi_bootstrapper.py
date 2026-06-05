@@ -56,6 +56,8 @@ class FastAPIConfig(
     prometheus_expose_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        # @dataclass(slots=True) replaces the class object, breaking bare super().
+        super(FastAPIConfig, self).__post_init__()
         if not import_checker.is_fastapi_installed:
             msg = "fastapi is not installed"
             raise ConfigurationError(msg)
@@ -65,14 +67,11 @@ class FastAPIConfig(
             # FastAPIConfig stays frozen for user-facing immutability; __post_init__ needs
             # to set application after construction, so we bypass the freeze here.
             object.__setattr__(self, "application", application)
-        else:
-            application = self.application
-            if self.application_kwargs:
-                warnings.warn("application_kwargs must be used without application", stacklevel=2)
-
-        application.title = self.service_name
-        application.debug = self.service_debug
-        application.version = self.service_version
+            application.title = self.service_name
+            application.debug = self.service_debug
+            application.version = self.service_version
+        elif self.application_kwargs:
+            warnings.warn("application_kwargs must be used without application", stacklevel=2)
 
 
 def _narrow_app(config: "FastAPIConfig") -> "fastapi.FastAPI":
