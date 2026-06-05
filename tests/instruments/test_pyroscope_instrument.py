@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import fastapi
 import pyroscope
+import pytest
 from fastapi.testclient import TestClient
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.sdk.trace import TracerProvider as SDKTracerProvider
@@ -21,6 +22,17 @@ _PYROSCOPE_OTEL = "lite_bootstrap.instruments.opentelemetry_instrument.pyroscope
 
 def _make_config(endpoint: str | None = "http://pyroscope:4040") -> PyroscopeConfig:
     return PyroscopeConfig(service_name="test-service", pyroscope_endpoint=endpoint)
+
+
+def test_pyroscope_bootstrap_raises_when_endpoint_unset() -> None:
+    # Build a config that passes is_configured (endpoint set), then forcibly
+    # clear the endpoint to simulate a caller bypassing the bootstrapper's
+    # is_configured gate.
+    config = _make_config()
+    object.__setattr__(config, "pyroscope_endpoint", None)
+    instrument = PyroscopeInstrument(bootstrap_config=config)
+    with pytest.raises(RuntimeError, match="pyroscope_endpoint is unset"):
+        instrument.bootstrap()
 
 
 def test_pyroscope_instrument_not_configured_without_endpoint() -> None:
