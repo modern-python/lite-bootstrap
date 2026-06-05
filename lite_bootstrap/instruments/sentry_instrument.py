@@ -122,3 +122,13 @@ class SentryInstrument(BaseInstrument[SentryConfig]):
         )
         tags: dict[str, str] = self.bootstrap_config.sentry_tags or {}
         sentry_sdk.set_tags(tags)
+
+    def teardown(self) -> None:
+        """Flush pending events and reset the SDK to a no-op state.
+
+        Calling ``sentry_sdk.init()`` with no DSN disables further event capture. This
+        cleans up after a bootstrap so the same process can be torn down and re-tested
+        without leaking the previous DSN/transport into subsequent code.
+        """
+        sentry_sdk.flush(timeout=2)
+        sentry_sdk.init()
