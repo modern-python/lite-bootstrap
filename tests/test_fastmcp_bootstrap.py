@@ -1,5 +1,6 @@
 import typing
 import uuid
+import warnings
 from unittest.mock import MagicMock
 
 import prometheus_client
@@ -266,6 +267,26 @@ def test_fastmcp_bootstrap_without_prometheus_client() -> None:
             bootstrapper = FastMcpBootstrapper(bootstrap_config=FastMcpConfig())
         bootstrapper.bootstrap()
         bootstrapper.teardown()
+
+
+def test_second_fastmcp_bootstrapper_on_same_app_warns_not_stacks() -> None:
+    application = FastMCP()
+    config_a = FastMcpConfig(application=application, service_name="a")
+    bootstrapper_a = FastMcpBootstrapper(bootstrap_config=config_a)
+    providers_after_first = list(application.providers)
+
+    config_b = FastMcpConfig(application=application, service_name="b")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        FastMcpBootstrapper(bootstrap_config=config_b)
+
+    matching = [w for w in caught if "_TeardownProvider" in str(w.message)]
+    assert matching, "expected warning about existing _TeardownProvider"
+    assert list(application.providers) == providers_after_first, (
+        "second bootstrapper must not stack another _TeardownProvider"
+    )
+
+    bootstrapper_a.teardown()
 
 
 def test_fastmcp_bootstrap_without_structlog() -> None:
