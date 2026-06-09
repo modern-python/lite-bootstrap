@@ -36,6 +36,7 @@ dependencies = [
 
 [project.urls]
 repository = "https://github.com/modern-python/lite-bootstrap"
+docs = "https://lite-bootstrap.modern-python.org"
 
 [project.optional-dependencies]
 sentry = [
