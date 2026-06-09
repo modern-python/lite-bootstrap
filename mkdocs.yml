@@ -1,4 +1,5 @@
 site_name: lite-bootstrap
+site_url: https://lite-bootstrap.modern-python.org
 repo_url: https://github.com/modern-python/lite-bootstrap
 docs_dir: docs
 edit_uri: edit/main/docs/
