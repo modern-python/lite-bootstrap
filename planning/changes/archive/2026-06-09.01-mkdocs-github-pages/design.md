@@ -1,3 +1,12 @@
+---
+status: shipped
+date: 2026-06-09
+slug: mkdocs-github-pages
+supersedes: null
+superseded_by: null
+pr: null
+outcome: shipped in the docs+CI modern-di mirror arc (#112–#115)
+---
 # Migrate docs from Read the Docs to GitHub Actions + Pages
 
 Date: 2026-06-09
