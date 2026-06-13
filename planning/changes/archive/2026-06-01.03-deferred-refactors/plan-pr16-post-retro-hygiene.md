@@ -6,7 +6,7 @@
 - `pyproject.toml` — add upper bound to `uv_build` to silence the every-`just lint` warning
 - `lite_bootstrap/instruments/pyroscope_instrument.py` — add a runtime assert on `pyroscope_endpoint` to document the `is_ready()`-enforced invariant
 
-**Parent docs:** Surfaced in the [audit retrospective](../specs/2026-06-01-audit-implementation-retro.md). Neither is an audit finding; both noticed during the retro action-item work (`just lint` warning persistence + Pyright's `reportArgumentType` on pyroscope's `server_address`).
+**Parent docs:** Surfaced in the [audit retrospective](../../retros/2026-06-01-audit-implementation-retro.md). Neither is an audit finding; both noticed during the retro action-item work (`just lint` warning persistence + Pyright's `reportArgumentType` on pyroscope's `server_address`).
 
 This is the first PR using the [lightweight plan template](../templates/lightweight-plan-template.md). Eat your own dog food.
 
