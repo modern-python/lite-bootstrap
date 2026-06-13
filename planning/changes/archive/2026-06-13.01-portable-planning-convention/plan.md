@@ -1,9 +1,9 @@
 ---
-status: draft
+status: shipped
 date: 2026-06-13
 slug: portable-planning-convention
 spec: portable-planning-convention
-pr: null
+pr: "120"
 ---
 
 # Portable planning convention — implementation plan
@@ -762,17 +762,18 @@ needs to understand the capability *now* — not change history.
 
 ---
 
-### On merge (finishing step — not executed during the branch)
+### On merge (finishing step — executed in-PR on #120)
 
-When this PR merges, self-migrate this convention bundle from `active/` to
-`archive/` (it defines the convention, so **no `architecture/` promotion
-applies**):
+This convention bundle self-migrates from `active/` to `archive/` (it defines
+the convention, so **no `architecture/` promotion applies**). Done within the
+shipping PR (#120) rather than as a post-merge step, so merged `main` lands in
+its final archived state:
 
 ```bash
 git mv planning/changes/active/2026-06-13.01-portable-planning-convention \
        planning/changes/archive/2026-06-13.01-portable-planning-convention
 ```
 
-Then set `status: shipped`, `pr:`, `outcome:` in this bundle's `design.md`
-frontmatter and move its line from **Active** to **Archived** in
+`status: shipped`, `pr: "120"`, and `outcome:` are set in this bundle's
+`design.md` frontmatter, and its line moved from **Active** to **Archived** in
 `planning/README.md`'s Index.

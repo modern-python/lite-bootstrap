@@ -1,11 +1,11 @@
 ---
-status: draft
+status: shipped
 date: 2026-06-13
 slug: portable-planning-convention
 supersedes: null
 superseded_by: null
-pr: null
-outcome: null
+pr: "120"
+outcome: "ships in #120 — defines the convention; no architecture/ promotion applies"
 ---
 
 # Design: Adopt the portable OpenSpec-shaped planning convention

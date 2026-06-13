@@ -70,13 +70,14 @@ carry **no** frontmatter — living prose, dated by git.
 
 ### Active
 
-- **[portable-planning-convention](changes/active/2026-06-13.01-portable-planning-convention/design.md)**
-  (2026-06-13) — Adopt the portable two-axis convention: `architecture/` truth
-  home + `changes/` bundles, per-arc bundling of the audit arcs, fresh Index.
-  *This change.*
+_None._
 
 ### Archived (shipped)
 
+- **[portable-planning-convention](changes/archive/2026-06-13.01-portable-planning-convention/design.md)**
+  (#120, 2026-06-13) — Adopt the portable two-axis convention: `architecture/`
+  truth home + `changes/` bundles, per-arc bundling of the audit arcs, fresh
+  Index.
 - **[mkdocs-github-pages](changes/archive/2026-06-09.01-mkdocs-github-pages/design.md)**
   (#112–#115, 2026-06-09) — Docs hosting moved from Read the Docs to GitHub
   Actions + Pages.
