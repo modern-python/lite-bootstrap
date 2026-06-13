@@ -273,7 +273,7 @@ needs to understand the capability *now* — not change history.
   supersedes: instrument-skip-rework
   superseded_by: null
   pr: "107"
-  outcome: merged as #107
+  outcome: "merged as #107"
   ---
   ```
 
@@ -434,7 +434,7 @@ needs to understand the capability *now* — not change history.
   supersedes: null
   superseded_by: null
   pr: null
-  outcome: shipped as #89–#95
+  outcome: "shipped as #89–#95"
   ---
   ```
 
@@ -447,7 +447,7 @@ needs to understand the capability *now* — not change history.
   supersedes: null
   superseded_by: null
   pr: null
-  outcome: shipped as #96–#103
+  outcome: "shipped as #96–#103"
   ---
   ```
 
@@ -460,7 +460,7 @@ needs to understand the capability *now* — not change history.
   supersedes: null
   superseded_by: null
   pr: null
-  outcome: shipped as #108–#110
+  outcome: "shipped as #108–#110"
   ---
   ```
 

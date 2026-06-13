@@ -5,7 +5,7 @@ slug: audit-implementation
 supersedes: null
 superseded_by: null
 pr: null
-outcome: shipped as #89–#95
+outcome: "shipped as #89–#95"
 ---
 # Audit Implementation Sequencing
 

@@ -5,7 +5,7 @@ slug: deferred-refactors
 supersedes: null
 superseded_by: null
 pr: null
-outcome: shipped as #96–#103
+outcome: "shipped as #96–#103"
 ---
 # Deferred Refactors Sequencing
 
