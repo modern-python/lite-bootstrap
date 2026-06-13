@@ -38,7 +38,7 @@ BaseBootstrapper (abc.ABC)
 
 ### Key design decisions
 
-Recent design context, bugs, and convention rationale: see `planning/specs/2026-*-bug-audit-*.md` (audits + retros).
+Recent design context, bugs, and convention rationale: see the bug-audit findings in `planning/audits/` and the post-work reflections in `planning/retros/` (the audit arcs themselves are bundled under `planning/changes/archive/`).
 
 - **Optional dependencies**: Each instrument checks for its optional package via `import_checker.py` (`importlib.util.find_spec`). Instruments are skipped silently if the package is absent. Optional packages are imported inside `if import_checker.is_X_installed:` blocks; static analyzers that don't model this guard will report spurious "possibly unbound" diagnostics — the project uses `ty` which handles the pattern correctly.
 - **Instrument skip ordering**: `BaseBootstrapper.__init__` runs `instrument_type.is_configured(config)` first (silent skip if the user's config indicates the instrument shouldn't run — populates `bootstrapper.skipped_instruments: list[tuple[type, str]]`); then `check_dependencies()` (emits `InstrumentDependencyMissingWarning` only for configured-but-dep-missing — the genuine deployment surprise); then instantiates. One `logger.info` summary line at the end lists configured + skipped instruments via `BaseBootstrapper.build_summary()`; that method is also publicly callable for post-construction debugging. Uses stdlib `logging` so it composes cleanly with the user's logging setup and with pytest's `caplog`.
