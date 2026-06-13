@@ -1,3 +1,10 @@
+---
+status: shipped
+date: 2026-06-02
+slug: stdlib-logging-and-build-summary
+spec: stdlib-logging-and-build-summary
+pr: "107"
+---
 # Stdlib Logging + `build_summary()` Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -8,7 +15,7 @@
 
 **Tech Stack:** Python 3.10+, stdlib `logging`, pytest (`caplog`), ruff, `ty`.
 
-**Parent spec:** `docs/superpowers/specs/2026-06-02-stdlib-logging-and-build-summary-design.md`
+**Parent spec:** `./design.md`
 
 ---
 

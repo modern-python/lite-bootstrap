@@ -1,3 +1,10 @@
+---
+status: shipped
+date: 2026-06-01
+slug: fastmcp-bootstrapper
+spec: fastmcp-bootstrapper
+pr: null
+---
 # FastMCP Bootstrapper Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -8,7 +15,7 @@
 
 **Tech Stack:** Python 3.10+ dataclasses, `fastmcp`, `structlog`, `prometheus_client`, `starlette.responses`, `pytest-asyncio` (auto mode), `httpx2` test client, `unittest.mock.MagicMock` / `pytest.MonkeyPatch`.
 
-**Parent spec:** `docs/superpowers/specs/2026-06-01-fastmcp-bootstrapper-design.md`
+**Parent spec:** `./design.md`
 **Reference PR:** [microbootstrap PR #141](https://github.com/community-of-python/microbootstrap/pull/141).
 
 ---
@@ -1103,7 +1110,7 @@ gh pr create --title "feat: add FastMcpBootstrapper" --body "$(cat <<'EOF'
 
 Mirrors the instrument set merged upstream in [microbootstrap PR #141](https://github.com/community-of-python/microbootstrap/pull/141) and improves on it by wiring teardown.
 
-Spec: `docs/superpowers/specs/2026-06-01-fastmcp-bootstrapper-design.md`.
+Spec: `./design.md`.
 
 ## Test plan
 

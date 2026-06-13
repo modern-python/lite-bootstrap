@@ -1,3 +1,12 @@
+---
+status: shipped
+date: 2026-06-01
+slug: fastmcp-bootstrapper
+supersedes: null
+superseded_by: null
+pr: null
+outcome: shipped
+---
 # FastMCP Bootstrapper Design
 
 **Date:** 2026-06-01

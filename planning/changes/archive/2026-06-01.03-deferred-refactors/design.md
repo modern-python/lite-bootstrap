@@ -1,8 +1,17 @@
+---
+status: shipped
+date: 2026-06-01
+slug: deferred-refactors
+supersedes: null
+superseded_by: null
+pr: null
+outcome: "shipped as #96–#103"
+---
 # Deferred Refactors Sequencing
 
 **Date:** 2026-06-01
-**Parent audit:** [2026-05-31-bug-refactor-audit.md](2026-05-31-bug-refactor-audit.md)
-**Sibling spec:** [2026-05-31-audit-implementation-sequencing.md](2026-05-31-audit-implementation-sequencing.md) (criticals + design issues; 7 PRs shipped as #89, #90, #91, #92, #93, #94, #95)
+**Parent audit:** [2026-05-31-bug-refactor-audit.md](../../audits/2026-05-31-bug-refactor-audit.md)
+**Sibling spec:** [2026-05-31-audit-implementation-sequencing.md](../2026-05-31.01-audit-implementation/design.md) (criticals + design issues; 7 PRs shipped as #89, #90, #91, #92, #93, #94, #95)
 **Scope:** All 20 deferred items — REF-1..7 (refactor opportunities), TEST-4/7/8 (test gaps), LOW-1..9 (cosmetic). Plus one finding surfaced during PR6 review: `Opentelemetry` → `OpenTelemetry` capitalization rename.
 **Deliverable:** 8 sequenced PRs. Sequencing rationale, per-PR scope, locked decisions.
 

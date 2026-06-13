@@ -1,7 +1,16 @@
+---
+status: shipped
+date: 2026-05-31
+slug: audit-implementation
+supersedes: null
+superseded_by: null
+pr: null
+outcome: "shipped as #89–#95"
+---
 # Audit Implementation Sequencing
 
 **Date:** 2026-05-31
-**Parent spec:** [2026-05-31-bug-refactor-audit.md](2026-05-31-bug-refactor-audit.md)
+**Parent spec:** [2026-05-31-bug-refactor-audit.md](../../audits/2026-05-31-bug-refactor-audit.md)
 **Scope:** Criticals (CRIT-1..3) + Design issues (DES-1..5) + paired tests (TEST-1/2/3/5/6)
 **Deliverable:** 7 sequenced PRs. Sequencing rationale, per-PR scope, decisions.
 

@@ -1,3 +1,10 @@
+---
+status: shipped
+date: 2026-06-09
+slug: mkdocs-github-pages
+spec: mkdocs-github-pages
+pr: null
+---
 # MkDocs GitHub Actions Migration Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -8,7 +15,7 @@
 
 **Tech Stack:** MkDocs + mkdocs-material, GitHub Actions, GitHub Pages, `uv`/`uvx`, `just`.
 
-**Spec:** `planning/specs/2026-06-09-mkdocs-github-actions-design.md`
+**Spec:** `./design.md`
 
 ---
 
@@ -417,8 +424,8 @@ gh pr create --title "docs: migrate from Read the Docs to GitHub Actions + Pages
 - GitHub Pages serves `gh-pages` under `lite-bootstrap.modern-python.org` (`docs/CNAME`).
 - Mirrors the sibling [`modern-di`](https://github.com/modern-python/modern-di) project's docs deployment pattern verbatim.
 
-Spec: `planning/specs/2026-06-09-mkdocs-github-actions-design.md`
-Plan: `planning/plans/2026-06-09-mkdocs-github-actions-plan.md`
+Spec: `./design.md`
+Plan: `./plan.md`
 
 ## Operator follow-ups (post-merge)
 

@@ -1,3 +1,12 @@
+---
+status: shipped
+date: 2026-06-05
+slug: bug-audit-v2
+supersedes: null
+superseded_by: null
+pr: null
+outcome: "shipped as #108–#110"
+---
 # Bug Audit v2 — Implementation Sequencing
 
 **Date:** 2026-06-05

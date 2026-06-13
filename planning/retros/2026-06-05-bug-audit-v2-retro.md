@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-05
 **Cycle:** Audit → 3-PR sequencing → execute
-**Inputs:** [bug-audit-v2.md](2026-06-05-bug-audit-v2.md), [sequencing](2026-06-05-bug-audit-v2-sequencing.md), [PR1 plan](../plans/2026-06-05-pr1-lifecycle.md), [PR2 plan](../plans/2026-06-05-pr2-config-security.md), [PR3 plan](../plans/2026-06-05-pr3-hygiene-ci.md)
+**Inputs:** [bug-audit-v2.md](../audits/2026-06-05-bug-audit-v2.md), [sequencing](../changes/archive/2026-06-05.01-bug-audit-v2/design.md), [PR1 plan](../changes/archive/2026-06-05.01-bug-audit-v2/plan-pr1-lifecycle.md), [PR2 plan](../changes/archive/2026-06-05.01-bug-audit-v2/plan-pr2-config-security.md), [PR3 plan](../changes/archive/2026-06-05.01-bug-audit-v2/plan-pr3-hygiene-ci.md)
 **Outcome:** 26/26 audit findings shipped to main across three PRs (#108, #109, #110).
 
 ## Numbers
