@@ -32,3 +32,7 @@ publish:
 # Manual invocation from a stale checkout will roll the live site back.
 docs-deploy:
     uvx --with-requirements docs/requirements.txt mkdocs gh-deploy --force
+
+# Strict local docs build (no deploy). Mirrors CI's link/strict checks.
+docs-build:
+    uvx --with-requirements docs/requirements.txt mkdocs build --strict

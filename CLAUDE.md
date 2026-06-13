@@ -61,15 +61,15 @@ One file per instrument under `lite_bootstrap/instruments/`, one per framework u
 
 See `[project.optional-dependencies]` in `pyproject.toml` for the full extras matrix.
 
-## Planning artifacts
+## Workflow
 
-Design docs and implementation plans live under `planning/` at the repo root, not under `docs/` (so they're excluded from the mkdocs site automatically):
+Per-feature: brainstorming → spec in `planning/changes/active/YYYY-MM-DD.NN-<slug>/design.md` → writing-plans → plan in `planning/changes/active/YYYY-MM-DD.NN-<slug>/plan.md` → executing-plans / subagent-driven-development → requesting-code-review → finishing-a-development-branch. Each change is a folder bundle; `<slug>` is a kebab-case description, not a story ID; `.NN` is a zero-padded intra-day counter that breaks same-date ties so the timeline sorts stably. On merge, the bundle moves to `planning/changes/archive/` with `status: shipped`, `pr:`, and `outcome:` filled, **and the change promotes its conclusions into the affected `architecture/<capability>.md`** — that hand-edit is what keeps `architecture/` true. See [`planning/README.md`](planning/README.md) for the conventions + index and [`planning/_templates/`](planning/_templates/) for copy-and-fill starting points.
 
-- `planning/specs/` — design docs / specs (output of brainstorming). Filename: `YYYY-MM-DD-<topic>-design.md`.
-- `planning/plans/` — step-by-step implementation plans (output of writing-plans). Filename: `YYYY-MM-DD-<topic>-plan.md` or `YYYY-MM-DD-pr<N>-<slug>.md` for per-PR plans.
-- `planning/templates/` — local templates (e.g. `lightweight-plan-template.md`).
+**Spec** (`design.md`) captures the *thinking* — why, what the design is, trade-offs, scope. Written before code; rarely revised after merge. **Plan** (`plan.md`) captures the *sequencing* — the ordered checklist an executor walks; references the spec for the "why". **`architecture/`** captures the *invariants* of shipped systems — the living truth, promoted from a change on merge. A plan paragraph that would still read correctly with all task numbers and checkboxes removed is design content and belongs in the spec.
 
-When superpowers skills default to `docs/superpowers/specs/`, use `planning/specs/` here instead.
+**Three lanes.** Scale the artifact to the change. **Full** — a `design.md` + `plan.md` bundle — for real design judgment, a new file/module, a public-API change, cross-cutting/multi-file work, or non-trivial test design. **Lightweight** — a single `change.md` — for small-but-real changes (≲30 LOC net, ≤2 files, no new file, no public-API change, a single straightforward test). **Tiny** — no bundle, just a conventional commit — for a typo, dep bump, linter/formatter/CI tweak, a mechanical rename, or a single-line config change. Heavier lane wins on ambiguity; a `change.md` that outgrows its lane splits into `design.md` + `plan.md`.
+
+Design docs and implementation plans live under `planning/` (not under `docs/`, so they're excluded from the mkdocs site automatically). When superpowers skills default to `docs/superpowers/specs/` or `docs/superpowers/plans/`, use the change bundle under `planning/changes/active/` here instead.
 
 ## Code style
 
