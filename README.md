@@ -1,9 +1,16 @@
-Lite-Bootstrap
-==
-[![Test Coverage](https://codecov.io/gh/modern-python/lite-bootstrap/branch/main/graph/badge.svg)](https://codecov.io/gh/modern-python/lite-bootstrap)
-[![Supported versions](https://img.shields.io/pypi/pyversions/lite-bootstrap.svg)](https://pypi.python.org/pypi/lite-bootstrap)
-[![downloads](https://img.shields.io/pypi/dm/lite-bootstrap.svg)](https://pypistats.org/packages/lite-bootstrap)
+# lite-bootstrap
+
+[![PyPI version](https://img.shields.io/pypi/v/lite-bootstrap.svg)](https://pypi.org/project/lite-bootstrap/)
+[![Supported Python versions](https://img.shields.io/pypi/pyversions/lite-bootstrap.svg)](https://pypi.org/project/lite-bootstrap/)
+[![Downloads](https://img.shields.io/pypi/dm/lite-bootstrap.svg)](https://pypistats.org/packages/lite-bootstrap)
+[![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)](https://github.com/modern-python/lite-bootstrap/actions/workflows/ci.yml)
+[![CI](https://github.com/modern-python/lite-bootstrap/actions/workflows/ci.yml/badge.svg)](https://github.com/modern-python/lite-bootstrap/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/modern-python/lite-bootstrap.svg)](https://github.com/modern-python/lite-bootstrap/blob/main/LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/modern-python/lite-bootstrap)](https://github.com/modern-python/lite-bootstrap/stargazers)
+[![Context7](https://img.shields.io/badge/Context7-docs-blue)](https://context7.com/modern-python/lite-bootstrap)
+[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![ty](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ty/main/assets/badge/v0.json)](https://github.com/astral-sh/ty)
 
 `lite-bootstrap` assists you in creating applications with all the necessary instruments already set up.
 
@@ -41,18 +48,6 @@ Usage examples:
 - with LiteStar - [litestar-sqlalchemy-template](https://github.com/modern-python/litestar-sqlalchemy-template)
 - with FastAPI - [fastapi-sqlalchemy-template](https://github.com/modern-python/fastapi-sqlalchemy-template)
 
-## Part of `modern-python`
-
-Browse the full list of templates and libraries in
-[`modern-python`](https://github.com/modern-python) — see the org profile for the
-categorized index.
-
-## 📚 [Documentation](https://lite-bootstrap.modern-python.org)
-
-## 📦 [PyPi](https://pypi.org/project/lite-bootstrap)
-
-## 📝 [License](LICENSE)
-
 ## Acknowledgements
 
 `lite-bootstrap` is inspired by [`microbootstrap`](https://github.com/community-of-python/microbootstrap) — a single package that wires up the common observability stack (sentry, prometheus, opentelemetry, logging, cors, swagger, health-checks) for FastAPI / Litestar / FastStream services and for plain scripts.
@@ -68,3 +63,14 @@ The following intentionally differ:
 - **Configuration**: `lite-bootstrap` uses frozen `dataclass` configs (no `pydantic` / `pydantic-settings` runtime dependency), which is what makes it "lite". `microbootstrap` configures everything through `pydantic-settings` models.
 - **Granular extras**: `lite-bootstrap` ships only `orjson` as a runtime dependency; every instrument (`sentry`, `otl`, `logging`, `pyroscope`) and every framework (`fastapi`, `litestar`, `faststream`) is its own extra, with per-pair combos (`fastapi-sentry`, `litestar-otl`, `faststream-metrics`, …) and `*-all` rollups. You install only what you actually use. `microbootstrap` bundles the full observability stack (opentelemetry, sentry-sdk, structlog, pyroscope-io, rich, pydantic-settings, …) as base dependencies and only splits framework packages into extras.
 - **Scope**: `lite-bootstrap` is deliberately narrow — only instrument wiring. It does not include a Granian server runner or a console writer.
+
+## 📚 [Documentation](https://lite-bootstrap.modern-python.org)
+
+## 📦 [PyPI](https://pypi.org/project/lite-bootstrap)
+
+## 📝 [License](LICENSE)
+
+## Part of `modern-python`
+
+Browse the full list of templates and libraries in
+[`modern-python`](https://github.com/modern-python) — see the org profile for the categorized index.
