@@ -1,5 +1,4 @@
 import pathlib
-import typing
 import warnings
 
 from lite_bootstrap import import_checker
@@ -47,10 +46,13 @@ def enable_offline_docs(
     redoc_url: str = app.redoc_url or "/redoc"
     swagger_ui_oauth2_redirect_url: str = app.swagger_ui_oauth2_redirect_url or "/docs/oauth2-redirect"
 
+    replaced_urls = (docs_url, redoc_url, swagger_ui_oauth2_redirect_url)
     app.router.routes = [
         route
         for route in app.router.routes
-        if typing.cast(Route, route).path not in (docs_url, redoc_url, swagger_ui_oauth2_redirect_url)
+        # Only the auto-generated docs endpoints are plain ``Route``s with a ``path``; other route
+        # types (e.g. FastAPI's ``_IncludedRouter``) lack ``.path`` and must be left untouched.
+        if not (isinstance(route, Route) and route.path in replaced_urls)
     ]
 
     static_dir_path = pathlib.Path(__file__).parent.parent / "static/fastapi_docs"
