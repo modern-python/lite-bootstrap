@@ -16,6 +16,10 @@ lint-ci:
     uv run ruff check --no-fix
     uv run ty check
 
+# Print the planning change index (grouped by status) to stdout.
+index:
+    uv run python planning/index.py
+
 test *args:
     uv run --no-sync pytest {{ args }}
 
