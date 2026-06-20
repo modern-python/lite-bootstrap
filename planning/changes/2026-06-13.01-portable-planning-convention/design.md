@@ -196,7 +196,7 @@ per instrument) can come later via normal changes.
 #### 4a. Clean design+plan pairs → one full bundle each
 
 Each existing `*-design.md` + its matching plan becomes a bundle under
-`changes/archive/`:
+`changes/`:
 
 | Bundle | design.md ← | plan.md ← |
 |--------|-------------|-----------|
@@ -298,7 +298,7 @@ This repo's `CLAUDE.md` has a `## Planning artifacts` section (not a
    `planning/changes/active/YYYY-MM-DD.NN-<slug>/design.md` → writing-plans →
    `plan.md` → executing-plans / subagent-driven-development →
    requesting-code-review → finishing-a-development-branch.
-2. On merge: bundle moves to `planning/changes/archive/` with `status: shipped`,
+2. On merge: bundle moves to `planning/changes/` with `status: shipped`,
    `pr:`, `outcome:` filled, **and the change promotes its conclusions into the
    affected `architecture/<capability>.md`** — name `architecture/` explicitly as
    the promotion target.
@@ -338,7 +338,7 @@ This adoption is itself a change, so it lands as
 - This `design.md` is written there now (during brainstorming) — the first use
   of the new layout.
 - The implementation plan is written to `plan.md` in the same folder.
-- On merge, the bundle moves to `changes/archive/` with `status: shipped`,
+- On merge, the bundle moves to `changes/` with `status: shipped`,
   `pr:`, `outcome:` filled, and its line moves to Archived in the README Index.
   No `architecture/` promotion applies — this change defines the convention
   (which lives in `README.md`) and seeds `architecture/`, rather than altering a

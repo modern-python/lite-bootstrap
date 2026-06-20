@@ -4,8 +4,8 @@
 **Scope:** PRs #89–103 across two sequenced waves
 **Parent docs:**
 - Audit: [2026-05-31-bug-refactor-audit.md](../audits/2026-05-31-bug-refactor-audit.md)
-- Sequencing 1: [2026-05-31-audit-implementation-sequencing.md](../changes/archive/2026-05-31.01-audit-implementation/design.md)
-- Sequencing 2: [2026-06-01-deferred-refactors-sequencing.md](../changes/archive/2026-06-01.03-deferred-refactors/design.md)
+- Sequencing 1: [2026-05-31-audit-implementation-sequencing.md](../changes/2026-05-31.01-audit-implementation/design.md)
+- Sequencing 2: [2026-06-01-deferred-refactors-sequencing.md](../changes/2026-06-01.03-deferred-refactors/design.md)
 
 ---
 
