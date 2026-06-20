@@ -51,7 +51,7 @@ already committed there).
 ### Task 1: Scaffold the new `planning/` skeleton + copy templates
 
 **Files:**
-- Create: `planning/changes/active/.gitkeep`, `planning/changes/archive/` (via bundles later)
+- Create: `planning/changes/active/.gitkeep`, `planning/changes/` (via bundles later)
 - Create: `planning/audits/`, `planning/retros/`
 - Create: `planning/_templates/{design,plan,change}.md` (copied byte-identical)
 - Create: `planning/deferred.md`
@@ -212,24 +212,24 @@ needs to understand the capability *now* — not change history.
   cd /Users/kevinsmith/src/pypi/lite-bootstrap
 
   # instrument-skip-rework (2026-06-01.01)
-  mkdir -p planning/changes/archive/2026-06-01.01-instrument-skip-rework
-  git mv planning/specs/2026-06-01-instrument-skip-rework-design.md planning/changes/archive/2026-06-01.01-instrument-skip-rework/design.md
-  git mv planning/plans/2026-06-01-instrument-skip-rework.md         planning/changes/archive/2026-06-01.01-instrument-skip-rework/plan.md
+  mkdir -p planning/changes/2026-06-01.01-instrument-skip-rework
+  git mv planning/specs/2026-06-01-instrument-skip-rework-design.md planning/changes/2026-06-01.01-instrument-skip-rework/design.md
+  git mv planning/plans/2026-06-01-instrument-skip-rework.md         planning/changes/2026-06-01.01-instrument-skip-rework/plan.md
 
   # fastmcp-bootstrapper (2026-06-01.02)
-  mkdir -p planning/changes/archive/2026-06-01.02-fastmcp-bootstrapper
-  git mv planning/specs/2026-06-01-fastmcp-bootstrapper-design.md planning/changes/archive/2026-06-01.02-fastmcp-bootstrapper/design.md
-  git mv planning/plans/2026-06-01-fastmcp-bootstrapper.md        planning/changes/archive/2026-06-01.02-fastmcp-bootstrapper/plan.md
+  mkdir -p planning/changes/2026-06-01.02-fastmcp-bootstrapper
+  git mv planning/specs/2026-06-01-fastmcp-bootstrapper-design.md planning/changes/2026-06-01.02-fastmcp-bootstrapper/design.md
+  git mv planning/plans/2026-06-01-fastmcp-bootstrapper.md        planning/changes/2026-06-01.02-fastmcp-bootstrapper/plan.md
 
   # stdlib-logging-and-build-summary (2026-06-02.01)
-  mkdir -p planning/changes/archive/2026-06-02.01-stdlib-logging-and-build-summary
-  git mv planning/specs/2026-06-02-stdlib-logging-and-build-summary-design.md planning/changes/archive/2026-06-02.01-stdlib-logging-and-build-summary/design.md
-  git mv planning/plans/2026-06-02-stdlib-logging-and-build-summary.md        planning/changes/archive/2026-06-02.01-stdlib-logging-and-build-summary/plan.md
+  mkdir -p planning/changes/2026-06-02.01-stdlib-logging-and-build-summary
+  git mv planning/specs/2026-06-02-stdlib-logging-and-build-summary-design.md planning/changes/2026-06-02.01-stdlib-logging-and-build-summary/design.md
+  git mv planning/plans/2026-06-02-stdlib-logging-and-build-summary.md        planning/changes/2026-06-02.01-stdlib-logging-and-build-summary/plan.md
 
   # mkdocs-github-pages (2026-06-09.01)
-  mkdir -p planning/changes/archive/2026-06-09.01-mkdocs-github-pages
-  git mv planning/specs/2026-06-09-mkdocs-github-actions-design.md planning/changes/archive/2026-06-09.01-mkdocs-github-pages/design.md
-  git mv planning/plans/2026-06-09-mkdocs-github-actions-plan.md   planning/changes/archive/2026-06-09.01-mkdocs-github-pages/plan.md
+  mkdir -p planning/changes/2026-06-09.01-mkdocs-github-pages
+  git mv planning/specs/2026-06-09-mkdocs-github-actions-design.md planning/changes/2026-06-09.01-mkdocs-github-pages/design.md
+  git mv planning/plans/2026-06-09-mkdocs-github-actions-plan.md   planning/changes/2026-06-09.01-mkdocs-github-pages/plan.md
   ```
 
 - [ ] **Step 2: Prepend frontmatter to each `design.md`**
@@ -338,7 +338,7 @@ needs to understand the capability *now* — not change history.
 
 - [ ] **Step 4: Fix any internal cross-links broken by the rename**
 
-  Run: `grep -rn "instrument-skip-rework\|2026-06-01-fastmcp\|2026-06-02-stdlib\|2026-06-09-mkdocs" planning/changes/archive/`
+  Run: `grep -rn "instrument-skip-rework\|2026-06-01-fastmcp\|2026-06-02-stdlib\|2026-06-09-mkdocs" planning/changes/`
   For each hit that points at an old `planning/specs|plans/...` path or a sibling
   doc's old filename, update it to the new bundle path
   (`./design.md`, `./plan.md`, or `../<bundle-id>/design.md`). The
@@ -349,7 +349,7 @@ needs to understand the capability *now* — not change history.
 
   Run:
   ```bash
-  for f in planning/changes/archive/*/design.md planning/changes/archive/*/plan.md; do
+  for f in planning/changes/*/design.md planning/changes/*/plan.md; do
     python3 -c "import sys,yaml; t=open('$f').read(); assert t.startswith('---'); yaml.safe_load(t.split('---')[1]); print('OK $f')"
   done
   ```
@@ -378,35 +378,35 @@ needs to understand the capability *now* — not change history.
   cd /Users/kevinsmith/src/pypi/lite-bootstrap
 
   # Arc 1: audit-implementation (2026-05-31.01) — sequencing → design.md, pr1..7 grouped
-  mkdir -p planning/changes/archive/2026-05-31.01-audit-implementation
-  git mv planning/specs/2026-05-31-audit-implementation-sequencing.md planning/changes/archive/2026-05-31.01-audit-implementation/design.md
-  git mv planning/plans/2026-05-31-pr1-crit1-redoc-root-path.md       planning/changes/archive/2026-05-31.01-audit-implementation/plan-pr1-crit1-redoc-root-path.md
-  git mv planning/plans/2026-05-31-pr2-crit2-otel-shutdown.md         planning/changes/archive/2026-05-31.01-audit-implementation/plan-pr2-crit2-otel-shutdown.md
-  git mv planning/plans/2026-05-31-pr3-crit3-idempotent-teardown.md   planning/changes/archive/2026-05-31.01-audit-implementation/plan-pr3-crit3-idempotent-teardown.md
-  git mv planning/plans/2026-06-01-pr4-des4-des5-small-cleanups.md    planning/changes/archive/2026-05-31.01-audit-implementation/plan-pr4-des4-des5-small-cleanups.md
-  git mv planning/plans/2026-06-01-pr5-des3-config-method-semantics.md planning/changes/archive/2026-05-31.01-audit-implementation/plan-pr5-des3-config-method-semantics.md
-  git mv planning/plans/2026-06-01-pr6-des2-otel-fields-mixin.md      planning/changes/archive/2026-05-31.01-audit-implementation/plan-pr6-des2-otel-fields-mixin.md
-  git mv planning/plans/2026-06-01-pr7-des1-generic-instruments.md    planning/changes/archive/2026-05-31.01-audit-implementation/plan-pr7-des1-generic-instruments.md
+  mkdir -p planning/changes/2026-05-31.01-audit-implementation
+  git mv planning/specs/2026-05-31-audit-implementation-sequencing.md planning/changes/2026-05-31.01-audit-implementation/design.md
+  git mv planning/plans/2026-05-31-pr1-crit1-redoc-root-path.md       planning/changes/2026-05-31.01-audit-implementation/plan-pr1-crit1-redoc-root-path.md
+  git mv planning/plans/2026-05-31-pr2-crit2-otel-shutdown.md         planning/changes/2026-05-31.01-audit-implementation/plan-pr2-crit2-otel-shutdown.md
+  git mv planning/plans/2026-05-31-pr3-crit3-idempotent-teardown.md   planning/changes/2026-05-31.01-audit-implementation/plan-pr3-crit3-idempotent-teardown.md
+  git mv planning/plans/2026-06-01-pr4-des4-des5-small-cleanups.md    planning/changes/2026-05-31.01-audit-implementation/plan-pr4-des4-des5-small-cleanups.md
+  git mv planning/plans/2026-06-01-pr5-des3-config-method-semantics.md planning/changes/2026-05-31.01-audit-implementation/plan-pr5-des3-config-method-semantics.md
+  git mv planning/plans/2026-06-01-pr6-des2-otel-fields-mixin.md      planning/changes/2026-05-31.01-audit-implementation/plan-pr6-des2-otel-fields-mixin.md
+  git mv planning/plans/2026-06-01-pr7-des1-generic-instruments.md    planning/changes/2026-05-31.01-audit-implementation/plan-pr7-des1-generic-instruments.md
 
   # Arc 2: deferred-refactors (2026-06-01.03) — sequencing → design.md, pr8..16 grouped
-  mkdir -p planning/changes/archive/2026-06-01.03-deferred-refactors
-  git mv planning/specs/2026-06-01-deferred-refactors-sequencing.md planning/changes/archive/2026-06-01.03-deferred-refactors/design.md
-  git mv planning/plans/2026-06-01-pr8-low-1-2-sentry-micro.md  planning/changes/archive/2026-06-01.03-deferred-refactors/plan-pr8-low-1-2-sentry-micro.md
-  git mv planning/plans/2026-06-01-pr9-otel-touch-ups.md        planning/changes/archive/2026-06-01.03-deferred-refactors/plan-pr9-otel-touch-ups.md
-  git mv planning/plans/2026-06-01-pr10-test-gap-fill.md        planning/changes/archive/2026-06-01.03-deferred-refactors/plan-pr10-test-gap-fill.md
-  git mv planning/plans/2026-06-01-pr11-logging-cleanup.md      planning/changes/archive/2026-06-01.03-deferred-refactors/plan-pr11-logging-cleanup.md
-  git mv planning/plans/2026-06-01-pr12-base-layer-cleanup.md   planning/changes/archive/2026-06-01.03-deferred-refactors/plan-pr12-base-layer-cleanup.md
-  git mv planning/plans/2026-06-01-pr13-frozen-setattr.md       planning/changes/archive/2026-06-01.03-deferred-refactors/plan-pr13-frozen-setattr.md
-  git mv planning/plans/2026-06-01-pr14-faststream-timeout.md   planning/changes/archive/2026-06-01.03-deferred-refactors/plan-pr14-faststream-timeout.md
-  git mv planning/plans/2026-06-01-pr15-naming-pass.md          planning/changes/archive/2026-06-01.03-deferred-refactors/plan-pr15-naming-pass.md
-  git mv planning/plans/2026-06-01-pr16-post-retro-hygiene.md   planning/changes/archive/2026-06-01.03-deferred-refactors/plan-pr16-post-retro-hygiene.md
+  mkdir -p planning/changes/2026-06-01.03-deferred-refactors
+  git mv planning/specs/2026-06-01-deferred-refactors-sequencing.md planning/changes/2026-06-01.03-deferred-refactors/design.md
+  git mv planning/plans/2026-06-01-pr8-low-1-2-sentry-micro.md  planning/changes/2026-06-01.03-deferred-refactors/plan-pr8-low-1-2-sentry-micro.md
+  git mv planning/plans/2026-06-01-pr9-otel-touch-ups.md        planning/changes/2026-06-01.03-deferred-refactors/plan-pr9-otel-touch-ups.md
+  git mv planning/plans/2026-06-01-pr10-test-gap-fill.md        planning/changes/2026-06-01.03-deferred-refactors/plan-pr10-test-gap-fill.md
+  git mv planning/plans/2026-06-01-pr11-logging-cleanup.md      planning/changes/2026-06-01.03-deferred-refactors/plan-pr11-logging-cleanup.md
+  git mv planning/plans/2026-06-01-pr12-base-layer-cleanup.md   planning/changes/2026-06-01.03-deferred-refactors/plan-pr12-base-layer-cleanup.md
+  git mv planning/plans/2026-06-01-pr13-frozen-setattr.md       planning/changes/2026-06-01.03-deferred-refactors/plan-pr13-frozen-setattr.md
+  git mv planning/plans/2026-06-01-pr14-faststream-timeout.md   planning/changes/2026-06-01.03-deferred-refactors/plan-pr14-faststream-timeout.md
+  git mv planning/plans/2026-06-01-pr15-naming-pass.md          planning/changes/2026-06-01.03-deferred-refactors/plan-pr15-naming-pass.md
+  git mv planning/plans/2026-06-01-pr16-post-retro-hygiene.md   planning/changes/2026-06-01.03-deferred-refactors/plan-pr16-post-retro-hygiene.md
 
   # Arc 3: bug-audit-v2 (2026-06-05.01) — sequencing → design.md, pr1..3 grouped
-  mkdir -p planning/changes/archive/2026-06-05.01-bug-audit-v2
-  git mv planning/specs/2026-06-05-bug-audit-v2-sequencing.md planning/changes/archive/2026-06-05.01-bug-audit-v2/design.md
-  git mv planning/plans/2026-06-05-pr1-lifecycle.md       planning/changes/archive/2026-06-05.01-bug-audit-v2/plan-pr1-lifecycle.md
-  git mv planning/plans/2026-06-05-pr2-config-security.md planning/changes/archive/2026-06-05.01-bug-audit-v2/plan-pr2-config-security.md
-  git mv planning/plans/2026-06-05-pr3-hygiene-ci.md      planning/changes/archive/2026-06-05.01-bug-audit-v2/plan-pr3-hygiene-ci.md
+  mkdir -p planning/changes/2026-06-05.01-bug-audit-v2
+  git mv planning/specs/2026-06-05-bug-audit-v2-sequencing.md planning/changes/2026-06-05.01-bug-audit-v2/design.md
+  git mv planning/plans/2026-06-05-pr1-lifecycle.md       planning/changes/2026-06-05.01-bug-audit-v2/plan-pr1-lifecycle.md
+  git mv planning/plans/2026-06-05-pr2-config-security.md planning/changes/2026-06-05.01-bug-audit-v2/plan-pr2-config-security.md
+  git mv planning/plans/2026-06-05-pr3-hygiene-ci.md      planning/changes/2026-06-05.01-bug-audit-v2/plan-pr3-hygiene-ci.md
   ```
 
 - [ ] **Step 2: `git mv` audits → `audits/` and retros → `retros/`**
@@ -482,9 +482,9 @@ needs to understand the capability *now* — not change history.
 
   Run:
   ```bash
-  for f in planning/changes/archive/2026-05-31.01-audit-implementation/design.md \
-           planning/changes/archive/2026-06-01.03-deferred-refactors/design.md \
-           planning/changes/archive/2026-06-05.01-bug-audit-v2/design.md; do
+  for f in planning/changes/2026-05-31.01-audit-implementation/design.md \
+           planning/changes/2026-06-01.03-deferred-refactors/design.md \
+           planning/changes/2026-06-05.01-bug-audit-v2/design.md; do
     python3 -c "import yaml; t=open('$f').read(); assert t.startswith('---'); yaml.safe_load(t.split('---')[1]); print('OK $f')"
   done
   ls planning/specs planning/plans
@@ -583,26 +583,26 @@ needs to understand the capability *now* — not change history.
 
   ### Archived (shipped)
 
-  - **[mkdocs-github-pages](changes/archive/2026-06-09.01-mkdocs-github-pages/design.md)**
+  - **[mkdocs-github-pages](changes/2026-06-09.01-mkdocs-github-pages/design.md)**
     (#112–#115, 2026-06-09) — Docs hosting moved from Read the Docs to GitHub
     Actions + Pages.
-  - **[bug-audit-v2](changes/archive/2026-06-05.01-bug-audit-v2/design.md)**
+  - **[bug-audit-v2](changes/2026-06-05.01-bug-audit-v2/design.md)**
     (#108–#110, 2026-06-05) — 26 findings (UX · logic · security · tests) shipped
     across three themed PRs.
-  - **[deferred-refactors](changes/archive/2026-06-01.03-deferred-refactors/design.md)**
+  - **[deferred-refactors](changes/2026-06-01.03-deferred-refactors/design.md)**
     (#96–#103, 2026-06-01) — The 20 deferred items from the 2026-05-31 audit
     (REF/TEST/LOW) across eight PRs.
-  - **[fastmcp-bootstrapper](changes/archive/2026-06-01.02-fastmcp-bootstrapper/design.md)**
+  - **[fastmcp-bootstrapper](changes/2026-06-01.02-fastmcp-bootstrapper/design.md)**
     (2026-06-01) — New `FastMcpBootstrapper` mirroring microbootstrap's fastmcp
     support.
-  - **[instrument-skip-rework](changes/archive/2026-06-01.01-instrument-skip-rework/design.md)**
+  - **[instrument-skip-rework](changes/2026-06-01.01-instrument-skip-rework/design.md)**
     (2026-06-01) — Replace `InstrumentNotReadyWarning` with a pre-instantiation
     config check + summary log. *Partially superseded by
-    [stdlib-logging-and-build-summary](changes/archive/2026-06-02.01-stdlib-logging-and-build-summary/design.md).*
-  - **[stdlib-logging-and-build-summary](changes/archive/2026-06-02.01-stdlib-logging-and-build-summary/design.md)**
+    [stdlib-logging-and-build-summary](changes/2026-06-02.01-stdlib-logging-and-build-summary/design.md).*
+  - **[stdlib-logging-and-build-summary](changes/2026-06-02.01-stdlib-logging-and-build-summary/design.md)**
     (#107, 2026-06-02) — Stdlib `logging` in `bootstrappers/base.py` + public
     `build_summary()`.
-  - **[audit-implementation](changes/archive/2026-05-31.01-audit-implementation/design.md)**
+  - **[audit-implementation](changes/2026-05-31.01-audit-implementation/design.md)**
     (#89–#95, 2026-05-31) — Criticals (CRIT-1..3) + design issues (DES-1..5) +
     paired tests across seven sequenced PRs.
 
@@ -666,7 +666,7 @@ needs to understand the capability *now* — not change history.
   ```markdown
   ## Workflow
 
-  Per-feature: brainstorming → spec in `planning/changes/active/YYYY-MM-DD.NN-<slug>/design.md` → writing-plans → plan in `planning/changes/active/YYYY-MM-DD.NN-<slug>/plan.md` → executing-plans / subagent-driven-development → requesting-code-review → finishing-a-development-branch. Each change is a folder bundle; `<slug>` is a kebab-case description, not a story ID; `.NN` is a zero-padded intra-day counter that breaks same-date ties so the timeline sorts stably. On merge, the bundle moves to `planning/changes/archive/` with `status: shipped`, `pr:`, and `outcome:` filled, **and the change promotes its conclusions into the affected `architecture/<capability>.md`** — that hand-edit is what keeps `architecture/` true. See [`planning/README.md`](planning/README.md) for the conventions + index and [`planning/_templates/`](planning/_templates/) for copy-and-fill starting points.
+  Per-feature: brainstorming → spec in `planning/changes/active/YYYY-MM-DD.NN-<slug>/design.md` → writing-plans → plan in `planning/changes/active/YYYY-MM-DD.NN-<slug>/plan.md` → executing-plans / subagent-driven-development → requesting-code-review → finishing-a-development-branch. Each change is a folder bundle; `<slug>` is a kebab-case description, not a story ID; `.NN` is a zero-padded intra-day counter that breaks same-date ties so the timeline sorts stably. On merge, the bundle moves to `planning/changes/` with `status: shipped`, `pr:`, and `outcome:` filled, **and the change promotes its conclusions into the affected `architecture/<capability>.md`** — that hand-edit is what keeps `architecture/` true. See [`planning/README.md`](planning/README.md) for the conventions + index and [`planning/_templates/`](planning/_templates/) for copy-and-fill starting points.
 
   **Spec** (`design.md`) captures the *thinking* — why, what the design is, trade-offs, scope. Written before code; rarely revised after merge. **Plan** (`plan.md`) captures the *sequencing* — the ordered checklist an executor walks; references the spec for the "why". **`architecture/`** captures the *invariants* of shipped systems — the living truth, promoted from a change on merge. A plan paragraph that would still read correctly with all task numbers and checkboxes removed is design content and belongs in the spec.
 
@@ -730,7 +730,7 @@ needs to understand the capability *now* — not change history.
   Run:
   ```bash
   echo "--- stale pointers ---"
-  grep -rn "planning/specs\|planning/plans\|lightweight-plan-template" --include="*.md" --include="justfile" . | grep -vE "planning/changes/archive/" || echo "clean"
+  grep -rn "planning/specs\|planning/plans\|lightweight-plan-template" --include="*.md" --include="justfile" . | grep -vE "planning/changes/" || echo "clean"
   echo "--- final planning tree ---"
   ls -R planning/ architecture/
   ```
@@ -771,7 +771,7 @@ its final archived state:
 
 ```bash
 git mv planning/changes/active/2026-06-13.01-portable-planning-convention \
-       planning/changes/archive/2026-06-13.01-portable-planning-convention
+       planning/changes/2026-06-13.01-portable-planning-convention
 ```
 
 `status: shipped`, `pr: "120"`, and `outcome:` are set in this bundle's

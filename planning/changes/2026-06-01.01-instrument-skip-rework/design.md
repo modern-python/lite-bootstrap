@@ -2,6 +2,7 @@
 status: shipped
 date: 2026-06-01
 slug: instrument-skip-rework
+summary: Replace `InstrumentNotReadyWarning` with a pre-instantiation config check + summary log.
 supersedes: null
 superseded_by: stdlib-logging-and-build-summary
 pr: null
