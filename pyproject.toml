@@ -1,26 +1,16 @@
 [project]
 name = "lite-bootstrap"
-description = "Lite package for bootstrapping new microservices"
+description = "Lightweight bootstrap for production-ready Python microservices"
 authors = [
     { name = "Artur Shiriev", email = "me@shiriev.ru" },
 ]
 readme = "README.md"
 requires-python = ">=3.10,<4"
 license = "MIT"
-keywords = [
-    "python",
-    "microservice",
-    "bootstrap",
-    "opentelemetry",
-    "sentry",
-    "error-tracing",
-    "fastapi",
-    "litestar",
-    "faststream",
-    "structlog",
-    "fastmcp",
-]
+keywords = ["microservices", "bootstrap", "opentelemetry", "sentry", "error-tracing", "fastapi", "litestar", "faststream", "structlog", "fastmcp", "python"]
 classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -35,8 +25,11 @@ dependencies = [
 ]
 
 [project.urls]
-repository = "https://github.com/modern-python/lite-bootstrap"
-docs = "https://lite-bootstrap.modern-python.org"
+Homepage = "https://lite-bootstrap.modern-python.org"
+Documentation = "https://lite-bootstrap.modern-python.org"
+Repository = "https://github.com/modern-python/lite-bootstrap"
+Issues = "https://github.com/modern-python/lite-bootstrap/issues"
+Changelog = "https://github.com/modern-python/lite-bootstrap/releases"
 
 [project.optional-dependencies]
 sentry = [
