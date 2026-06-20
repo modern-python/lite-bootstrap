@@ -2,6 +2,7 @@
 status: shipped
 date: 2026-06-13
 slug: portable-planning-convention
+summary: Adopt the portable two-axis convention: `architecture/` truth home + `changes/` bundles, per-arc bundling of the audit arcs, fresh Index.
 supersedes: null
 superseded_by: null
 pr: "120"
