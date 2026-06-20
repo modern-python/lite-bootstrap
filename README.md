@@ -12,7 +12,7 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![ty](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ty/main/assets/badge/v0.json)](https://github.com/astral-sh/ty)
 
-`lite-bootstrap` assists you in creating applications with all the necessary instruments already set up.
+`lite-bootstrap` helps you bootstrap production-ready Python microservices with all the necessary instruments already set up.
 
 With `lite-bootstrap`, you receive an application with lightweight built-in support for:
 - `sentry`
