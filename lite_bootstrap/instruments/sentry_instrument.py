@@ -1,10 +1,9 @@
 import dataclasses
 import typing
 
-import orjson
-
 from lite_bootstrap import import_checker
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
+from lite_bootstrap.instruments.logging_factory import STRUCTLOG_META_KEYS, StructuredLogPayload
 
 
 if typing.TYPE_CHECKING:
@@ -16,9 +15,9 @@ if import_checker.is_sentry_installed:
     import sentry_sdk
 
 
-IGNORED_STRUCTLOG_ATTRIBUTES: typing.Final = frozenset(
-    {"event", "level", "logger", "tracing", "timestamp", "exception", "skip_sentry"}
-)
+# Back-compat alias: this vocabulary moved to logging_factory and was renamed
+# STRUCTLOG_META_KEYS. Preserved here for external importers of the old name.
+IGNORED_STRUCTLOG_ATTRIBUTES: typing.Final = STRUCTLOG_META_KEYS
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
@@ -39,35 +38,25 @@ class SentryConfig(BaseConfig):
 def enrich_sentry_event_from_structlog_log(
     event: "sentry_types.Event", _: "sentry_types.Hint"
 ) -> typing.Optional["sentry_types.Event"]:
-    if (
+    if not (
         (logentry := event.get("logentry"))
         and (formatted_message := logentry.get("formatted"))
-        and (isinstance(formatted_message, str))
-        and formatted_message.startswith("{")
-        and (isinstance(event.get("contexts"), dict))
+        and isinstance(formatted_message, str)
+        and isinstance(event.get("contexts"), dict)
     ):
-        try:
-            loaded_formatted_log = orjson.loads(formatted_message)
-        except orjson.JSONDecodeError:
-            return event
+        return event
 
-        if not isinstance(loaded_formatted_log, dict):  # pragma: no cover
-            return event
+    payload = StructuredLogPayload.parse(formatted_message)
+    if payload is None:
+        return event
+    if payload.skip_sentry:
+        return None
+    if not payload.message:
+        return event
 
-        if loaded_formatted_log.get("skip_sentry"):
-            return None
-
-        if event_name := loaded_formatted_log.get("event"):
-            event["logentry"]["formatted"] = event_name  # ty: ignore[invalid-assignment]
-        else:
-            return event
-
-        additional_extra = loaded_formatted_log
-        for one_attr in IGNORED_STRUCTLOG_ATTRIBUTES:
-            additional_extra.pop(one_attr, None)
-        if additional_extra:
-            event["contexts"]["structlog"] = additional_extra
-
+    event["logentry"]["formatted"] = payload.message  # ty: ignore[invalid-assignment]
+    if payload.extra:
+        event["contexts"]["structlog"] = payload.extra
     return event
 
 

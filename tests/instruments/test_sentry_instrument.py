@@ -84,23 +84,29 @@ def test_sentry_instrument_empty_dsn() -> None:
 
 
 class TestSentryEnrichEventFromStructlog:
+    """enrich_* owns the Sentry-event-shape guards and the orchestration branches.
+
+    Line-content parsing (meta-stripping, skip detection, JSON guards) is the
+    StructuredLogPayload.parse contract and is covered in test_structured_log_payload.py.
+    """
+
     @pytest.mark.parametrize(
         "event",
         [
-            {},
-            {"logentry": None},
-            {"logentry": {}},
-            {"logentry": {"formatted": b""}},
-            {"logentry": {"formatted": ""}},
-            {"logentry": {"formatted": "hi"}},
-            {"logentry": {"formatted": "[]"}},
-            {"logentry": {"formatted": "[{}]"}},
-            {"logentry": {"formatted": "{"}, "contexts": {}},
-            {"logentry": {"formatted": "{}"}, "contexts": {}},
+            {},  # no logentry
+            {"logentry": {"formatted": b""}},  # formatted is not a str
+            {"logentry": {"formatted": "hi"}, "contexts": {}},  # parse returns None (not a structlog line)
+            {"logentry": {"formatted": "{}"}, "contexts": {}},  # parsed, but no `event` key -> no message
         ],
     )
-    def test_skip(self, event: "sentry_types.Event") -> None:
+    def test_passthrough_leaves_event_unmodified(self, event: "sentry_types.Event") -> None:
         assert enrich_sentry_event_from_structlog_log(copy.deepcopy(event), {}) == event
+
+    def test_drops_event_on_skip_sentry_before_message_check(self) -> None:
+        # Ordering pin: skip_sentry is honored before the message-presence check, so a
+        # line with skip_sentry truthy and no `event` key still drops (returns None).
+        event: sentry_types.Event = {"logentry": {"formatted": '{"skip_sentry": true}'}, "contexts": {}}
+        assert enrich_sentry_event_from_structlog_log(event, {}) is None
 
     @pytest.mark.parametrize(
         ("event_before", "event_after"),
@@ -121,19 +127,11 @@ class TestSentryEnrichEventFromStructlog:
                     "contexts": {"structlog": {"foo": "bar"}},
                 },
             ),
-            (
-                {
-                    "logentry": {"formatted": '{"event": "event name", "skip_sentry": false, "foo": "bar"}'},
-                    "contexts": {},
-                },
-                {
-                    "logentry": {"formatted": "event name"},
-                    "contexts": {"structlog": {"foo": "bar"}},
-                },
-            ),
         ],
     )
-    def test_modify(self, event_before: "sentry_types.Event", event_after: "sentry_types.Event") -> None:
+    def test_modify_lifts_message_and_attaches_extra(
+        self, event_before: "sentry_types.Event", event_after: "sentry_types.Event"
+    ) -> None:
         assert enrich_sentry_event_from_structlog_log(event_before, {}) == event_after
 
 
