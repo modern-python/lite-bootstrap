@@ -1,0 +1,79 @@
+from lite_bootstrap.instruments.logging_factory import (
+    STRUCTLOG_META_KEYS,
+    StructuredLogPayload,
+    _serialize_log_with_orjson_to_string,
+)
+
+
+def test_parse_normal_line_lifts_message_and_strips_meta() -> None:
+    formatted = (
+        '{"event": "hello", "level": "info", "logger": "app", "timestamp": "2026-06-23T00:00:00Z", "foo": "bar"}'
+    )
+
+    payload = StructuredLogPayload.parse(formatted)
+
+    assert payload is not None
+    assert payload.message == "hello"
+    assert payload.extra == {"foo": "bar"}
+    assert payload.skip_sentry is False
+
+
+def test_parse_non_json_line_returns_none() -> None:
+    assert StructuredLogPayload.parse("plain text message") is None
+
+
+def test_parse_non_object_json_returns_none() -> None:
+    assert StructuredLogPayload.parse("[1, 2, 3]") is None
+
+
+def test_parse_malformed_json_object_returns_none() -> None:
+    assert StructuredLogPayload.parse('{"event": ') is None
+
+
+def test_parse_line_without_event_has_no_message() -> None:
+    payload = StructuredLogPayload.parse('{"level": "info", "foo": "bar"}')
+
+    assert payload is not None
+    assert payload.message is None
+    assert payload.extra == {"foo": "bar"}
+
+
+def test_parse_truthy_skip_sentry_sets_flag() -> None:
+    payload = StructuredLogPayload.parse('{"event": "drop me", "skip_sentry": true}')
+
+    assert payload is not None
+    assert payload.skip_sentry is True
+
+
+def test_parse_falsy_skip_sentry_is_stripped_from_extra() -> None:
+    # DES-4 (planning/audits/2026-06-05-bug-audit-v2.md): a falsy skip_sentry flag
+    # must not leak into extra; it is a meta-key, stripped regardless of value.
+    payload = StructuredLogPayload.parse('{"event": "keep", "skip_sentry": false, "foo": "bar"}')
+
+    assert payload is not None
+    assert payload.skip_sentry is False
+    assert payload.extra == {"foo": "bar"}
+
+
+def test_round_trip_through_real_serializer_strips_every_meta_key() -> None:
+    # Drift net: a representative event_dict the producer's structlog chain emits,
+    # serialized by the real serializer and parsed back. If a meta-key the chain
+    # emits is missing from STRUCTLOG_META_KEYS, it leaks into extra and this fails.
+    event_dict = {
+        "event": "request handled",
+        "level": "info",
+        "logger": "app.api",
+        "tracing": {"span_id": "abc", "trace_id": "def"},
+        "timestamp": "2026-06-23T00:00:00Z",
+        "skip_sentry": False,
+        "user_id": 42,
+        "path": "/health",
+    }
+
+    formatted = _serialize_log_with_orjson_to_string(event_dict)
+    payload = StructuredLogPayload.parse(formatted)
+
+    assert payload is not None
+    assert payload.message == "request handled"
+    assert payload.extra == {"user_id": 42, "path": "/health"}
+    assert not (payload.extra.keys() & STRUCTLOG_META_KEYS)
