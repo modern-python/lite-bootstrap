@@ -50,7 +50,6 @@ class FastAPIConfig(
 ):
     application: "fastapi.FastAPI | UnsetType" = UNSET
     application_kwargs: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
-    opentelemetry_excluded_urls: list[str] = dataclasses.field(default_factory=list)
     prometheus_instrumentator_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     prometheus_instrument_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     prometheus_expose_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)

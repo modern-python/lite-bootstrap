@@ -233,6 +233,24 @@ def test_faststream_opentelemetry_excluded_urls_in_built_set(broker: RedisBroker
     assert "/bar" in excluded
 
 
+def test_faststream_build_excluded_urls_covers_prometheus_and_health_paths(broker: RedisBroker) -> None:
+    # Pins the genuine cross-instrument reads in _build_excluded_urls: a rename of
+    # prometheus_metrics_path / health_checks_path (or a regression in the health
+    # conditional) breaks this loudly instead of silently dropping the exclusion.
+    config_no_health_spans = dataclasses.replace(
+        build_faststream_config(broker=broker),
+        opentelemetry_generate_health_check_spans=False,
+    )
+    excluded = FastStreamOpenTelemetryInstrument(bootstrap_config=config_no_health_spans)._build_excluded_urls()  # noqa: SLF001
+    assert config_no_health_spans.prometheus_metrics_path in excluded  # always excluded
+    assert config_no_health_spans.health_checks_path in excluded  # excluded when health spans are off
+
+    config_with_health_spans = build_faststream_config(broker=broker)  # generate_health_check_spans defaults True
+    excluded_with = FastStreamOpenTelemetryInstrument(bootstrap_config=config_with_health_spans)._build_excluded_urls()  # noqa: SLF001
+    assert config_with_health_spans.prometheus_metrics_path in excluded_with
+    assert config_with_health_spans.health_checks_path not in excluded_with  # kept when health spans are on
+
+
 async def test_faststream_prometheus_uses_injected_registry(broker: RedisBroker) -> None:
     custom_registry = prometheus_client.CollectorRegistry()
     counter_name = f"injected_counter_{uuid.uuid4().hex}_total"

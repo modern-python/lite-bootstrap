@@ -56,6 +56,7 @@ class OpenTelemetryConfig(OpenTelemetryServiceFieldsConfig):
     )
     opentelemetry_log_traces: bool = False
     opentelemetry_generate_health_check_spans: bool = True
+    opentelemetry_excluded_urls: list[str] = dataclasses.field(default_factory=list)
 
     def __post_init__(self) -> None:
         host = self._parse_remote_insecure_host()
@@ -142,7 +143,7 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
         return import_checker.is_opentelemetry_installed
 
     def _build_excluded_urls(self) -> set[str]:
-        excluded_urls: set[str] = set(getattr(self.bootstrap_config, "opentelemetry_excluded_urls", []))
+        excluded_urls: set[str] = set(self.bootstrap_config.opentelemetry_excluded_urls)
         prometheus_path = getattr(self.bootstrap_config, "prometheus_metrics_path", None)
         if prometheus_path:
             excluded_urls.add(prometheus_path)

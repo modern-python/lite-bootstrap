@@ -77,10 +77,7 @@ Additional parameters:
 - `opentelemetry_instrumentors` - a list of extra instrumentors.
 - `opentelemetry_log_traces` - traces will be logged to stdout.
 - `opentelemetry_generate_health_check_spans` - generate spans for health check handlers if `True`.
-
-Additional parameters for Litestar and FastAPI:
-
-- `opentelemetry_excluded_urls` - by default, heath checks and metrics paths will be excluded.
+- `opentelemetry_excluded_urls` - extra URLs excluded from tracing; the metrics path and (unless health-check spans are enabled) the health-check path are excluded automatically.
 
 For FastStream you must provide additionally:
 
