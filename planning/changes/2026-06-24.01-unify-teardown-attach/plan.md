@@ -1,9 +1,9 @@
 ---
-status: approved
+status: shipped
 date: 2026-06-24
 slug: unify-teardown-attach
 spec: unify-teardown-attach
-pr: null
+pr: 130
 ---
 
 # unify-teardown-attach — implementation plan
