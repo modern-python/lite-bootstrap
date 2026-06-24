@@ -2,7 +2,6 @@ import contextlib
 import dataclasses
 import time
 import typing
-import warnings
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
@@ -152,15 +151,8 @@ class FastMcpBootstrapper(BaseBootstrapper["FastMCP[typing.Any]"]):
 
     def __init__(self, bootstrap_config: FastMcpConfig) -> None:
         super().__init__(bootstrap_config)
-        if any(isinstance(p, _TeardownProvider) for p in self.bootstrap_config.application.providers):
-            warnings.warn(
-                "FastMCP application already has a _TeardownProvider attached; skipping re-attachment. "
-                "This FastMcpBootstrapper's teardown will not be invoked on ASGI shutdown — "
-                "construct one FastMcpBootstrapper per application.",
-                stacklevel=2,
-            )
-            return
-        self.bootstrap_config.application.add_provider(_TeardownProvider(self.teardown))
+        application = self.bootstrap_config.application
+        self._attach_teardown_once(application, lambda: application.add_provider(_TeardownProvider(self.teardown)))
 
     def _prepare_application(self) -> "FastMCP[typing.Any]":
         return self.bootstrap_config.application

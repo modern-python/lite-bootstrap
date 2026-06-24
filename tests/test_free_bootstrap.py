@@ -1,4 +1,5 @@
 import logging
+import types
 import warnings
 from unittest.mock import MagicMock
 
@@ -10,6 +11,7 @@ from lite_bootstrap import (
     FreeConfig,
     TeardownError,
 )
+from lite_bootstrap.bootstrappers.base import BaseBootstrapper
 from lite_bootstrap.instruments.logging_instrument import LoggingInstrument
 from lite_bootstrap.instruments.pyroscope_instrument import PyroscopeInstrument
 from tests.conftest import CustomInstrumentor, SentryTestTransport, emulate_package_missing
@@ -112,6 +114,41 @@ def test_free_bootstrapper_with_missing_instrument_dependency(
 ) -> None:
     with emulate_package_missing(package_name), pytest.warns(UserWarning, match=package_name):
         FreeBootstrapper(bootstrap_config=free_bootstrapper_config)
+
+
+def test_attach_teardown_once_attaches_then_warns_and_skips(free_bootstrapper_config: FreeConfig) -> None:
+    bootstrapper = FreeBootstrapper(bootstrap_config=free_bootstrapper_config)
+    target = types.SimpleNamespace()
+    attach = MagicMock()
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        bootstrapper._attach_teardown_once(target, attach)  # noqa: SLF001
+
+    attach.assert_called_once()
+    assert getattr(target, BaseBootstrapper._TEARDOWN_MARKER) is True  # noqa: SLF001
+
+    with pytest.warns(UserWarning, match="already has a lite-bootstrap teardown hook"):
+        bootstrapper._attach_teardown_once(target, attach)  # noqa: SLF001
+
+    attach.assert_called_once()  # still once — second attach skipped
+
+
+def test_attach_teardown_once_does_not_mark_when_attach_raises(free_bootstrapper_config: FreeConfig) -> None:
+    bootstrapper = FreeBootstrapper(bootstrap_config=free_bootstrapper_config)
+    target = types.SimpleNamespace()
+
+    failing = MagicMock(side_effect=RuntimeError("attach boom"))
+    with pytest.raises(RuntimeError, match="attach boom"):
+        bootstrapper._attach_teardown_once(target, failing)  # noqa: SLF001
+
+    # A failed attach must leave the target untagged so a retry can re-attach.
+    assert not getattr(target, BaseBootstrapper._TEARDOWN_MARKER, False)  # noqa: SLF001
+
+    retry = MagicMock()
+    bootstrapper._attach_teardown_once(target, retry)  # noqa: SLF001
+    retry.assert_called_once()
+    assert getattr(target, BaseBootstrapper._TEARDOWN_MARKER) is True  # noqa: SLF001
 
 
 def test_teardown_is_idempotent(free_bootstrapper_config: FreeConfig) -> None:

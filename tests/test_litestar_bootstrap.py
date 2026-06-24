@@ -1,5 +1,6 @@
 import dataclasses
 import gc
+import warnings
 import weakref
 
 import litestar
@@ -44,6 +45,23 @@ def litestar_config() -> LitestarConfig:
         sentry_additional_params={"transport": SentryTestTransport()},
         swagger_offline_docs=True,
         logging_buffer_capacity=0,
+    )
+
+
+def test_second_litestar_bootstrapper_on_same_config_warns_not_stacks(litestar_config: LitestarConfig) -> None:
+    config_a = litestar_config
+    LitestarBootstrapper(bootstrap_config=config_a)
+    on_shutdown_after_first = len(config_a.application_config.on_shutdown)
+
+    config_b = dataclasses.replace(litestar_config)  # shares the same application_config
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        LitestarBootstrapper(bootstrap_config=config_b)
+
+    matching = [w for w in caught if "already has a lite-bootstrap teardown hook" in str(w.message)]
+    assert matching, "expected warning about existing lite-bootstrap teardown hook"
+    assert len(config_a.application_config.on_shutdown) == on_shutdown_after_first, (
+        "second bootstrapper must not stack another on_shutdown teardown"
     )
 
 

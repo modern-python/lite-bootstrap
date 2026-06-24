@@ -65,12 +65,34 @@ The same string is produced by the public `build_summary()` method, callable at
 any later point (REPL, health endpoint) regardless of log-level filtering. To
 inspect skips programmatically, iterate `bootstrapper.skipped_instruments`.
 
+## Teardown-on-shutdown attach
+
+Each app-bearing bootstrapper wires its `teardown` into the framework's shutdown
+lifecycle from `__init__`, through one shared seam:
+`BaseBootstrapper._attach_teardown_once(target, attach)`. That method owns the
+double-attach guard — it tags the attach target with a
+`_lite_bootstrap_teardown_attached` marker, so a second bootstrapper on the same
+app warns and skips rather than stacking a second teardown hook. Only the `attach`
+thunk is framework-specific:
+
+- **FastAPI** — merge a lifespan context manager (`_wrap_lifespan`); target is the app.
+- **Litestar** — append to `application_config.on_shutdown`; target is the
+  `AppConfig` (the built `Litestar` app is slotted and is never tagged).
+- **FastStream** — register via `application.on_shutdown(...)`; target is the app.
+- **FastMCP** — add a `_TeardownProvider` whose async lifespan runs teardown; target
+  is the app (FastMCP exposes no `on_shutdown` API).
+- **Free** — no app, no shutdown lifecycle; not wired.
+
+The guard is uniform: the same marker and warning apply to all four app-bearing
+frameworks. `attach` is typed `Callable[[], object]` because some hooks (FastStream's
+`on_shutdown`) return the callback.
+
 ## App-tagging sentinel convention
 
 When a bootstrapper must tag a user-supplied framework app (FastAPI, FastMCP,
 Litestar, FastStream) with internal state, it stores a direct attribute prefixed
 `_lite_bootstrap_` rather than squatting in framework namespaces like Starlette's
-`application.state`. Example: FastAPI's lifespan double-wrap guard reads
-`getattr(application, "_lite_bootstrap_lifespan_attached", False)` (no SLF
-violation) and writes
-`application._lite_bootstrap_lifespan_attached = True  # noqa: SLF001`.
+`application.state`. The canonical example is the teardown guard's
+`_lite_bootstrap_teardown_attached` marker, read via
+`getattr(target, BaseBootstrapper._TEARDOWN_MARKER, False)` (no SLF violation) and
+written via `setattr` inside `_attach_teardown_once`.
