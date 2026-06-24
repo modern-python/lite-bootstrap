@@ -5,12 +5,14 @@ docs_dir: docs
 edit_uri: edit/main/docs/
 nav:
   - Introduction:
+      - Quickstart: introduction/quickstart.md
       - Installation: introduction/installation.md
       - Configuration: introduction/configuration.md
   - Integrations:
       - Litestar: integrations/litestar.md
       - FastStream: integrations/faststream.md
       - FastAPI: integrations/fastapi.md
+      - FastMCP: integrations/fastmcp.md
       - Free bootstrapper: integrations/free.md
 theme:
   name: material
