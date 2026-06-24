@@ -24,6 +24,29 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
     skipped_instruments: list[tuple[type[BaseInstrument], str]]
     bootstrap_config: BaseConfig
 
+    # Marker tagged on a user-supplied app (or its config) once this bootstrapper has
+    # attached its teardown to the framework's shutdown lifecycle. Prevents a second
+    # bootstrapper on the same app from re-attaching. See architecture/bootstrappers.md.
+    _TEARDOWN_MARKER: typing.ClassVar[str] = "_lite_bootstrap_teardown_attached"
+
+    def _attach_teardown_once(self, target: object, attach: typing.Callable[[], None]) -> None:
+        """Run ``attach`` (which wires ``teardown`` into the framework's shutdown) once per target.
+
+        Idempotent across bootstrapper instances: if ``target`` is already tagged, warn
+        and skip rather than stacking a second teardown hook. ``attach`` is the only
+        framework-specific part; detection + warning live here.
+        """
+        if getattr(target, self._TEARDOWN_MARKER, False):
+            warnings.warn(
+                f"The application passed to {type(self).__name__} already has a lite-bootstrap "
+                f"teardown hook attached; skipping. This {type(self).__name__}'s teardown will "
+                f"not run on shutdown — construct one {type(self).__name__} per application.",
+                stacklevel=3,
+            )
+            return
+        setattr(target, self._TEARDOWN_MARKER, True)
+        attach()
+
     def build_summary(self) -> str:
         """Return a multi-line human-readable summary of configured + skipped instruments.
 
