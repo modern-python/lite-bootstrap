@@ -51,11 +51,7 @@ free-all = [
     "lite-bootstrap[sentry,otl,logging,pyroscope]",
 ]
 fastapi = [
-    # FastAPI 0.137 introduced the internal `_IncludedRouter` route type, which
-    # prometheus-fastapi-instrumentator (<=8.0.0) does not handle (it reads `route.path`
-    # unconditionally and raises AttributeError). Cap until a fixed instrumentator ships.
-    # Upstream issue: https://github.com/trallnag/prometheus-fastapi-instrumentator/issues/370
-    "fastapi<0.137",
+    "fastapi",
 ]
 fastapi-sentry = [
     "lite-bootstrap[fastapi,sentry]",
@@ -69,7 +65,9 @@ fastapi-logging = [
 ]
 fastapi-metrics = [
     "lite-bootstrap[fastapi]",
-    "prometheus-fastapi-instrumentator>=6.1",
+    # >=8.0.1 carries the _IncludedRouter fix required for FastAPI >=0.137
+    # (trallnag/prometheus-fastapi-instrumentator#370).
+    "prometheus-fastapi-instrumentator>=8.0.1",
 ]
 fastapi-all = [
     "lite-bootstrap[fastapi-sentry,fastapi-otl,fastapi-logging,fastapi-metrics,pyroscope]",
