@@ -117,7 +117,6 @@ class LitestarConfig(
     SwaggerConfig,
 ):
     application_config: "AppConfig" = dataclasses.field(default_factory=lambda: AppConfig())  # noqa: PLW0108
-    opentelemetry_excluded_urls: list[str] = dataclasses.field(default_factory=list)
     prometheus_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     swagger_extra_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
 
