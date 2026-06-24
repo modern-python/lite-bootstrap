@@ -127,8 +127,8 @@ def test_second_fastapi_bootstrapper_on_same_app_warns_not_stacks(fastapi_config
         warnings.simplefilter("always")
         FastAPIBootstrapper(bootstrap_config=config_b)
 
-    matching = [w for w in caught if "already has a lite-bootstrap lifespan" in str(w.message)]
-    assert matching, "expected warning about existing lite-bootstrap lifespan"
+    matching = [w for w in caught if "already has a lite-bootstrap teardown hook" in str(w.message)]
+    assert matching, "expected warning about existing lite-bootstrap teardown hook"
     assert application.router.lifespan_context is lifespan_after_first, (
         "second bootstrapper must not re-wrap the lifespan"
     )

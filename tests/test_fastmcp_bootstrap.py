@@ -280,8 +280,8 @@ def test_second_fastmcp_bootstrapper_on_same_app_warns_not_stacks() -> None:
         warnings.simplefilter("always")
         FastMcpBootstrapper(bootstrap_config=config_b)
 
-    matching = [w for w in caught if "_TeardownProvider" in str(w.message)]
-    assert matching, "expected warning about existing _TeardownProvider"
+    matching = [w for w in caught if "already has a lite-bootstrap teardown hook" in str(w.message)]
+    assert matching, "expected warning about existing lite-bootstrap teardown hook"
     assert list(application.providers) == providers_after_first, (
         "second bootstrapper must not stack another _TeardownProvider"
     )
