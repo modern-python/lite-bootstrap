@@ -29,7 +29,7 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
     # bootstrapper on the same app from re-attaching. See architecture/bootstrappers.md.
     _TEARDOWN_MARKER: typing.ClassVar[str] = "_lite_bootstrap_teardown_attached"
 
-    def _attach_teardown_once(self, target: object, attach: typing.Callable[[], None]) -> None:
+    def _attach_teardown_once(self, target: object, attach: typing.Callable[[], object]) -> None:
         """Run ``attach`` (which wires ``teardown`` into the framework's shutdown) once per target.
 
         Idempotent across bootstrapper instances: if ``target`` is already tagged, warn

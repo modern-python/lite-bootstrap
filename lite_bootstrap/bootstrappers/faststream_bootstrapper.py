@@ -205,7 +205,8 @@ class FastStreamBootstrapper(BaseBootstrapper["AsgiFastStream"]):
 
     def __init__(self, bootstrap_config: FastStreamConfig) -> None:
         super().__init__(bootstrap_config)
-        self.bootstrap_config.application.on_shutdown(self.teardown)
+        application = self.bootstrap_config.application
+        self._attach_teardown_once(application, lambda: application.on_shutdown(self.teardown))
 
     def _prepare_application(self) -> "AsgiFastStream":
         return self.bootstrap_config.application

@@ -2,6 +2,7 @@ import dataclasses
 import logging
 import typing
 import uuid
+import warnings
 from unittest.mock import AsyncMock, patch
 
 import faststream.asgi
@@ -65,6 +66,19 @@ def build_faststream_config(
         logging_buffer_capacity=0,
         application=application,
     )
+
+
+def test_second_faststream_bootstrapper_on_same_app_warns(broker: RedisBroker) -> None:
+    config_a = build_faststream_config(broker=broker)
+    FastStreamBootstrapper(bootstrap_config=config_a)
+
+    config_b = dataclasses.replace(config_a)  # shares the same application
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        FastStreamBootstrapper(bootstrap_config=config_b)
+
+    matching = [w for w in caught if "already has a lite-bootstrap teardown hook" in str(w.message)]
+    assert matching, "expected warning about existing lite-bootstrap teardown hook"
 
 
 async def test_faststream_bootstrap(broker: RedisBroker) -> None:
