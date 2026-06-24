@@ -1,9 +1,9 @@
 ---
-status: approved
+status: shipped
 date: 2026-06-23
 slug: structured-log-payload
 spec: structured-log-payload
-pr: null
+pr: 129
 ---
 
 # structured-log-payload — implementation plan

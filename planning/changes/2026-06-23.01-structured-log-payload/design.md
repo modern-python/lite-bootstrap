@@ -1,12 +1,12 @@
 ---
-status: approved
+status: shipped
 date: 2026-06-23
 slug: structured-log-payload
 summary: Move the structlog→Sentry log-line contract into a StructuredLogPayload value object so the meta-key vocabulary and parse live in one place, closing the silent-drift failure mode.
 supersedes: null
 superseded_by: null
-pr: null
-outcome: null
+pr: 129
+outcome: Shipped as designed — StructuredLogPayload owns parse + STRUCTLOG_META_KEYS in logging_factory; Sentry reduced to event-shape guards + orchestration; back-compat alias retained; round-trip drift net added; 100% coverage held.
 ---
 
 # Design: Give the structlog→Sentry payload a deep module
