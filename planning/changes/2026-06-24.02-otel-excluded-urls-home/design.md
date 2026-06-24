@@ -1,12 +1,12 @@
 ---
-status: approved
+status: shipped
 date: 2026-06-24
 slug: otel-excluded-urls-home
 summary: Move OTel's own opentelemetry_excluded_urls field onto OpenTelemetryConfig (typed access, one declaration) and pin the genuine prometheus/health cross-config exclusion reads with a regression test.
 supersedes: null
 superseded_by: null
-pr: null
-outcome: null
+pr: 132
+outcome: Shipped as designed — opentelemetry_excluded_urls moved to OpenTelemetryConfig (3 declarations → 1, typed access), sibling prometheus/health reads kept and pinned by a new test, contribution-mechanism refactor rejected; 100% coverage held.
 ---
 
 # Design: Move `opentelemetry_excluded_urls` onto its own config; pin the sibling-path exclusions
