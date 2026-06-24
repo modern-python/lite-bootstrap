@@ -38,14 +38,16 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
         """
         if getattr(target, self._TEARDOWN_MARKER, False):
             warnings.warn(
-                f"The application passed to {type(self).__name__} already has a lite-bootstrap "
-                f"teardown hook attached; skipping. This {type(self).__name__}'s teardown will "
-                f"not run on shutdown — construct one {type(self).__name__} per application.",
+                f"{type(self).__name__} already has a lite-bootstrap teardown hook attached to this "
+                f"application or its configuration; skipping. This {type(self).__name__}'s teardown "
+                f"will not run on shutdown — construct one {type(self).__name__} per application.",
                 stacklevel=3,
             )
             return
-        setattr(target, self._TEARDOWN_MARKER, True)
+        # Mark only after a successful attach: if attach() raises, the target stays untagged
+        # so a retry can re-attach rather than silently warning-and-skipping forever.
         attach()
+        setattr(target, self._TEARDOWN_MARKER, True)
 
     def build_summary(self) -> str:
         """Return a multi-line human-readable summary of configured + skipped instruments.

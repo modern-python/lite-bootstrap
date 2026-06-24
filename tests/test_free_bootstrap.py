@@ -134,6 +134,23 @@ def test_attach_teardown_once_attaches_then_warns_and_skips(free_bootstrapper_co
     attach.assert_called_once()  # still once — second attach skipped
 
 
+def test_attach_teardown_once_does_not_mark_when_attach_raises(free_bootstrapper_config: FreeConfig) -> None:
+    bootstrapper = FreeBootstrapper(bootstrap_config=free_bootstrapper_config)
+    target = types.SimpleNamespace()
+
+    failing = MagicMock(side_effect=RuntimeError("attach boom"))
+    with pytest.raises(RuntimeError, match="attach boom"):
+        bootstrapper._attach_teardown_once(target, failing)  # noqa: SLF001
+
+    # A failed attach must leave the target untagged so a retry can re-attach.
+    assert not getattr(target, BaseBootstrapper._TEARDOWN_MARKER, False)  # noqa: SLF001
+
+    retry = MagicMock()
+    bootstrapper._attach_teardown_once(target, retry)  # noqa: SLF001
+    retry.assert_called_once()
+    assert getattr(target, BaseBootstrapper._TEARDOWN_MARKER) is True  # noqa: SLF001
+
+
 def test_teardown_is_idempotent(free_bootstrapper_config: FreeConfig) -> None:
     bootstrapper = FreeBootstrapper(bootstrap_config=free_bootstrapper_config)
     bootstrapper.bootstrap()
