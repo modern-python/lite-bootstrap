@@ -35,6 +35,51 @@ def _serialize_log_with_orjson_to_string(value: typing.Any, **kwargs: typing.Any
     return orjson.dumps(value, **kwargs).decode()
 
 
+# Meta-keys the producer's structlog processor chain emits at the top level of every
+# rendered line (see lite_bootstrap/instruments/logging_instrument.py). They are not
+# user-supplied extra and are stripped from StructuredLogPayload.extra. If you add a
+# custom top-level meta-processor to that chain, add its key here.
+STRUCTLOG_META_KEYS: typing.Final = frozenset(
+    {"event", "level", "logger", "tracing", "timestamp", "exception", "skip_sentry"}
+)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class StructuredLogPayload:
+    """The semantic content of one rendered structlog line.
+
+    A consumer-side interpretation type: ``parse`` turns the raw JSON string a
+    structlog processor chain emits into its parts. It holds no knowledge of any
+    downstream event shape (e.g. Sentry's); mapping onto a consumer's event is the
+    consumer's job.
+    """
+
+    message: str | None
+    extra: dict[str, typing.Any]
+    skip_sentry: bool
+
+    @classmethod
+    def parse(cls, formatted: str) -> "StructuredLogPayload | None":
+        """Interpret one rendered structlog line.
+
+        Returns ``None`` when ``formatted`` is not a structlog JSON object (not a
+        JSON object string, a decode error, or a non-dict result).
+        """
+        if not formatted.startswith("{"):
+            return None
+        try:
+            loaded = orjson.loads(formatted)
+        except orjson.JSONDecodeError:
+            return None
+        if not isinstance(loaded, dict):  # pragma: no cover - JSON starting with "{" is always an object
+            return None
+
+        skip_sentry = bool(loaded.get("skip_sentry"))
+        message = loaded.get("event")
+        extra = {key: value for key, value in loaded.items() if key not in STRUCTLOG_META_KEYS}
+        return cls(message=message, extra=extra, skip_sentry=skip_sentry)
+
+
 if import_checker.is_structlog_installed:
     import structlog
 

@@ -65,11 +65,19 @@ leaves no stale references.
 
 ## Cross-instrument integrations
 
-**Logging ↔ Sentry.** `logging_instrument.py` injects structlog context into
-Sentry events. `sentry_instrument.py` chains the user's `before_send` after the
-built-in structlog enricher via `wrap_before_send_callbacks()`. A `skip_sentry`
-flag in the log context suppresses the event; the flag is also stripped from the
-Sentry payload (it is in `IGNORED_STRUCTLOG_ATTRIBUTES`).
+**Logging ↔ Sentry.** `logging_instrument.py` renders every structlog line to a
+flat JSON object via the shared serializer in `logging_factory.py`. The seam
+between the two instruments is `StructuredLogPayload` (also in
+`logging_factory.py`): its `parse` classmethod reconstructs that line into
+`message` / `extra` / `skip_sentry`, owning the meta-key vocabulary
+(`STRUCTLOG_META_KEYS`) and stripping it from `extra` — so neither the parsing
+detail nor the key set lives in `sentry_instrument.py`. The Sentry side's
+`enrich_sentry_event_from_structlog_log` (chained after the user's `before_send`
+via `wrap_before_send_callbacks()`) only maps the parsed payload onto the Sentry
+event: a truthy `skip_sentry` suppresses the event (checked before the
+message-presence test), otherwise it lifts `message` and attaches `extra` under
+`contexts.structlog`. `IGNORED_STRUCTLOG_ATTRIBUTES` remains in
+`sentry_instrument.py` as a back-compat alias of `STRUCTLOG_META_KEYS`.
 
 **OTel ↔ Logging.** The logging instrument injects span/trace IDs from the
 active OpenTelemetry context into every log record, so logs and traces correlate.

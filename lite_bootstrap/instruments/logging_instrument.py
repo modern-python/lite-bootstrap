@@ -30,6 +30,10 @@ if import_checker.is_structlog_installed:
 if import_checker.is_opentelemetry_installed:
     from opentelemetry import trace
 
+    # `tracer_injection` adds the top-level `tracing` meta-key. Any new top-level
+    # meta-processor added to the chain must register its key in
+    # `STRUCTLOG_META_KEYS` (logging_factory.py) or it will leak into
+    # StructuredLogPayload.extra and downstream Sentry context.
     def tracer_injection(_: "WrappedLogger", __: str, event_dict: "EventDict") -> "EventDict":
         current_span = trace.get_current_span()
         if not current_span.is_recording():
