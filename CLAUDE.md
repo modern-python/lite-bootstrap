@@ -4,72 +4,93 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-```bash
-just install        # Update lock file and sync all extras + lint group
-just lint           # Format and lint (eof-fixer, ruff format, ruff check --fix, ty check)
-just lint-ci        # CI lint in check-only mode (no auto-fix)
-just test           # Run pytest with coverage
-just test -- -k "test_name"  # Run a single test
-just test-branch    # Run tests with branch coverage
-```
+`just --list` is the source of truth. Non-obvious "which to use when":
+
+- `just lint` auto-fixes; `just lint-ci` is check-only (CI) and also runs the
+  planning validator (`planning/index.py --check`). `just check-planning` runs
+  just that validator.
+- `just test -- -k "test_name"` runs a single test; `just test-branch` adds
+  branch coverage.
 
 All commands use `uv run` — do not invoke tools directly (e.g., use `uv run pytest`, not `pytest`).
 
 ## Architecture
 
-**lite-bootstrap** bootstraps Python microservices with pre-configured observability instruments.
+**lite-bootstrap** bootstraps Python microservices with pre-configured
+observability instruments: a frozen `BaseConfig` hierarchy describes what the
+user wants, `BaseInstrument[ConfigT]` subclasses each own one observability
+concern, and a `BaseBootstrapper` per framework decides which instruments apply
+and drives their lifecycle.
 
-### Core pattern
+The authoritative, code-current account of each capability lives in
+[`architecture/`](architecture/). **When a change alters a capability's
+behavior, update the matching `architecture/<capability>.md` in the same PR** —
+that promotion is what keeps `architecture/` true.
 
-```
-BaseConfig (frozen dataclass, kw_only)
-    └── Framework configs compose multiple instrument configs via multiple inheritance
+Invariants (what must not break) — see the capability page for the full account:
 
-BaseInstrument[ConfigT] (generic, non-frozen dataclass with slots)
-    └── Instrument subclasses: lifecycle via bootstrap() / teardown(); skip check via is_configured() classmethod
+- **Frozen configs, non-frozen instruments.** All `*Config` are frozen for
+  user-facing immutability; `*Instrument` are non-frozen because `LoggingInstrument`
+  / `OpenTelemetryInstrument` cache runtime state, forcing the whole hierarchy
+  non-frozen. → `architecture/config-model.md`, `architecture/instruments.md`
+- **`__post_init__` cascade.** Every config `__post_init__` must call
+  `super().__post_init__()` (`BaseConfig` is the no-op terminator); `FastAPIConfig`
+  uses the explicit `super(FastAPIConfig, self)` form under `slots=True`. →
+  `architecture/config-model.md`
+- **`from_dict` vs `from_object` differ on `None`.** `from_dict` passes explicit
+  `None` through (overrides default); `from_object` filters `None`/missing (default
+  wins). → `architecture/config-model.md`
+- **Optional-dependency guard.** Optional imports sit behind
+  `if import_checker.is_X_installed:`; code referencing the symbol runs only after
+  `check_dependencies()` returned True. `ty` models this; other checkers may
+  false-flag "possibly unbound". → `architecture/instruments.md`
+- **Construction skip ordering.** `is_configured` (silent skip) → `check_dependencies`
+  (warns on configured-but-missing) → instantiate; one INFO summary line via
+  `build_summary()`. → `architecture/bootstrappers.md`
+- **Idempotent teardown.** `teardown()` no-ops when not bootstrapped, runs instruments
+  in reverse, collects per-instrument errors into one `TeardownError`, resets cached
+  state in `try/finally`. → `architecture/bootstrappers.md`
+- **OTel is single-instance per process.** `set_tracer_provider` is set-once; a second
+  instance is ignored. Construct exactly one `OpenTelemetryInstrument` per process. →
+  `architecture/instruments.md`
+- **Teardown attaches once.** `_attach_teardown_once` guards against double-attach via
+  the `_lite_bootstrap_teardown_attached` marker; `_lite_bootstrap_*`-prefixed
+  attributes are the sanctioned way to tag user-supplied apps. →
+  `architecture/bootstrappers.md`
 
-BaseBootstrapper (abc.ABC)
-    ├── FastAPIBootstrapper
-    ├── LitestarBootstrapper
-    ├── FastStreamBootstrapper
-    ├── FastMcpBootstrapper
-    └── FreeBootstrapper
-```
+Capability index (all of `architecture/`):
 
-### Key design decisions
+| Capability | File |
+|---|---|
+| Config model — `BaseConfig`, multiple-inheritance composition, `from_dict`/`from_object`, `UNSET`, `__post_init__` cascade | `architecture/config-model.md` |
+| Instruments — `BaseInstrument` lifecycle, catalog, optional-dep guard, non-frozen rationale, cross-instrument integrations (Logging↔Sentry, OTel↔Logging, Pyroscope↔OTel), OTel single-instance | `architecture/instruments.md` |
+| Bootstrappers — hierarchy, skip ordering, registry + idempotent teardown, summary logging, teardown-attach seam, app-tagging sentinels | `architecture/bootstrappers.md` |
 
-Recent design context, bugs, and convention rationale: see the bug-audit findings in `planning/audits/` and the post-work reflections in `planning/retros/` (the audit arcs themselves are bundled under `planning/changes/`).
-
-- **Optional dependencies**: Each instrument checks for its optional package via `import_checker.py` (`importlib.util.find_spec`). Instruments are skipped silently if the package is absent. Optional packages are imported inside `if import_checker.is_X_installed:` blocks; static analyzers that don't model this guard will report spurious "possibly unbound" diagnostics — the project uses `ty` which handles the pattern correctly.
-- **Instrument skip ordering**: `BaseBootstrapper.__init__` runs `instrument_type.is_configured(config)` first (silent skip if the user's config indicates the instrument shouldn't run — populates `bootstrapper.skipped_instruments: list[tuple[type, str]]`); then `check_dependencies()` (emits `InstrumentDependencyMissingWarning` only for configured-but-dep-missing — the genuine deployment surprise); then instantiates. One `logger.info` summary line at the end lists configured + skipped instruments via `BaseBootstrapper.build_summary()`; that method is also publicly callable for post-construction debugging. Uses stdlib `logging` so it composes cleanly with the user's logging setup and with pytest's `caplog`.
-- **Frozen configs, non-frozen instruments**: All `*Config` classes are `@dataclasses.dataclass(kw_only=True, frozen=True)`. All `*Instrument` classes lose `frozen=True` because two instruments (`LoggingInstrument`, `OpenTelemetryInstrument`) cache mutable runtime state (`_logger_factory`, `_tracer_provider`); Python's dataclass rules require the whole hierarchy to be non-frozen. `from_dict()` and `from_object()` filter unknown keys before constructing.
-- **`FastAPIConfig.application` uses an `UnsetType` sentinel**: shared in `lite_bootstrap/types.py` as `UnsetType` + `UNSET` (singleton). `FastAPIConfig.__post_init__` checks `isinstance(self.application, UnsetType)` and replaces with a constructed `FastAPI()` via `object.__setattr__` (config stays frozen for user-facing immutability). A one-line comment in `__post_init__` documents the freeze bypass.
-- **Instrument registry**: `BaseBootstrapper` holds a list of instrument instances; it calls `bootstrap()` on each in order and `teardown()` in reverse during shutdown.
-- **Idempotent teardown**: `BaseBootstrapper.teardown()` returns immediately if `not self.is_bootstrapped`. Cached runtime state in `LoggingInstrument` and `OpenTelemetryInstrument` is reset inside `try/finally` so a raised shutdown leaves no stale references.
-- **Logging ↔ Sentry integration**: `logging_instrument.py` renders structlog lines to JSON; the seam is `StructuredLogPayload.parse` in `logging_factory.py`, which reconstructs a line into `message`/`extra`/`skip_sentry` and owns the meta-key vocabulary (`STRUCTLOG_META_KEYS`, stripped from `extra`). `sentry_instrument.py`'s `enrich_sentry_event_from_structlog_log` (chained after the user's `before_send` via `wrap_before_send_callbacks()`) only maps the parsed payload onto the Sentry event — a truthy `skip_sentry` suppresses the event (checked before the message-presence test), else it lifts `message` and attaches `extra` under `contexts.structlog`. `IGNORED_STRUCTLOG_ATTRIBUTES` stays as a back-compat alias of `STRUCTLOG_META_KEYS`. The value object holds no Sentry-event-shape knowledge; adding a custom top-level meta-processor to the logging chain means extending `STRUCTLOG_META_KEYS` (cross-referenced at `tracer_injection`).
-- **OTel ↔ Logging integration**: The logging instrument injects span/trace IDs from the active OpenTelemetry context into every log record.
-- **`OpenTelemetryInstrument` is single-instance per process**: `bootstrap()` calls `opentelemetry.trace.set_tracer_provider(...)`, which the OTel SDK enforces as set-once via `_TRACER_PROVIDER_SET_ONCE.do_once(...)` (subsequent calls log `"Overriding of current TracerProvider is not allowed"` and have no effect). `teardown()` calls `shutdown()` on the provider (flushes batched spans, closes exporters) but cannot reset the process-global pointer. Construct one `OpenTelemetryInstrument` per process; do not bootstrap a second instance. Verified against `opentelemetry/trace/__init__.py:548-556`.
-
-### Module layout
-
-One file per instrument under `lite_bootstrap/instruments/`, one per framework under `lite_bootstrap/bootstrappers/`. Non-obvious files worth knowing:
-
-- `lite_bootstrap/types.py` — `UnsetType` + `UNSET` singleton used as the "user did not supply this" sentinel (notably for `FastAPIConfig.application`).
-- `lite_bootstrap/instruments/logging_factory.py` — `MemoryLoggerFactory`, factory config, structlog serializer, ASGI protocols. Split out of `logging_instrument.py` to keep each file scoped to one job.
-
-### Optional dependency groups
-
-See `[project.optional-dependencies]` in `pyproject.toml` for the full extras matrix.
+Recent design context, bugs, and rationale: bug-audit findings in
+`planning/audits/`, post-work reflections in `planning/retros/`, and the audit
+arcs bundled under `planning/changes/`. The full extras matrix is
+`[project.optional-dependencies]` in `pyproject.toml`.
 
 ## Workflow
 
-Per-feature: brainstorming → spec in `planning/changes/YYYY-MM-DD.NN-<slug>/design.md` → writing-plans → plan in `planning/changes/YYYY-MM-DD.NN-<slug>/plan.md` → executing-plans / subagent-driven-development → requesting-code-review → finishing-a-development-branch. Each change is a folder bundle; `<slug>` is a kebab-case description, not a story ID; `.NN` is a zero-padded intra-day counter that breaks same-date ties so the timeline sorts stably. The implementing PR sets `status: shipped` and fills `pr` / `outcome` in the branch, alongside the code and promotes its conclusions into the affected `architecture/<capability>.md` — that hand-edit keeps `architecture/` true and is the only ship-time step; there is no folder move. The change listing is generated — run `just index`. A design decision taken without a code change — especially a candidate rejected with a load-bearing reason — is recorded as `planning/decisions/YYYY-MM-DD-<slug>.md` (the `decision.md` template, frontmatter `status: accepted|superseded`), each with a **Revisit trigger** so future reviews don't re-litigate it; listed by `just index`. See [`planning/README.md`](planning/README.md) for the conventions and [`planning/_templates/`](planning/_templates/) for copy-and-fill starting points.
+Planning uses the portable two-axis convention: `architecture/` (repo root) is
+the living truth home and promotion target; `planning/changes/` holds the
+per-change bundles. **Start at the
+[Quick path](planning/README.md#quick-path-start-here)** in
+[`planning/README.md`](planning/README.md) to choose a lane (Full / Lightweight /
+Tiny), create a bundle, and ship — that file is the authoritative spec, with
+copy-and-fill starters in [`planning/_templates/`](planning/_templates/). Run
+`just check-planning` to validate bundles and `just index` to print the listing.
 
-**Spec** (`design.md`) captures the *thinking* — why, what the design is, trade-offs, scope. Written before code; rarely revised after merge. **Plan** (`plan.md`) captures the *sequencing* — the ordered checklist an executor walks; references the spec for the "why". **`architecture/`** captures the *invariants* of shipped systems — the living truth, promoted in the implementing PR alongside the code. A plan paragraph that would still read correctly with all task numbers and checkboxes removed is design content and belongs in the spec.
+Repo-local notes:
 
-**Three lanes.** Scale the artifact to the change. **Full** — a `design.md` + `plan.md` bundle — for real design judgment, a new file/module, a public-API change, cross-cutting/multi-file work, or non-trivial test design. **Lightweight** — a single `change.md` — for small-but-real changes (≲30 LOC net, ≤2 files, no new file, no public-API change, a single straightforward test). **Tiny** — no bundle, just a conventional commit — for a typo, dep bump, linter/formatter/CI tweak, a mechanical rename, or a single-line config change. Heavier lane wins on ambiguity; a `change.md` that outgrows its lane splits into `design.md` + `plan.md`.
-
-Design docs and implementation plans live under `planning/` (not under `docs/`, so they're excluded from the mkdocs site automatically). When superpowers skills default to `docs/superpowers/specs/` or `docs/superpowers/plans/`, use the change bundle under `planning/changes/` here instead.
+- Design docs and plans live under `planning/`, **not** under `docs/`, so the
+  mkdocs site excludes them automatically. When superpowers skills default to
+  `docs/superpowers/specs/` or `docs/superpowers/plans/`, use the change bundle
+  under `planning/changes/` instead.
+- `summary` is finalized at ship to state the realized result, in the
+  implementing PR alongside the code and the `architecture/` promotion — no
+  post-merge bookkeeping, no folder move.
 
 ## Code style
 
@@ -79,13 +100,16 @@ Design docs and implementation plans live under `planning/` (not under `docs/`, 
 
 ### Conventions (from prior audit work)
 
+These are coding rules. The capability invariants they touch are detailed in
+`architecture/` (pointers below).
+
 - **No `# noqa: PLR2004`**: extract magic values to named locals. Example: `expected_max_age = 600; assert config.cors_max_age == expected_max_age` (not `assert config.cors_max_age == 600  # noqa: PLR2004`).
 - **Backward-compat aliases for renames**: when renaming a public class, add a silent module-level alias (`OldName = NewName`) at the end of the file. Re-export both names from `__init__.py` if the old name was publicly exported. Aliases are class assignments, not subclasses — same class object, so `isinstance` behavior is preserved.
-- **Frozen-config bypass in `__post_init__`**: it's acceptable to use `object.__setattr__(self, "field", value)` inside a frozen config's `__post_init__` to set a field that requires other config values to construct. Document with a one-line comment naming the trade-off (user-facing immutability vs. construction-time mutation).
-- **Optional-import guard pattern**: top-level conditional imports (`if import_checker.is_X_installed: import X`) keep optional dependencies actually optional. Code that references `X` is only reached when `check_dependencies()` has already returned True; the runtime invariant is maintained by the inline `is_configured → check_dependencies → instantiate` flow in `BaseBootstrapper.__init__`. See "Type checking" below.
-- **`from_dict` vs `from_object` accept different shapes for `None`**: `BaseConfig.from_dict({"service_name": None})` succeeds and explicitly overrides the default with `None`. `BaseConfig.from_object(obj)` where `obj.service_name is None` filters the attribute out and the dataclass default takes over. The asymmetry is documented in both methods' docstrings (`instruments/base.py:17, 23`) and pinned by tests in `tests/test_config.py:54-94`. Pick `from_dict` if explicit-None override is the load-bearing semantic.
-- **`__post_init__` cascade invariant**: every config-class `__post_init__` must call `super().__post_init__()` so MRO chains terminate cleanly. `BaseConfig` has a no-op `__post_init__` as the chain terminator. Required because `OpenTelemetryConfig.__post_init__` (SEC-2 warning), `CorsConfig.__post_init__` (SEC-3 validation), and `FastAPIConfig.__post_init__` (UnsetType app construction) all sit on the same MRO for `FastAPIConfig`/`LitestarConfig`/`FastStreamConfig`/`FreeConfig`; without the cascade, a class that returns early before `super()` blocks the rest of the chain. `FastAPIConfig` uses the explicit `super(FastAPIConfig, self).__post_init__()` form because `@dataclass(slots=True)` replaces the class object after the body compiles and breaks bare `super()`.
-- **`_lite_bootstrap_*` prefix for sentinels on user-supplied app instances**: when the bootstrapper needs to tag a user-supplied framework app (FastAPI, FastMCP, Litestar, FastStream) with internal state, store it as a direct attribute on the instance with a `_lite_bootstrap_` prefix. The canonical example is the `_lite_bootstrap_teardown_attached` marker that gates the double-attach guard, set once by the shared `BaseBootstrapper._attach_teardown_once(target, attach)` and applied uniformly across all four app-bearing bootstrappers (FastAPI tags the app, Litestar tags its `AppConfig`, FastStream/FastMCP tag the app). Read with `getattr(target, "_lite_bootstrap_<name>", False)` (no SLF violation); write with `setattr`/`target._lite_bootstrap_<name> = value  # noqa: SLF001`. Don't squat in framework-provided user namespaces like Starlette's `application.state`. See `architecture/bootstrappers.md`.
+- **Frozen-config bypass in `__post_init__`**: `object.__setattr__(self, "field", value)` inside a frozen config's `__post_init__` is acceptable to set a field that requires other config values to construct; document with a one-line comment naming the trade-off (user-facing immutability vs. construction-time mutation). → `architecture/config-model.md`
+- **Optional-import guard pattern**: top-level conditional imports (`if import_checker.is_X_installed: import X`) keep optional dependencies actually optional; code referencing `X` runs only after `check_dependencies()` returned True (the `is_configured → check_dependencies → instantiate` flow in `BaseBootstrapper.__init__`). See "Type checking" below. → `architecture/instruments.md`
+- **`from_dict` vs `from_object` differ on `None`**: `from_dict` overrides the default with explicit `None`; `from_object` filters `None`/missing so the default wins. Documented in both docstrings (`instruments/base.py`) and pinned by `tests/test_config.py`. Pick `from_dict` if explicit-None override is the load-bearing semantic. → `architecture/config-model.md`
+- **`__post_init__` cascade**: every config-class `__post_init__` must call `super().__post_init__()`; `BaseConfig`'s no-op terminates the chain; `FastAPIConfig` needs the explicit `super(FastAPIConfig, self).__post_init__()` form under `slots=True`. → `architecture/config-model.md`
+- **`_lite_bootstrap_*` prefix for sentinels on user-supplied apps**: tag a user-supplied framework app with a direct `_lite_bootstrap_`-prefixed attribute (read via `getattr(..., default)` — no SLF violation; write with `# noqa: SLF001`); don't squat in framework namespaces like Starlette's `application.state`. The canonical example is the `_lite_bootstrap_teardown_attached` double-attach marker set by `_attach_teardown_once`. → `architecture/bootstrappers.md`
 
 ### Type checking
 
