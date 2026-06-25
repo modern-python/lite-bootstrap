@@ -1,12 +1,5 @@
 ---
-status: shipped
-date: 2026-06-02
-slug: stdlib-logging-and-build-summary
 summary: Stdlib `logging` in `bootstrappers/base.py` + public `build_summary()`.
-supersedes: instrument-skip-rework
-superseded_by: null
-pr: "107"
-outcome: "merged as #107"
 ---
 # Design: Stdlib Logging in `bootstrappers/base.py` + Public `build_summary()` Method
 

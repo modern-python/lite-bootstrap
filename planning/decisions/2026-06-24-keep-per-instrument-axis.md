@@ -1,11 +1,8 @@
 ---
 status: accepted
-date: 2026-06-24
-slug: keep-per-instrument-axis
 summary: Keep the per-instrument axis for the instrument×framework matrix; reject inverting to per-framework adapters.
 supersedes: null
 superseded_by: null
-pr: null
 ---
 
 # Keep the per-instrument axis for the instrument × framework matrix

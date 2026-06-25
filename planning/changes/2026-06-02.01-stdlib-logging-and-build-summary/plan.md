@@ -1,10 +1,3 @@
----
-status: shipped
-date: 2026-06-02
-slug: stdlib-logging-and-build-summary
-spec: stdlib-logging-and-build-summary
-pr: "107"
----
 # Stdlib Logging + `build_summary()` Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

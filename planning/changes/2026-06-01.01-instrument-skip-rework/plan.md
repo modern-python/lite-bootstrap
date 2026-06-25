@@ -1,10 +1,3 @@
----
-status: shipped
-date: 2026-06-01
-slug: instrument-skip-rework
-spec: instrument-skip-rework
-pr: null
----
 # Instrument Skip Rework Implementation Plan
 
 > **Note (2026-06-02):** the `_get_logger()` fresh-per-call decision documented below was revised by `docs/superpowers/specs/2026-06-02-stdlib-logging-and-build-summary-design.md`. The summary-log goal is unchanged; the implementation switched to stdlib `logging` with a public `build_summary()` method.

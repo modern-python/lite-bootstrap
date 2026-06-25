@@ -1,12 +1,5 @@
 ---
-status: shipped
-date: 2026-06-01
-slug: deferred-refactors
 summary: The 20 deferred items from the 2026-05-31 audit (REF/TEST/LOW) across eight PRs.
-supersedes: null
-superseded_by: null
-pr: null
-outcome: "shipped as #96–#103"
 ---
 # Deferred Refactors Sequencing
 

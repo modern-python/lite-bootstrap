@@ -6,10 +6,11 @@ at the repo root; this directory records *how it got there*.
 
 ## Conventions
 
-> This section is the portable convention — identical across the
-> modern-python repos. The generated change listing (`just index`) and the `## Other` pointers below are repo-local. To adopt elsewhere,
-> copy this section plus [`_templates/`](_templates/) and point that repo's
-> `CLAUDE.md` Workflow + truth home at it.
+> This section is the portable convention, sourced from the canonical repo
+> [`lesnik512/planning-convention`](https://github.com/lesnik512/planning-convention)
+> (applied version in [`.convention-version`](.convention-version)). To update
+> it, run that repo's `APPLY.md` flow. The generated change index (`just index`)
+> and the `## Other` pointers below are repo-local.
 
 ### Two axes, never mixed
 
@@ -32,10 +33,11 @@ A change is a folder `changes/YYYY-MM-DD.NN-<slug>/`:
   (`.01`, `.02`, …) that breaks same-date ties so the timeline sorts stably.
 - `<slug>` — kebab-case description, not a story ID.
 
-`summary` is written when the change is created (it is the change's
-one-liner). The implementing PR then sets `status: shipped` and fills `pr`
-and `outcome` **in the branch**, alongside the code and the `architecture/`
-promotion — no post-merge bookkeeping, no folder move.
+`summary` is written when the change is created (the intent one-liner) and
+**finalized at ship** to state the realized result — set in the implementing
+PR, alongside the code and the `architecture/` promotion. No post-merge
+bookkeeping, no folder move. `date` and `slug` are never written — they are
+read from the bundle's directory name.
 
 ### Three lanes
 
@@ -66,19 +68,25 @@ Templates live in [`_templates/`](_templates/).
 
 ### Frontmatter
 
-`design.md` / `change.md`: `status` (draft|approved|shipped|superseded),
-`date`, `slug`, `summary` (single line), `supersedes`, `superseded_by`, `pr`,
-`outcome`. `plan.md`: `status`, `date`, `slug`, `spec`, `pr`.
-`decisions/*.md`: `status` (accepted|superseded), `date`, `slug`, `summary`,
-`supersedes`, `superseded_by`, `pr`. Files in
-`architecture/` carry **no** frontmatter — living prose, dated by git.
+`date` and `slug` are **derived from the directory / file name** — never
+repeated in frontmatter. So:
+
+- `design.md` / `change.md`: `summary` (single line) only.
+- `plan.md`: **no frontmatter** — its identity is the bundle directory.
+- `decisions/*.md`: `status` (accepted|superseded), `summary`, and optional
+  `supersedes` / `superseded_by`.
+- Files in `architecture/` carry **no** frontmatter — living prose, dated by git.
+
+**`summary`** is one line: written at creation as the intent, then **finalized
+at ship** to state the realized result — what shipped and its effect. It is the
+only field the index renders.
 
 ## Index
 
 The listing is **generated**, not maintained — run `just index` to print it:
-changes grouped by `status` (In progress / Shipped / Superseded), then
-decisions newest-first. The frontmatter in each bundle / decision file is the
-single source of truth; there is no committed copy to drift.
+changes flat, newest-first, then decisions newest-first. The frontmatter in
+each bundle / decision file is the single source of truth; there is no
+committed copy to drift.
 
 ## Other
 

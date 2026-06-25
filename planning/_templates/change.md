@@ -1,12 +1,5 @@
 ---
-status: draft
-date: YYYY-MM-DD
-slug: my-change
-summary: One line — shown in the generated index. Fill at ship time.
-supersedes: null
-superseded_by: null
-pr: null
-outcome: null
+summary: One line — shown in the generated index. Written at creation; finalize at ship to state the realized result.
 ---
 
 # Change: One-line capitalized title

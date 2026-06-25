@@ -1,12 +1,5 @@
 ---
-status: shipped
-date: 2026-06-24
-slug: unify-teardown-attach
 summary: Move the teardown-on-shutdown attach behind one BaseBootstrapper._attach_teardown_once seam with a uniform marker, extending the double-attach guard to Litestar and FastStream.
-supersedes: null
-superseded_by: null
-pr: 130
-outcome: Shipped as designed — one _attach_teardown_once seam owns detection + warning + skip; FastAPI/FastMCP migrated behavior-preserving; Litestar/FastStream gained the guard; attach typed Callable[[], object]; 100% coverage held.
 ---
 
 # Design: Unify the teardown-on-shutdown attach behind one guarded seam
