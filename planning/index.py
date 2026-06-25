@@ -2,24 +2,29 @@
 """
 Generate the planning index from frontmatter.
 
-Run via ``just index``. Globs ``planning/changes/*/`` (each bundle's ``design.md``,
-falling back to ``change.md``) and ``planning/decisions/*.md``, reads their
-frontmatter, and prints a Markdown listing to stdout — changes grouped by lifecycle
-status, then decisions newest-first. Never writes a file: the listing is a query over
-the files, not a committed artifact.
+Run via ``just index``. Globs ``planning/changes/*/`` (each bundle's
+``design.md``, falling back to ``change.md``) and ``planning/decisions/*.md``,
+reads their frontmatter, and prints a Markdown listing to stdout — changes
+then decisions, newest-first. Never writes a file:
+the listing is a query over the files, not a committed artifact.
+
+``date`` and ``slug`` are derived from the directory / file name, not
+frontmatter — the name is the single source of truth for both.
 """
 
 import pathlib
+import re
 import sys
 
 
 CHANGES_DIR = pathlib.Path(__file__).parent / "changes"
 DECISIONS_DIR = pathlib.Path(__file__).parent / "decisions"
-GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("In progress", ("draft", "approved")),
-    ("Shipped", ("shipped",)),
-    ("Superseded", ("superseded",)),
-)
+VALID_DECISION_STATUS = {"accepted", "superseded"}
+BUNDLE_RE = re.compile(r"^(?P<date>\d{4}-\d{2}-\d{2})\.\d{2}-(?P<slug>.+)$")
+DECISION_RE = re.compile(r"^(?P<date>\d{4}-\d{2}-\d{2})-(?P<slug>.+)$")
+ALLOWED_BUNDLE_FILES = {"design.md", "plan.md", "change.md"}
+SPEC_REQUIRED = ("summary",)
+DECISION_REQUIRED = ("status", "summary")
 
 
 def parse_frontmatter(text: str) -> dict[str, str]:
@@ -31,6 +36,8 @@ def parse_frontmatter(text: str) -> dict[str, str]:
     for line in lines[1:]:
         if line.strip() == "---":
             break
+        if line[:1] in (" ", "\t"):
+            continue
         key, sep, value = line.partition(": ")
         if not sep:
             continue
@@ -39,8 +46,17 @@ def parse_frontmatter(text: str) -> dict[str, str]:
     return fields
 
 
+def _named(fields: dict[str, str], name: str, pattern: re.Pattern[str]) -> dict[str, str]:
+    """Inject ``date``/``slug`` derived from a dir/file name into ``fields``."""
+    match = pattern.match(name)
+    if match:
+        fields["date"] = match.group("date")
+        fields["slug"] = match.group("slug")
+    return fields
+
+
 def load_bundles() -> list[dict[str, str]]:
-    """Read every bundle's spec frontmatter under ``CHANGES_DIR``."""
+    """Read each bundle's summary; derive date/slug from the directory name."""
     bundles: list[dict[str, str]] = []
     for bundle in sorted(CHANGES_DIR.iterdir()):
         if not bundle.is_dir():
@@ -50,7 +66,7 @@ def load_bundles() -> list[dict[str, str]]:
             spec = bundle / "change.md"
         if not spec.exists():
             continue
-        fields = parse_frontmatter(spec.read_text(encoding="utf-8"))
+        fields = _named(parse_frontmatter(spec.read_text(encoding="utf-8")), bundle.name, BUNDLE_RE)
         fields["path"] = f"changes/{bundle.name}/{spec.name}"
         fields["name"] = bundle.name
         bundles.append(fields)
@@ -58,14 +74,14 @@ def load_bundles() -> list[dict[str, str]]:
 
 
 def load_decisions() -> list[dict[str, str]]:
-    """Read frontmatter from every decision file under ``DECISIONS_DIR``."""
+    """Read each decision's frontmatter; derive date/slug from the file name."""
     decisions: list[dict[str, str]] = []
     if not DECISIONS_DIR.is_dir():
         return decisions
     for path in sorted(DECISIONS_DIR.glob("*.md")):
         if path.name == "README.md" or path.name.startswith("_"):
             continue
-        fields = parse_frontmatter(path.read_text(encoding="utf-8"))
+        fields = _named(parse_frontmatter(path.read_text(encoding="utf-8")), path.stem, DECISION_RE)
         fields["path"] = f"decisions/{path.name}"
         fields["name"] = path.stem
         decisions.append(fields)
@@ -73,13 +89,12 @@ def load_decisions() -> list[dict[str, str]]:
 
 
 def format_row(bundle: dict[str, str]) -> str:
-    """Render one bundle or decision as a Markdown list item."""
+    """Render one bundle as a Markdown list item."""
     slug = bundle.get("slug", "?")
     path = bundle.get("path", "")
-    pr = bundle.get("pr") or "—"
     date = bundle.get("date", "")
     summary = bundle.get("summary") or "(no summary)"
-    line = f"- **[{slug}]({path})** (#{pr}, {date}) — {summary}"
+    line = f"- **[{slug}]({path})** ({date}) — {summary}"
     if bundle.get("supersedes"):
         line += f" _(supersedes {bundle['supersedes']})_"
     if bundle.get("superseded_by"):
@@ -88,26 +103,85 @@ def format_row(bundle: dict[str, str]) -> str:
 
 
 def render(bundles: list[dict[str, str]], decisions: list[dict[str, str]]) -> str:
-    """Render the full Markdown listing: changes by status, then decisions."""
+    """Render the full Markdown listing: changes then decisions, newest-first."""
     out = ["# Planning index", "", "_Generated by `just index` — do not edit._", "", "## Changes", ""]
-    for title, statuses in GROUPS:
-        out += [f"### {title}", ""]
-        rows = sorted(
-            (b for b in bundles if b.get("status") in statuses),
-            key=lambda b: b.get("name", ""),
-            reverse=True,
-        )
-        out += [format_row(b) for b in rows] if rows else ["_None._"]
-        out.append("")
-    out += ["## Decisions", ""]
+    change_rows = sorted(bundles, key=lambda b: b.get("name", ""), reverse=True)
+    out += [format_row(b) for b in change_rows] if change_rows else ["_None._"]
+    out += ["", "## Decisions", ""]
     decision_rows = sorted(decisions, key=lambda d: d.get("name", ""), reverse=True)
     out += [format_row(d) for d in decision_rows] if decision_rows else ["_None._"]
     out.append("")
     return "\n".join(out).rstrip() + "\n"
 
 
+def _require(fields: dict[str, str], keys: tuple[str, ...], rel: str, violations: list[str]) -> None:
+    """Append a violation for each required key that is absent or empty."""
+    violations.extend(f"{rel}: missing or empty frontmatter key '{key}'" for key in keys if not fields.get(key))
+
+
+def _check_spec_file(path: pathlib.Path, rel: str, violations: list[str]) -> None:
+    """Validate a design.md / change.md spec file (requires `summary`)."""
+    fields = parse_frontmatter(path.read_text(encoding="utf-8"))
+    _require(fields, SPEC_REQUIRED, rel, violations)
+
+
+def _check_bundle(bundle: pathlib.Path, violations: list[str]) -> None:
+    """Validate one change bundle directory."""
+    rel = f"changes/{bundle.name}"
+    if BUNDLE_RE.match(bundle.name) is None:
+        violations.append(f"{rel}: directory name is not 'YYYY-MM-DD.NN-slug'")
+    violations.extend(
+        f"{rel}/{child.name}: unexpected file in bundle (allowed: {', '.join(sorted(ALLOWED_BUNDLE_FILES))})"
+        for child in sorted(bundle.iterdir())
+        if child.name not in ALLOWED_BUNDLE_FILES
+    )
+    design = bundle / "design.md"
+    change = bundle / "change.md"
+    if not design.exists() and not change.exists():
+        violations.append(f"{rel}: bundle has neither design.md nor change.md")
+    for spec_file in (design, change):
+        if spec_file.exists():
+            _check_spec_file(spec_file, f"{rel}/{spec_file.name}", violations)
+    # plan.md carries no frontmatter — its identity comes from the bundle dir.
+
+
+def _check_decision(path: pathlib.Path, violations: list[str]) -> None:
+    """Validate one decision file (requires `status` + `summary`)."""
+    rel = f"decisions/{path.name}"
+    if DECISION_RE.match(path.stem) is None:
+        violations.append(f"{rel}: file name is not 'YYYY-MM-DD-slug.md'")
+    fields = parse_frontmatter(path.read_text(encoding="utf-8"))
+    _require(fields, DECISION_REQUIRED, rel, violations)
+    status = fields.get("status", "")
+    if status and status not in VALID_DECISION_STATUS:
+        violations.append(f"{rel}: invalid status '{status}' (allowed: {', '.join(sorted(VALID_DECISION_STATUS))})")
+
+
+def check() -> list[str]:
+    """Validate every bundle and decision; return the list of violation strings."""
+    violations: list[str] = []
+    for bundle in sorted(CHANGES_DIR.iterdir()):
+        if bundle.is_dir():
+            _check_bundle(bundle, violations)
+    if DECISIONS_DIR.is_dir():
+        for path in sorted(DECISIONS_DIR.glob("*.md")):
+            if path.name == "README.md" or path.name.startswith("_"):
+                continue
+            _check_decision(path, violations)
+    return violations
+
+
 def main() -> int:
-    """Print the listing to stdout."""
+    """Print the listing to stdout, or validate bundles with --check."""
+    if "--check" in sys.argv[1:]:
+        violations = check()
+        if violations:
+            sys.stderr.write(f"planning: {len(violations)} violation(s)\n")
+            for violation in violations:
+                sys.stderr.write(f"  - {violation}\n")
+            return 1
+        sys.stdout.write("planning: OK\n")
+        return 0
     sys.stdout.write(render(load_bundles(), load_decisions()))
     return 0
 

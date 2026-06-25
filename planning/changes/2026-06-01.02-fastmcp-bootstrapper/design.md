@@ -1,12 +1,5 @@
 ---
-status: shipped
-date: 2026-06-01
-slug: fastmcp-bootstrapper
 summary: New `FastMcpBootstrapper` mirroring microbootstrap's fastmcp support.
-supersedes: null
-superseded_by: null
-pr: null
-outcome: shipped
 ---
 # FastMCP Bootstrapper Design
 

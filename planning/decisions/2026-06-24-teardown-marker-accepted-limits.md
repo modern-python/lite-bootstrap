@@ -1,11 +1,8 @@
 ---
 status: accepted
-date: 2026-06-24
-slug: teardown-marker-accepted-limits
 summary: Two deliberate limits of the unified teardown marker — FastMCP detects via attribute not provider scan, and Litestar tags the shareable AppConfig.
 supersedes: null
 superseded_by: null
-pr: 130
 ---
 
 # Accepted limits of the unified teardown-attach marker

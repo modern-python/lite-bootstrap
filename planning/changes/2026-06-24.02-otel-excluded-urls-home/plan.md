@@ -1,11 +1,3 @@
----
-status: shipped
-date: 2026-06-24
-slug: otel-excluded-urls-home
-spec: otel-excluded-urls-home
-pr: 132
----
-
 # otel-excluded-urls-home — implementation plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use

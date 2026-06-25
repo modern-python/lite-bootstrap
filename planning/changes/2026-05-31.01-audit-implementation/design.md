@@ -1,12 +1,5 @@
 ---
-status: shipped
-date: 2026-05-31
-slug: audit-implementation
 summary: Criticals (CRIT-1..3) + design issues (DES-1..5) + paired tests across seven sequenced PRs.
-supersedes: null
-superseded_by: null
-pr: null
-outcome: "shipped as #89–#95"
 ---
 # Audit Implementation Sequencing
 
