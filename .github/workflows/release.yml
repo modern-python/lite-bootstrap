@@ -23,6 +23,25 @@ jobs:
       - uses: extractions/setup-just@v4
       - uses: astral-sh/setup-uv@v7
 
+      # Curated release notes are MANDATORY for a stable tag. This runs BEFORE
+      # `just publish` (which is irreversible) so a missing notes file aborts
+      # the release before anything reaches PyPI — rather than silently shipping
+      # with GitHub's auto-generated notes. Pre-release tags (a letter in the
+      # name, e.g. 2.0.0rc1) are exempt and keep the auto-generated fallback.
+      - name: Require curated release notes (stable tags)
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF_NAME" =~ [a-z] ]]; then
+            echo "Pre-release ${GITHUB_REF_NAME}: curated notes not required."
+            exit 0
+          fi
+          notes="planning/releases/${GITHUB_REF_NAME}.md"
+          if [ ! -f "$notes" ]; then
+            echo "::error::Stable tag ${GITHUB_REF_NAME} has no curated release notes at ${notes}. Write the notes, commit to main, and re-tag." >&2
+            exit 1
+          fi
+          echo "Found curated release notes: ${notes}"
+
       # PyPI is irreversible, so it runs FIRST: if it fails the job stops and no
       # GitHub Release is created advertising a version that never reached PyPI.
       # `just publish` derives the version from $GITHUB_REF_NAME (the tag name).
