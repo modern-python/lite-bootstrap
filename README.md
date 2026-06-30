@@ -1,4 +1,10 @@
-# lite-bootstrap
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)"  srcset="https://raw.githubusercontent.com/modern-python/.github/main/brand/projects/lite-bootstrap/lockup-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/modern-python/.github/main/brand/projects/lite-bootstrap/lockup-light.svg">
+    <img alt="lite-bootstrap" src="https://raw.githubusercontent.com/modern-python/.github/main/brand/projects/lite-bootstrap/lockup.png" width="420">
+  </picture>
+</p>
 
 [![PyPI version](https://img.shields.io/pypi/v/lite-bootstrap.svg)](https://pypi.org/project/lite-bootstrap/)
 [![Supported Python versions](https://img.shields.io/pypi/pyversions/lite-bootstrap.svg)](https://pypi.org/project/lite-bootstrap/)
