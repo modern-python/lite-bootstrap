@@ -8,7 +8,7 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/lite-bootstrap.svg)](https://pypi.org/project/lite-bootstrap/)
 [![Supported Python versions](https://img.shields.io/pypi/pyversions/lite-bootstrap.svg)](https://pypi.org/project/lite-bootstrap/)
-[![Downloads](https://img.shields.io/pypi/dm/lite-bootstrap.svg)](https://pypistats.org/packages/lite-bootstrap)
+[![Downloads](https://static.pepy.tech/badge/lite-bootstrap/month)](https://pepy.tech/projects/lite-bootstrap)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)](https://github.com/modern-python/lite-bootstrap/actions/workflows/ci.yml)
 [![CI](https://github.com/modern-python/lite-bootstrap/actions/workflows/ci.yml/badge.svg)](https://github.com/modern-python/lite-bootstrap/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/modern-python/lite-bootstrap.svg)](https://github.com/modern-python/lite-bootstrap/blob/main/LICENSE)
