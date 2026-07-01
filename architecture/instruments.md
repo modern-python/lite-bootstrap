@@ -63,6 +63,20 @@ to be non-frozen, so `BaseInstrument` is non-frozen too. Both caches are reset
 to `None` inside a `try/finally` during `teardown()`, so a raised shutdown
 leaves no stale references.
 
+## Prometheus path-label cardinality (Litestar)
+
+Litestar's `PrometheusConfig` defaults `group_path=False`, so the `path` metric
+label holds the raw URL; parameterized routes then mint one series per distinct
+value and grow the registry unbounded (memory growth — see
+[litestar#4891](https://github.com/litestar-org/litestar/issues/4891)).
+`LitestarConfig.prometheus_group_path` defaults to `True` to bind the label to
+the route template (`/users/{id}`). `LitestarPrometheusInstrument.bootstrap`
+merges `{"group_path": <field>, **prometheus_additional_params}`, so precedence
+is `prometheus_additional_params["group_path"]` > `prometheus_group_path` >
+Litestar's own default. Set `prometheus_group_path=False` for raw paths. FastAPI
+is unaffected: `prometheus_fastapi_instrumentator` already labels by route
+template.
+
 ## Cross-instrument integrations
 
 **Logging ↔ Sentry.** `logging_instrument.py` renders every structlog line to a
