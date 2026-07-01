@@ -60,3 +60,21 @@ async def list_items(request: Request) -> list[str]:
     request.logger.info("listing items")
     return []
 ```
+
+## Prometheus
+
+`prometheus_group_path` defaults to `True`, so the `path` metric label uses the
+route template (`/users/{id}`) instead of the raw URL. This bounds metric
+cardinality; without it, parameterized routes mint a new series per distinct
+value and grow memory unbounded ([litestar#4891](https://github.com/litestar-org/litestar/issues/4891)).
+
+Set `prometheus_group_path=False` to record raw paths. Anything in
+`prometheus_additional_params` (including `group_path`) overrides the default:
+
+```python
+LitestarConfig(
+    service_name="microservice",
+    prometheus_group_path=False,  # raw paths
+    prometheus_additional_params={"exclude_unhandled_paths": True},
+)
+```

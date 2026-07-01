@@ -118,6 +118,8 @@ class LitestarConfig(
 ):
     application_config: "AppConfig" = dataclasses.field(default_factory=lambda: AppConfig())  # noqa: PLW0108
     prometheus_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
+    # Bounds path-label cardinality (Litestar defaults False -> raw URLs leak memory). See litestar#4891.
+    prometheus_group_path: bool = True
     swagger_extra_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
 
 
@@ -209,9 +211,14 @@ class LitestarPrometheusInstrument(PrometheusInstrument):
             include_in_schema = self.bootstrap_config.prometheus_metrics_include_in_schema
             openmetrics_format = True
 
+        # Merged so prometheus_additional_params can override group_path without a kwarg collision.
+        prometheus_params: dict[str, typing.Any] = {
+            "group_path": self.bootstrap_config.prometheus_group_path,
+            **self.bootstrap_config.prometheus_additional_params,
+        }
         litestar_prometheus_config = PrometheusConfig(
             app_name=self.bootstrap_config.service_name,
-            **self.bootstrap_config.prometheus_additional_params,
+            **prometheus_params,
         )
 
         self.bootstrap_config.application_config.route_handlers.append(LitestarPrometheusController)

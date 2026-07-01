@@ -154,6 +154,39 @@ def test_litestar_request_logger(litestar_config: LitestarConfig) -> None:
         assert response.json() == {"status": "ok"}
 
 
+def _scrape_prometheus_path_labels(config: LitestarConfig, handler_path: str, request_path: str) -> str:
+    @litestar.get(handler_path)
+    async def _handler(user_id: FromPath[int]) -> dict[str, int]:
+        return {"user_id": user_id}
+
+    config = dataclasses.replace(config, application_config=AppConfig(route_handlers=[_handler]))
+    application = LitestarBootstrapper(bootstrap_config=config).bootstrap()
+    with TestClient(app=application) as client:
+        client.get(request_path)
+        return client.get(config.prometheus_metrics_path).text
+
+
+def test_litestar_prometheus_group_path_default_uses_route_template(litestar_config: LitestarConfig) -> None:
+    # Default prometheus_group_path=True keeps the path label bounded to the route template,
+    # so parameterized routes cannot explode metric cardinality.
+    metrics = _scrape_prometheus_path_labels(litestar_config, "/gp-default/{user_id:int}", "/gp-default/1")
+    assert "/gp-default/{user_id}" in metrics
+    assert "/gp-default/1" not in metrics
+
+
+def test_litestar_prometheus_group_path_false_records_raw_path(litestar_config: LitestarConfig) -> None:
+    config = dataclasses.replace(litestar_config, prometheus_group_path=False)
+    metrics = _scrape_prometheus_path_labels(config, "/gp-false/{user_id:int}", "/gp-false/7")
+    assert "/gp-false/7" in metrics
+
+
+def test_litestar_prometheus_additional_params_override_group_path(litestar_config: LitestarConfig) -> None:
+    # prometheus_additional_params wins over the prometheus_group_path default, without a kwarg collision.
+    config = dataclasses.replace(litestar_config, prometheus_additional_params={"group_path": False})
+    metrics = _scrape_prometheus_path_labels(config, "/gp-override/{user_id:int}", "/gp-override/9")
+    assert "/gp-override/9" in metrics
+
+
 def test_build_span_name_no_route() -> None:
     assert build_span_name("GET", "") == "GET"
 
