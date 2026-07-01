@@ -31,11 +31,12 @@ test *args:
 test-branch:
     @just test --cov-branch
 
+# Auth via PyPI Trusted Publishing (OIDC); uv publish auto-detects the CI id-token.
 publish:
     rm -rf dist
     uv version $GITHUB_REF_NAME
     uv build
-    uv publish --token $PYPI_TOKEN
+    uv publish
 
 # Strict local docs build (no deploy). Mirrors CI's link/strict checks.
 docs-build:
