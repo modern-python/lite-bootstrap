@@ -19,7 +19,7 @@ You can choose required framework and instruments using this table:
 * not used - means that the instrument is not implemented in the integration.
 * no extra - means that the instrument requires no additional dependencies.
 
-## Install `lite-bootstrap` using your favorite tool with choosen extras
+## Install `lite-bootstrap` using your favorite tool with chosen extras
 
 For example, if you want to bootstrap litestar with structlog and opentelemetry instruments:
 

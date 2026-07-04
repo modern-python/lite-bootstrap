@@ -20,9 +20,9 @@
       poetry add lite-bootstrap[faststream-all]
       ```
 
-Read more about available extras [here](../../../introduction/installation):
+Read more about available extras [here](../introduction/installation.md).
 
-## 2. Define bootstrapper config and build you application:
+## 2. Define bootstrapper config and build your application:
 
 ```python
 from lite_bootstrap import FastStreamConfig, FastStreamBootstrapper
@@ -50,4 +50,4 @@ bootstrapper = FastStreamBootstrapper(bootstrapper_config)
 application = bootstrapper.bootstrap()
 ```
 
-Read more about available configuration options [here](../../../introduction/configuration):
+Read more about available configuration options [here](../introduction/configuration.md).

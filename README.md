@@ -21,6 +21,7 @@
 `lite-bootstrap` wires production observability — OpenTelemetry, Prometheus, Sentry, and structlog — into FastAPI, Litestar, and FastStream services in a few lines, with no boilerplate.
 
 With `lite-bootstrap`, you receive an application with lightweight built-in support for:
+
 - `sentry`
 - `prometheus`
 - `opentelemetry`
