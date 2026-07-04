@@ -1,4 +1,4 @@
-# Usage with `Fastapi`
+# Usage with `FastAPI`
 
 *Another example of usage with FastAPI - [fastapi-sqlalchemy-template](https://github.com/modern-python/fastapi-sqlalchemy-template)*
 
@@ -22,9 +22,9 @@
       poetry add lite-bootstrap[fastapi-all]
       ```
 
-Read more about available extras [here](../../../introduction/installation):
+Read more about available extras [here](../introduction/installation.md).
 
-## 2. Define bootstrapper config and build you application:
+## 2. Define bootstrapper config and build your application:
 
 ```python
 from lite_bootstrap import FastAPIConfig, FastAPIBootstrapper
@@ -45,4 +45,4 @@ bootstrapper = FastAPIBootstrapper(bootstrapper_config)
 application = bootstrapper.bootstrap()
 ```
 
-Read more about available configuration options [here](../../../introduction/configuration):
+Read more about available configuration options [here](../introduction/configuration.md).

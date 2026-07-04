@@ -40,6 +40,7 @@ Prometheus's integration for Litestar requires `prometheus_client` package.
 
 Additional parameters for Litestar integration:
 
+- `prometheus_group_path` - defaults to `True` so the `path` metric label uses the route template (`/users/{id}`) instead of the raw URL, bounding metric cardinality. Set to `False` to record raw paths.
 - `prometheus_additional_params` - passed to `litestar.plugins.prometheus.PrometheusConfig`.
 
 ### Prometheus FastStream

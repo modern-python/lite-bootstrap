@@ -20,7 +20,7 @@
       poetry add lite-bootstrap[fastmcp-all]
       ```
 
-Read more about available extras [here](../../../introduction/installation):
+Read more about available extras [here](../introduction/installation.md).
 
 ## 2. Define bootstrapper config and build your application:
 
@@ -54,4 +54,4 @@ Teardown is wired through FastMCP's provider lifecycle — `bootstrapper.teardow
 runs automatically when the FastMCP server's ASGI lifespan shuts down (i.e. when
 the application that serves `application.http_app()` shuts down).
 
-Read more about available configuration options [here](../../../introduction/configuration):
+Read more about available configuration options [here](../introduction/configuration.md).
