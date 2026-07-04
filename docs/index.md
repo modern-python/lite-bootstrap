@@ -22,4 +22,3 @@ Those instruments can be bootstrapped for:
 - [FastAPI](integrations/fastapi.md)
 - [FastMCP](integrations/fastmcp.md)
 - [services and scripts without frameworks](integrations/free.md)
----

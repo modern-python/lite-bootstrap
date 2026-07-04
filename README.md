@@ -33,11 +33,11 @@ With `lite-bootstrap`, you receive an application with lightweight built-in supp
 
 Those instruments can be bootstrapped for:
 
-- [LiteStar](https://lite-bootstrap.modern-python.org/integrations/litestar)
-- [FastStream](https://lite-bootstrap.modern-python.org/integrations/faststream)
-- [FastAPI](https://lite-bootstrap.modern-python.org/integrations/fastapi)
-- [FastMCP](https://lite-bootstrap.modern-python.org/integrations/fastmcp)
-- [services and scripts without frameworks](https://lite-bootstrap.modern-python.org/integrations/free)
+- [LiteStar](https://lite-bootstrap.modern-python.org/integrations/litestar/)
+- [FastStream](https://lite-bootstrap.modern-python.org/integrations/faststream/)
+- [FastAPI](https://lite-bootstrap.modern-python.org/integrations/fastapi/)
+- [FastMCP](https://lite-bootstrap.modern-python.org/integrations/fastmcp/)
+- [services and scripts without frameworks](https://lite-bootstrap.modern-python.org/integrations/free/)
 
 ## Lifecycle constraints
 
