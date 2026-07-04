@@ -1,6 +1,11 @@
-# Lite Bootstrap
+<div class="mp-hero" markdown>
 
-Welcome to the `lite-bootstrap` documentation!
+<h1 class="mp-lockup">
+<img class="mp-logo mp-logo--light" src="assets/lockup-light.svg" alt="lite-bootstrap">
+<img class="mp-logo mp-logo--dark" src="assets/lockup-dark.svg" alt="" aria-hidden="true">
+</h1>
+
+</div>
 
 `lite-bootstrap` assists you in creating applications with all the necessary instruments already set up.
 
