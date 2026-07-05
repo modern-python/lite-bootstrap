@@ -16,6 +16,14 @@ jobs:
       - run: uv python pin 3.10
       - run: just install lint-ci
 
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: extractions/setup-just@v4
+      - uses: astral-sh/setup-uv@v8.2.0
+      - run: just docs-build
+
   pytest:
     runs-on: ubuntu-latest
     strategy:
