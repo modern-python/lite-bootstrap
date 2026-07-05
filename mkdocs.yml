@@ -4,6 +4,7 @@ repo_url: https://github.com/modern-python/lite-bootstrap
 docs_dir: docs
 edit_uri: edit/main/docs/
 nav:
+  - Overview: index.md
   - Introduction:
       - Quickstart: introduction/quickstart.md
       - Installation: introduction/installation.md
@@ -50,6 +51,12 @@ theme:
       toggle:
         icon: material/brightness-4
         name: Switch to system preference
+
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
 
 markdown_extensions:
   - toc:
