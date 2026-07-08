@@ -68,29 +68,29 @@ Capability index (all of `architecture/`):
 
 Recent design context, bugs, and rationale: bug-audit findings in
 `planning/audits/`, post-work reflections in `planning/retros/`, and the audit
-arcs bundled under `planning/changes/`. The full extras matrix is
-`[project.optional-dependencies]` in `pyproject.toml`.
+arcs recorded as change files under `planning/changes/`. The full extras
+matrix is `[project.optional-dependencies]` in `pyproject.toml`.
 
 ## Workflow
 
 Planning uses the portable two-axis convention: `architecture/` (repo root) is
 the living truth home and promotion target; `planning/changes/` holds the
-per-change bundles. **Start at the
+per-change files. **Start at the
 [Quick path](planning/README.md#quick-path-start-here)** in
 [`planning/README.md`](planning/README.md) to choose a lane (Full / Lightweight /
-Tiny), create a bundle, and ship — that file is the authoritative spec, with
+Tiny), create a change file, and ship — that file is the authoritative spec, with
 copy-and-fill starters in [`planning/_templates/`](planning/_templates/). Run
-`just check-planning` to validate bundles and `just index` to print the listing.
+`just check-planning` to validate changes and `just index` to print the listing.
 
 Repo-local notes:
 
 - Design docs and plans live under `planning/`, **not** under `docs/`, so the
   mkdocs site excludes them automatically. When superpowers skills default to
-  `docs/superpowers/specs/` or `docs/superpowers/plans/`, use the change bundle
+  `docs/superpowers/specs/` or `docs/superpowers/plans/`, use a change file
   under `planning/changes/` instead.
 - `summary` is finalized at ship to state the realized result, in the
   implementing PR alongside the code and the `architecture/` promotion — no
-  post-merge bookkeeping, no folder move.
+  post-merge bookkeeping, no file move.
 
 ## Code style
 
