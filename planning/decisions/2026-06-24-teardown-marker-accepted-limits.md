@@ -8,7 +8,7 @@ superseded_by: null
 # Accepted limits of the unified teardown-attach marker
 
 **Decision:** The `_lite_bootstrap_teardown_attached` marker introduced in
-[unify-teardown-attach](../changes/2026-06-24.01-unify-teardown-attach/design.md)
+[unify-teardown-attach](../changes/2026-06-24.01-unify-teardown-attach.md)
 (#130) carries two known limits that we accept rather than design around:
 FastMCP detects double-attach via the attribute marker (not a provider-list scan),
 and Litestar tags the shared `AppConfig` (not a built app). Both surfaced in the
