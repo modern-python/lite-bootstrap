@@ -28,30 +28,45 @@ this repo.
 **Trigger:** `pyroscope-io` ships ft wheels (or a maintained ft-capable
 replacement appears).
 
-### fastmcp on free-threaded Python (import_checker crash, not an install failure)
+### fastmcp on free-threaded Python
 
-`fastmcp` *installs* fine on ft (3.14t confirmed), but importing `lite_bootstrap`
-afterward crashes. `fastmcp` requires `fastmcp-slim[client,server]`, which
-unconditionally requires `opentelemetry-api` — independent of lite-bootstrap's own
-`otl` extra. On the ft leg `otl` is excluded (see the OTLP entry above), so
-`opentelemetry-api` ends up installed without `opentelemetry-instrumentation`.
-`lite_bootstrap/import_checker.py` then calls
-`find_spec("opentelemetry.instrumentation.fastapi")` /
-`find_spec("opentelemetry.instrumentation.asgi")`; `importlib.util.find_spec` imports
-the dotted name's parent package first, and since `opentelemetry.instrumentation`
-isn't installed, that raises `ModuleNotFoundError` instead of returning `None`,
-crashing `import lite_bootstrap` entirely. Reproduced 2026-07-18 on 3.14t: `uv pip
-install ".[fastmcp]"` succeeds, but `python -c "import lite_bootstrap"` raises
-`ModuleNotFoundError: No module named 'opentelemetry.instrumentation'`. `fastmcp`
-and `fastmcp-metrics` are excluded from the ft CI leg
+`fastmcp` and `fastmcp-metrics` are excluded from both ft CI legs
 (`.github/workflows/_checks.yml`) and from `scripts/ft_smoke.py`'s local
-verification command pending this fix.
-**Trigger:** fastmcp support on ft is needed, or `import_checker.py`'s two
-`is_fastapi_opentelemetry_installed` / `is_litestar_opentelemetry_installed` checks
-are made defensive against a present-but-incomplete `opentelemetry` namespace
-package (e.g. wrap in `try/except ModuleNotFoundError`) — a fix worth making
-regardless of ft, since any environment with `opentelemetry-api` but not
-`opentelemetry-instrumentation` installed hits the same crash.
+verification commands, for two separate, independent reasons — one per leg:
+
+- **3.13t (install-time, upstream, not fixable here):** `fastmcp` →
+  `fastmcp-slim[server]` → `joserfc` → `cryptography` → `cffi`, and `cffi`
+  (v2.1.0) refuses to build on free-threaded 3.13: "CFFI does not support the
+  free-threaded build of CPython 3.13. Upgrade to free-threaded 3.14 or newer
+  to use CFFI with the free-threaded build." — an upstream gate, not a
+  build-environment problem, the same shape as msgspec's 3.13t gate below.
+  Reproduced 2026-07-18: `uv pip install --python <3.13t venv> ".[fastmcp]"`
+  fails building `cffi`.
+- **3.14t (import-time, partially fixed, one blocker remains):** `fastmcp`
+  transitively pulls bare `opentelemetry-api` with no other `opentelemetry-*`
+  package (independent of lite-bootstrap's own `otl` extra, which bundles
+  api+sdk+exporter+instrumentation together and is excluded from ft for the
+  unrelated grpcio reason above). Two import-safety bugs this exposed are now
+  fixed: `import_checker.py`'s dotted `find_spec` calls previously raised
+  `ModuleNotFoundError` instead of returning `False` when a parent namespace
+  was incomplete, and `opentelemetry_instrument.py` previously imported the
+  grpc otlp exporter unconditionally whenever bare `opentelemetry-api` was
+  present. A third, deeper issue remains, found while verifying the above:
+  `opentelemetry_instrument.py` also imports several `opentelemetry.sdk.*`
+  names (`resources`, `TracerProvider`, `BatchSpanProcessor`, etc.) under the
+  same `is_opentelemetry_installed` guard, and `check_dependencies()` uses that
+  same flag — but `opentelemetry-sdk` is a separate PyPI distribution that
+  `fastmcp` does not pull in, so `uv pip install ".[fastmcp]"` followed by
+  `import lite_bootstrap` still raises `ModuleNotFoundError: No module named
+  'opentelemetry.sdk'` (reproduced 2026-07-18 on 3.14t). Fixing this properly
+  means distinguishing "opentelemetry-api present" from "opentelemetry-sdk
+  present" in `check_dependencies()`/activation, not just adding another
+  import guard — an activation-semantics change, deliberately left for a
+  separate, deliberate pass rather than folded into this fix.
+
+**Trigger:** `cffi` ships free-threaded 3.13 wheels (unblocks 3.13t), or fastmcp
+support on the 3.14t leg is wanted (needs the `opentelemetry-sdk`-vs-api
+activation fix above first).
 
 ### litestar on free-threaded Python 3.13 (msgspec gates Py_GIL_DISABLED to 3.14+)
 
@@ -61,11 +76,8 @@ regardless of ft, since any environment with `opentelemetry-api` but not
 intentional upstream gate, not a build-environment problem. Reproduced 2026-07-18:
 `uv pip install --python <3.13t venv> "litestar>=2.9"` fails compiling
 `msgspec._core`; the same install against a 3.14t venv succeeds cleanly and
-`scripts/ft_smoke.py`-equivalent checks pass. Because the ft CI leg
-(`.github/workflows/_checks.yml`) runs one shared install step across the whole
-`{3.13t, 3.14t}` matrix, `litestar` and `litestar-metrics` are excluded from that
-step (and from the local verification command) for both Python versions, even
-though litestar itself is ft-clean on 3.14t.
-**Trigger:** `msgspec` extends `Py_GIL_DISABLED` support to 3.13, **or** the ft CI
-leg is worth splitting into a per-python-version install step so `litestar` /
-`litestar-metrics` can be added back for the 3.14t leg only.
+`scripts/ft_smoke.py`-equivalent checks pass. The ft CI leg
+(`.github/workflows/_checks.yml`) now installs per Python version, so `litestar`
+and `litestar-metrics` run on the 3.14t leg and are excluded only from 3.13t.
+**Trigger:** `msgspec` extends `Py_GIL_DISABLED` support to 3.13, at which point
+`litestar` / `litestar-metrics` can be added to the 3.13t leg too.
