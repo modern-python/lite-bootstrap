@@ -171,6 +171,9 @@ ignore = [
 isort.lines-after-imports = 2
 isort.no-lines-before = ["standard-library", "local-folder"]
 
+[tool.ruff.lint.per-file-ignores]
+"scripts/*.py" = ["INP001"] # standalone scripts, not an importable package
+
 [tool.pytest.ini_options]
 addopts = "--cov=. --cov-report term-missing --cov-fail-under=100"
 asyncio_mode = "auto"

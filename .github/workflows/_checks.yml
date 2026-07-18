@@ -46,3 +46,26 @@ jobs:
       - run: uv python pin ${{ matrix.python-version }}
       - run: just install
       - run: just test . --cov=. --cov-report xml
+
+  free-threaded:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.13t"
+          - "3.14t"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: "**/pyproject.toml"
+      - run: uv python install ${{ matrix.python-version }}
+      - run: uv venv --python ${{ matrix.python-version }}
+      - name: Install core + ft-ready extras (orjson/otl/pyroscope/fastmcp/litestar excluded)
+        run: >
+          uv pip install
+          ".[logging,sentry,fastapi,faststream,fastapi-metrics,faststream-metrics]"
+      - name: Free-threaded smoke test
+        run: .venv/bin/python scripts/ft_smoke.py
