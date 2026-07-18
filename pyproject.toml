@@ -20,9 +20,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 version = "0"
-dependencies = [
-    "orjson",
-]
+dependencies = []
 
 [project.urls]
 Homepage = "https://lite-bootstrap.modern-python.org"
@@ -32,6 +30,9 @@ Issues = "https://github.com/modern-python/lite-bootstrap/issues"
 Changelog = "https://github.com/modern-python/lite-bootstrap/releases"
 
 [project.optional-dependencies]
+orjson = [
+    "orjson",
+]
 sentry = [
     "sentry-sdk",
 ]

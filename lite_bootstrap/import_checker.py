@@ -17,3 +17,4 @@ is_litestar_opentelemetry_installed = (
 )
 is_pyroscope_installed = find_spec("pyroscope") is not None
 is_fastmcp_installed = find_spec("fastmcp") is not None
+is_orjson_installed = find_spec("orjson") is not None

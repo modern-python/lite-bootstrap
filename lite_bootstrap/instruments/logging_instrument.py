@@ -11,7 +11,7 @@ from lite_bootstrap.instruments.logging_factory import (
     RequestProtocol,
     ScopeType,
     _MemoryLoggerFactoryConfig,
-    _serialize_log_with_orjson_to_string,
+    _serialize_log_to_string,
 )
 
 
@@ -117,7 +117,7 @@ class LoggingInstrument(BaseInstrument[LoggingConfig]):
             structlog.stdlib.filter_by_level,
             *self.structlog_pre_chain_processors,
             *self.bootstrap_config.logging_extra_processors,
-            structlog.processors.JSONRenderer(serializer=_serialize_log_with_orjson_to_string),
+            structlog.processors.JSONRenderer(serializer=_serialize_log_to_string),
         ]
 
     @property
@@ -152,7 +152,7 @@ class LoggingInstrument(BaseInstrument[LoggingConfig]):
                 processors=[
                     structlog.stdlib.ProcessorFormatter.remove_processors_meta,
                     *self.bootstrap_config.logging_extra_processors,
-                    structlog.processors.JSONRenderer(serializer=_serialize_log_with_orjson_to_string),
+                    structlog.processors.JSONRenderer(serializer=_serialize_log_to_string),
                 ],
                 logger=root_logger,
             )
