@@ -42,20 +42,6 @@ calls on one bootstrapper — by design. Free-threading parallelizes request
 handling, where `lite-bootstrap` does not sit. Do not call `bootstrap()`/`teardown()`
 on the same bootstrapper from multiple threads.
 
-## Related import-safety fixes
-
-Verifying `fastmcp` on 3.14t (import-time, still excluded per the matrix above)
-surfaced two pre-existing import-safety bugs, now fixed and not ft-specific —
-any environment with a partial `opentelemetry` stack could trigger them:
-`import_checker.py`'s dotted `find_spec` calls raising `ModuleNotFoundError`
-instead of returning `False` on an incomplete parent namespace, and
-`opentelemetry_instrument.py` importing the gRPC OTLP exporter unconditionally
-under the coarse `is_opentelemetry_installed` guard. See
-[`architecture/instruments.md`](instruments.md)'s "Optional-dependency guard"
-section for the fix and the honest trade-off it leaves open (a silent OTLP-export
-skip), and [`planning/deferred.md`](../planning/deferred.md) for the remaining
-sdk-vs-api activation-semantics gap.
-
 ## Proof
 
 `.github/workflows/_checks.yml` runs `scripts/ft_smoke.py` on 3.13t and 3.14t:
