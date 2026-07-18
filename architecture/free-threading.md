@@ -10,7 +10,7 @@ its extra, not `lite-bootstrap` itself.
 | Surface | 3.13t | 3.14t | Notes |
 |---|---|---|---|
 | core, `logging`, `sentry` | ✅ | ✅ | pure Python; `logging` uses the stdlib-json serializer fallback when `orjson` is absent |
-| `fastapi`/`faststream` (+ `-sentry`/`-logging`/`-metrics`) | ✅ | ✅ | pure Python + `pydantic-core`/`httptools` ft wheels |
+| `fastapi`/`faststream` (+ `-sentry`/`-logging`/`-metrics`) | ✅ | ✅ | pure Python + `pydantic-core` ft wheels |
 | `litestar` (+ `litestar-metrics`) | ❌ | ✅ | `msgspec` gates `Py_GIL_DISABLED` to Python 3.14+ — its `_core.c` contains `#error "Py_GIL_DISABLED is only supported in Python 3.14+"` (v0.21.1), so the source build fails on 3.13t. See [`planning/deferred.md`](../planning/deferred.md) |
 | `fastmcp` (+ `fastmcp-metrics`) | ❌ | ❌ | 3.13t: `cffi` (via `fastmcp`→`cryptography`) refuses to build free-threaded. 3.14t: `fastmcp` pulls bare `opentelemetry-api` without `opentelemetry-sdk`, so `import lite_bootstrap` still fails. See [`planning/deferred.md`](../planning/deferred.md) |
 | `orjson` (opt-in speedup) | ❌ | ❌ | no ft wheels, build refuses ft ([ijl/orjson#530](https://github.com/ijl/orjson/issues/530)). Omit it on ft; the serializer falls back to stdlib json |
