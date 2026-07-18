@@ -53,6 +53,35 @@ so the runtime invariant holds even though static analyzers that don't model the
 guard may report spurious "possibly unbound" diagnostics. The project uses `ty`,
 which handles the pattern correctly.
 
+**Guarding dotted `find_spec` checks.** `find_spec` imports a dotted name's
+parent package first, so a present-but-incomplete namespace — e.g.
+`opentelemetry-api` installed without `opentelemetry-instrumentation` — raised
+`ModuleNotFoundError` instead of returning `False`, crashing `import
+lite_bootstrap`. `import_checker._safe_find_spec` wraps `find_spec` for dotted
+names and treats that exception as absent; `is_fastapi_opentelemetry_installed`
+and `is_litestar_opentelemetry_installed` both route through it.
+
+**`is_otlp_grpc_exporter_installed` is a separate guard from
+`is_opentelemetry_installed`.** `is_opentelemetry_installed` only means
+`opentelemetry-api` resolves — it says nothing about the SDK or the gRPC OTLP
+exporter package. `opentelemetry_instrument.py` used to import the gRPC
+exporter unconditionally under that coarse guard, crashing `import
+lite_bootstrap` in any environment with bare `opentelemetry-api` present (e.g.
+`lite-bootstrap[fastmcp]`, which pulls it in transitively without the rest of
+the stack). The exporter import — and its use in `bootstrap()` — now sit behind
+their own `import_checker.is_otlp_grpc_exporter_installed` guard
+(`_safe_find_spec("opentelemetry.exporter.otlp.proto.grpc.trace_exporter")`).
+The honest trade-off: `check_dependencies()` still gates OpenTelemetry
+activation on `is_opentelemetry_installed` alone, so setting
+`opentelemetry_endpoint` in an environment where `opentelemetry-api` is present
+but the exporter package is not now **silently skips OTLP export** —
+`bootstrap()`'s exporter block simply omits the span processor when
+`is_otlp_grpc_exporter_installed` is False, with none of the
+`InstrumentDependencyMissingWarning` a configured-but-missing dependency
+normally gets. Making `check_dependencies()` distinguish api/sdk/exporter
+presence, so this case gets the standard warning instead of silence, is
+deferred — see `planning/deferred.md`.
+
 ## Why instruments are not frozen
 
 All `*Config` classes are frozen, but `*Instrument` classes drop `frozen=True`

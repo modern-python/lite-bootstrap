@@ -1,7 +1,9 @@
 from lite_bootstrap.instruments.logging_factory import (
     STRUCTLOG_META_KEYS,
     StructuredLogPayload,
-    _serialize_log_with_orjson_to_string,
+    _dumps_orjson,
+    _dumps_stdlib,
+    _serialize_log_to_string,
 )
 
 
@@ -70,10 +72,27 @@ def test_round_trip_through_real_serializer_strips_every_meta_key() -> None:
         "path": "/health",
     }
 
-    formatted = _serialize_log_with_orjson_to_string(event_dict)
+    formatted = _serialize_log_to_string(event_dict)
     payload = StructuredLogPayload.parse(formatted)
 
     assert payload is not None
     assert payload.message == "request handled"
     assert payload.extra == {"user_id": 42, "path": "/health"}
     assert not (payload.extra.keys() & STRUCTLOG_META_KEYS)
+
+
+def test_dumps_stdlib_matches_orjson_output() -> None:
+    event = {"event": "hello café", "level": "info", "n": 1, "ok": True, "nested": {"a": [1, 2]}}
+    assert _dumps_stdlib(event) == _dumps_orjson(event)
+
+
+def test_dumps_stdlib_is_compact_utf8() -> None:
+    assert _dumps_stdlib({"k": "café", "n": 1}) == '{"k":"café","n":1}'
+
+
+def test_parse_round_trips_under_active_loader() -> None:
+    formatted = _serialize_log_to_string({"event": "hi", "level": "info", "x": 1})
+    payload = StructuredLogPayload.parse(formatted)
+    assert payload is not None
+    assert payload.message == "hi"
+    assert payload.extra == {"x": 1}

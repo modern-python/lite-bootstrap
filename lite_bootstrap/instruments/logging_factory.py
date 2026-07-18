@@ -1,12 +1,15 @@
 import dataclasses
+import json
 import logging
 import logging.handlers
 import sys
 import typing
 
-import orjson
-
 from lite_bootstrap import import_checker
+
+
+if import_checker.is_orjson_installed:
+    import orjson
 
 
 ScopeType = typing.MutableMapping[str, typing.Any]
@@ -31,8 +34,20 @@ class _MemoryLoggerFactoryConfig:
     log_stream: typing.Any = sys.stdout
 
 
-def _serialize_log_with_orjson_to_string(value: typing.Any, **kwargs: typing.Any) -> str:  # noqa: ANN401
+def _dumps_orjson(value: typing.Any, **kwargs: typing.Any) -> str:  # noqa: ANN401
     return orjson.dumps(value, **kwargs).decode()
+
+
+def _dumps_stdlib(value: typing.Any, **kwargs: typing.Any) -> str:  # noqa: ANN401
+    # Match orjson's compact, UTF-8 output shape so log lines stay byte-identical.
+    return json.dumps(value, separators=(",", ":"), ensure_ascii=False, **kwargs)
+
+
+# orjson has no free-threaded wheels and refuses to build on ft; fall back to the
+# stdlib json accelerator (always ft-native) when it is absent.
+# See architecture/free-threading.md.
+_serialize_log_to_string = _dumps_orjson if import_checker.is_orjson_installed else _dumps_stdlib
+_json_loads = orjson.loads if import_checker.is_orjson_installed else json.loads
 
 
 # Meta-keys the producer's structlog processor chain emits at the top level of every
@@ -68,8 +83,8 @@ class StructuredLogPayload:
         if not formatted.startswith("{"):
             return None
         try:
-            loaded = orjson.loads(formatted)
-        except orjson.JSONDecodeError:
+            loaded = _json_loads(formatted)
+        except json.JSONDecodeError:  # orjson.JSONDecodeError subclasses this
             return None
         if not isinstance(loaded, dict):  # pragma: no cover - JSON starting with "{" is always an object
             return None

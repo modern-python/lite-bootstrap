@@ -87,6 +87,14 @@ The guard is uniform: the same marker and warning apply to all four app-bearing
 frameworks. `attach` is typed `Callable[[], object]` because some hooks (FastStream's
 `on_shutdown`) return the callback.
 
+## Single-threaded init (free-threading)
+
+`bootstrap()`/`teardown()` are startup/shutdown, main-thread operations; their
+cached state (`is_bootstrapped`, the teardown-attach marker) carries no locks and
+is not safe to drive concurrently on one bootstrapper. This is intentional: under
+free-threaded CPython the parallelism is in request handling, not bootstrap. See
+[`free-threading.md`](free-threading.md).
+
 ## App-tagging sentinel convention
 
 When a bootstrapper must tag a user-supplied framework app (FastAPI, FastMCP,

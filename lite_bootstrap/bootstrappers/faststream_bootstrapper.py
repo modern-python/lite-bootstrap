@@ -43,6 +43,11 @@ class FastStreamTelemetryMiddlewareProtocol(typing.Protocol):
         include_messages_counters: bool = True,
     ) -> None: ...
 
+    # A constructed instance is passed to broker.add_middleware, which expects a
+    # faststream BrokerMiddleware — a builder callable. Declared with Any to keep
+    # lite-bootstrap decoupled from faststream's internal middleware types.
+    def __call__(self, msg: typing.Any, /, *, context: typing.Any) -> typing.Any: ...  # noqa: ANN401
+
 
 @typing.runtime_checkable
 class FastStreamPrometheusMiddlewareProtocol(typing.Protocol):
@@ -54,6 +59,9 @@ class FastStreamPrometheusMiddlewareProtocol(typing.Protocol):
         metrics_prefix: str = "faststream",
         received_messages_size_buckets: typing.Sequence[float] | None = None,
     ) -> None: ...
+
+    # See FastStreamTelemetryMiddlewareProtocol.__call__.
+    def __call__(self, msg: typing.Any, /, *, context: typing.Any) -> typing.Any: ...  # noqa: ANN401
 
 
 def _make_asgi_faststream() -> "AsgiFastStream":
