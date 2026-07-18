@@ -65,6 +65,7 @@ Capability index (all of `architecture/`):
 | Config model — `BaseConfig`, multiple-inheritance composition, `from_dict`/`from_object`, `UNSET`, `__post_init__` cascade | `architecture/config-model.md` |
 | Instruments — `BaseInstrument` lifecycle, catalog, optional-dep guard, non-frozen rationale, cross-instrument integrations (Logging↔Sentry, OTel↔Logging, Pyroscope↔OTel), OTel single-instance | `architecture/instruments.md` |
 | Bootstrappers — hierarchy, skip ordering, registry + idempotent teardown, summary logging, teardown-attach seam, app-tagging sentinels | `architecture/bootstrappers.md` |
+| Free-threading — nogil support matrix, orjson fallback, single-threaded-init invariant | `architecture/free-threading.md` |
 
 Recent design context, bugs, and rationale: bug-audit findings in
 `planning/audits/`, post-work reflections in `planning/retros/`, and the audit
