@@ -1,4 +1,5 @@
 import logging
+import sys
 import typing
 import warnings
 from unittest.mock import patch
@@ -6,13 +7,14 @@ from unittest.mock import patch
 import pytest
 from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
 
+from lite_bootstrap import import_checker
 from lite_bootstrap.exceptions import TeardownError
 from lite_bootstrap.instruments.opentelemetry_instrument import (
     InstrumentorWithParams,
     OpenTelemetryConfig,
     OpenTelemetryInstrument,
 )
-from tests.conftest import CustomInstrumentor
+from tests.conftest import CustomInstrumentor, emulate_package_missing_with_module_reload
 
 
 def test_opentelemetry_instrument() -> None:
@@ -183,3 +185,31 @@ def test_opentelemetry_teardown_aggregates_instrumentor_and_shutdown_errors() ->
     assert any("shutdown boom" in m for m in error_msgs), error_msgs
     assert instrument._tracer_provider is None  # noqa: SLF001
     assert instrument._prior_logger_disabled == {}  # noqa: SLF001
+
+
+# The grpc otlp exporter's dotted submodules are already cached in sys.modules from
+# earlier imports of this very module (both in normal test collection and by the
+# reload below), so a plain "opentelemetry.exporter" -> None emulation would take the
+# "already in sys.modules" fast path and never exercise the parent-import bug; evict
+# the cached leaf/intermediate entries first to force a real resolution.
+_GRPC_EXPORTER_SUBMODULES = (
+    "opentelemetry.exporter.otlp.proto.grpc.trace_exporter",
+    "opentelemetry.exporter.otlp.proto.grpc",
+    "opentelemetry.exporter.otlp.proto",
+    "opentelemetry.exporter.otlp",
+)
+
+
+def test_opentelemetry_instrument_survives_missing_grpc_exporter() -> None:
+    # opentelemetry-api (+sdk) present but the grpc otlp exporter package absent must
+    # not crash importing opentelemetry_instrument (e.g. lite-bootstrap[fastmcp],
+    # which pulls bare opentelemetry-api transitively without any exporter package).
+    saved_submodules = {name: sys.modules.pop(name) for name in _GRPC_EXPORTER_SUBMODULES if name in sys.modules}
+    try:
+        with emulate_package_missing_with_module_reload(
+            "opentelemetry.exporter",
+            ["lite_bootstrap.instruments.opentelemetry_instrument"],
+        ):
+            assert import_checker.is_otlp_grpc_exporter_installed is False
+    finally:
+        sys.modules.update(saved_submodules)

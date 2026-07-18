@@ -15,11 +15,16 @@ if typing.TYPE_CHECKING:
 
 if import_checker.is_opentelemetry_installed:
     from opentelemetry.context import Context
-    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
     from opentelemetry.sdk import resources
     from opentelemetry.sdk.trace import ReadableSpan, SpanProcessor, TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter, SimpleSpanProcessor
     from opentelemetry.trace import Span, format_span_id, set_tracer_provider
+
+if import_checker.is_otlp_grpc_exporter_installed:
+    # opentelemetry-api can be present without the grpc otlp exporter package (e.g.
+    # lite-bootstrap[fastmcp] pulls bare opentelemetry-api transitively); this must
+    # stay a separate guard from is_opentelemetry_installed above.
+    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 
 if import_checker.is_pyroscope_installed:
     import pyroscope
@@ -176,7 +181,9 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
             tracer_provider.add_span_processor(PyroscopeSpanProcessor())
         if self.bootstrap_config.opentelemetry_log_traces:
             tracer_provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter(formatter=_format_span)))
-        if self.bootstrap_config.opentelemetry_endpoint:  # pragma: no cover
+        if (
+            self.bootstrap_config.opentelemetry_endpoint and import_checker.is_otlp_grpc_exporter_installed
+        ):  # pragma: no cover
             tracer_provider.add_span_processor(
                 BatchSpanProcessor(
                     OTLPSpanExporter(
