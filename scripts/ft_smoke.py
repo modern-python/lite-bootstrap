@@ -3,15 +3,17 @@
 Run under a free-threaded interpreter with the ft-ready extras installed (no
 orjson). Exits non-zero on failure. Proves: the interpreter is free-threaded,
 orjson is absent, the logging serializer's stdlib-json fallback produces
-parseable output, and a FastAPI bootstrap runs bootstrap()/teardown() clean.
-Not a pytest test (conftest.py hard-imports opentelemetry, which the ft leg
-does not install). See architecture/free-threading.md.
+parseable output, a FastAPI bootstrap runs bootstrap()/teardown() clean, and
+OTLP export works over the http exporter (grpc/grpcio stays absent). Not a
+pytest test (conftest.py hard-imports opentelemetry, which the ft leg does
+not install). See architecture/free-threading.md.
 """
 
 import sys
 
 from lite_bootstrap import FastAPIBootstrapper, FastAPIConfig, import_checker
 from lite_bootstrap.instruments.logging_factory import StructuredLogPayload, _serialize_log_to_string
+from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryConfig, OpenTelemetryInstrument
 
 
 def main() -> None:
@@ -41,6 +43,19 @@ def main() -> None:
 
     bootstrapper.teardown()
     assert not bootstrapper.is_bootstrapped
+
+    # OTLP export on ft: the http exporter installs and constructs (grpc/grpcio does not).
+    assert import_checker.is_otlp_http_exporter_installed is True, "otl-http must be installed on the ft leg"
+    assert import_checker.is_otlp_grpc_exporter_installed is False, "grpc exporter (grpcio) must be absent on ft"
+    otel = OpenTelemetryInstrument(
+        bootstrap_config=OpenTelemetryConfig(
+            service_name="ft-smoke",
+            opentelemetry_endpoint="http://localhost:4318/v1/traces",
+            opentelemetry_exporter_protocol="http",
+        )
+    )
+    otel.bootstrap()
+    otel.teardown()
 
     print("ft smoke OK:", sys.version)  # noqa: T201
 

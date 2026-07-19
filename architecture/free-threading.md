@@ -14,15 +14,17 @@ its extra, not `lite-bootstrap` itself.
 | `litestar` (+ `litestar-metrics`) | ❌ | ✅ | `msgspec` gates `Py_GIL_DISABLED` to Python 3.14+ — its `_core.c` contains `#error "Py_GIL_DISABLED is only supported in Python 3.14+"` (v0.21.1), so the source build fails on 3.13t. See [`planning/deferred.md`](../planning/deferred.md) |
 | `fastmcp` (+ `fastmcp-metrics`) | ❌ | ✅ | 3.13t: `cffi` (via `fastmcp`→`cryptography`) refuses to build free-threaded. 3.14t: works (on the leg) since the opentelemetry api/sdk split. See [`planning/deferred.md`](../planning/deferred.md) |
 | `orjson` (opt-in speedup) | ❌ | ❌ | no ft wheels, build refuses ft ([ijl/orjson#530](https://github.com/ijl/orjson/issues/530)). Omit it on ft; the serializer falls back to stdlib json |
-| `otl` (gRPC exporter) | ❌ | ❌ | needs `grpcio`, no ft wheels ([grpc/grpc#38762](https://github.com/grpc/grpc/issues/38762)). An HTTP-exporter path is deferred (`planning/deferred.md`) |
+| `otl` (gRPC exporter) | ❌ | ❌ | needs `grpcio`, no ft wheels ([grpc/grpc#38762](https://github.com/grpc/grpc/issues/38762)) |
+| `otl-http` (HTTP exporter) | ✅ | ✅ | `opentelemetry-exporter-otlp-proto-http` (requests + protobuf, no grpcio); set `opentelemetry_exporter_protocol="http"` |
 | `pyroscope` | ❌ | ❌ | `pyroscope-io` is abi3-only, unmaintained, no ft wheels ([`planning/deferred.md`](../planning/deferred.md)) |
 
 The CI matrix (`.github/workflows/_checks.yml`, `free-threaded` job) installs
 per Python version to match this table exactly: the 3.13t leg's extras stop at
-`logging,sentry,fastapi,faststream,fastapi-metrics,faststream-metrics`; the
-3.14t leg adds `litestar,litestar-metrics,fastmcp,fastmcp-metrics`. `orjson`,
-`otl`, and `pyroscope` are excluded from both legs; `fastmcp` runs on 3.14t only
-(3.13t is `cffi`-blocked).
+`logging,sentry,fastapi,faststream,fastapi-metrics,faststream-metrics,otl-http`;
+the 3.14t leg adds `litestar,litestar-metrics,fastmcp,fastmcp-metrics`. `orjson`
+and `pyroscope` are excluded from both legs, and `otl` (the gRPC exporter) is
+excluded in favor of `otl-http`, which is included on both legs; `fastmcp` runs
+on 3.14t only (3.13t is `cffi`-blocked).
 
 ## The `orjson` fallback
 

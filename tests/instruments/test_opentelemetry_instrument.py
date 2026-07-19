@@ -7,6 +7,7 @@ from unittest.mock import patch
 import pytest
 from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
 
+import lite_bootstrap.instruments.opentelemetry_instrument as otel_module
 from lite_bootstrap import import_checker
 from lite_bootstrap.exceptions import InstrumentDependencyMissingWarning, TeardownError
 from lite_bootstrap.instruments.opentelemetry_instrument import (
@@ -239,3 +240,55 @@ def test_bootstrap_warns_when_endpoint_set_without_grpc_exporter() -> None:
             instrument.bootstrap()
     finally:
         instrument.teardown()
+
+
+def test_bootstrap_http_protocol_uses_http_exporter() -> None:
+    instrument = OpenTelemetryInstrument(
+        bootstrap_config=OpenTelemetryConfig(
+            opentelemetry_endpoint="http://collector:4318/v1/traces",
+            opentelemetry_exporter_protocol="http",
+        )
+    )
+    try:
+        with patch.object(otel_module, "OTLPHttpSpanExporter") as mock_http:
+            instrument.bootstrap()
+        mock_http.assert_called_once_with(endpoint="http://collector:4318/v1/traces")
+    finally:
+        instrument.teardown()
+
+
+def test_bootstrap_grpc_protocol_uses_grpc_exporter() -> None:
+    instrument = OpenTelemetryInstrument(bootstrap_config=OpenTelemetryConfig(opentelemetry_endpoint="localhost:4317"))
+    try:
+        with patch.object(otel_module, "OTLPGrpcSpanExporter") as mock_grpc:
+            instrument.bootstrap()
+        mock_grpc.assert_called_once_with(endpoint="localhost:4317", insecure=True)
+    finally:
+        instrument.teardown()
+
+
+def test_bootstrap_warns_when_endpoint_set_without_http_exporter() -> None:
+    instrument = OpenTelemetryInstrument(
+        bootstrap_config=OpenTelemetryConfig(
+            opentelemetry_endpoint="http://collector:4318/v1/traces",
+            opentelemetry_exporter_protocol="http",
+        )
+    )
+    try:
+        with (
+            patch.object(import_checker, "is_otlp_http_exporter_installed", False),
+            pytest.warns(InstrumentDependencyMissingWarning, match="HTTP OTLP exporter"),
+        ):
+            instrument.bootstrap()
+    finally:
+        instrument.teardown()
+
+
+def test_http_protocol_does_not_emit_insecure_warning() -> None:
+    # The insecure warning is gRPC-only; an http:// non-local endpoint must not warn.
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        OpenTelemetryConfig(
+            opentelemetry_endpoint="http://remote-collector:4318/v1/traces",
+            opentelemetry_exporter_protocol="http",
+        )
