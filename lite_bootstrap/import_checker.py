@@ -15,6 +15,11 @@ def _safe_find_spec(module_name: str) -> bool:
 
 
 is_opentelemetry_installed = find_spec("opentelemetry") is not None
+# opentelemetry-api provides the `opentelemetry` namespace (trace, metrics) without the
+# sdk. The OTel instrument imports opentelemetry.sdk.* and needs this stricter check;
+# api-only consumers (logging trace-injection, framework get_tracer_provider) use the
+# flag above. See architecture/instruments.md.
+is_opentelemetry_sdk_installed = _safe_find_spec("opentelemetry.sdk")
 is_sentry_installed = find_spec("sentry_sdk") is not None
 is_structlog_installed = find_spec("structlog") is not None
 is_prometheus_client_installed = find_spec("prometheus_client") is not None
