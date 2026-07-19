@@ -28,33 +28,19 @@ this repo.
 **Trigger:** `pyroscope-io` ships ft wheels (or a maintained ft-capable
 replacement appears).
 
-### fastmcp on free-threaded Python
+### fastmcp on free-threaded Python 3.13 (cffi gates Py_GIL_DISABLED to 3.14+)
 
-`fastmcp` and `fastmcp-metrics` are excluded from both ft CI legs
-(`.github/workflows/_checks.yml`) and from `scripts/ft_smoke.py`'s local
-verification commands, for two separate, independent reasons — one per leg:
-
-- **3.13t (install-time, upstream, not fixable here):** `fastmcp` →
-  `fastmcp-slim[server]` → `joserfc` → `cryptography` → `cffi`, and `cffi`
-  (v2.1.0) refuses to build on free-threaded 3.13: "CFFI does not support the
-  free-threaded build of CPython 3.13. Upgrade to free-threaded 3.14 or newer
-  to use CFFI with the free-threaded build." — an upstream gate, not a
-  build-environment problem, the same shape as msgspec's 3.13t gate below.
-  Reproduced 2026-07-18: `uv pip install --python <3.13t venv> ".[fastmcp]"`
-  fails building `cffi`.
-- **3.14t (now importable):** `fastmcp` transitively pulls bare
-  `opentelemetry-api` with no other `opentelemetry-*` package. The three
-  incomplete-opentelemetry-stack bugs this exposed are all fixed — the
-  `import_checker` namespace crash and the unconditional grpc-exporter import in
-  `changes/2026-07-18.01`, and the api-vs-sdk conflation
-  (`opentelemetry_instrument.py` importing `opentelemetry.sdk.*` and
-  `check_dependencies()` under the api-only flag) in `changes/2026-07-19.01`. So
-  `uv pip install ".[fastmcp]"` + `import lite_bootstrap` now succeeds on 3.14t;
-  it is simply not yet wired into the 3.14t leg's extras.
-
-**Trigger:** `cffi` ships free-threaded 3.13 wheels (unblocks 3.13t), **or** add
-`fastmcp`/`fastmcp-metrics` to the 3.14t leg's extras in `_checks.yml` (import
-now works there).
+`fastmcp`/`fastmcp-metrics` run on the **3.14t** ft CI leg
+(`.github/workflows/_checks.yml`) but are excluded from **3.13t**: `fastmcp` →
+`fastmcp-slim[server]` → `joserfc` → `cryptography` → `cffi`, and `cffi` (v2.1.0)
+refuses to build on free-threaded 3.13 ("CFFI does not support the free-threaded
+build of CPython 3.13. Upgrade to free-threaded 3.14 or newer to use CFFI with
+the free-threaded build.") — an upstream gate, the same shape as msgspec's 3.13t
+gate below. Reproduced 2026-07-18: `uv pip install --python <3.13t venv>
+".[fastmcp]"` fails building `cffi`. (The three opentelemetry-stack import bugs
+that previously also blocked 3.14t are fixed in `changes/2026-07-18.01` and
+`changes/2026-07-19.01`.)
+**Trigger:** `cffi` ships free-threaded 3.13 wheels.
 
 ### litestar on free-threaded Python 3.13 (msgspec gates Py_GIL_DISABLED to 3.14+)
 

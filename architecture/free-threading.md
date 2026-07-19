@@ -12,7 +12,7 @@ its extra, not `lite-bootstrap` itself.
 | core, `logging`, `sentry` | ✅ | ✅ | pure Python; `logging` uses the stdlib-json serializer fallback when `orjson` is absent |
 | `fastapi`/`faststream` (+ `-sentry`/`-logging`/`-metrics`) | ✅ | ✅ | pure Python + `pydantic-core` ft wheels |
 | `litestar` (+ `litestar-metrics`) | ❌ | ✅ | `msgspec` gates `Py_GIL_DISABLED` to Python 3.14+ — its `_core.c` contains `#error "Py_GIL_DISABLED is only supported in Python 3.14+"` (v0.21.1), so the source build fails on 3.13t. See [`planning/deferred.md`](../planning/deferred.md) |
-| `fastmcp` (+ `fastmcp-metrics`) | ❌ | ❌ | 3.13t: `cffi` (via `fastmcp`→`cryptography`) refuses to build free-threaded. 3.14t: `fastmcp` pulls bare `opentelemetry-api` without `opentelemetry-sdk`, so `import lite_bootstrap` still fails. See [`planning/deferred.md`](../planning/deferred.md) |
+| `fastmcp` (+ `fastmcp-metrics`) | ❌ | ✅ | 3.13t: `cffi` (via `fastmcp`→`cryptography`) refuses to build free-threaded. 3.14t: works (on the leg) since the opentelemetry api/sdk split. See [`planning/deferred.md`](../planning/deferred.md) |
 | `orjson` (opt-in speedup) | ❌ | ❌ | no ft wheels, build refuses ft ([ijl/orjson#530](https://github.com/ijl/orjson/issues/530)). Omit it on ft; the serializer falls back to stdlib json |
 | `otl` (gRPC exporter) | ❌ | ❌ | needs `grpcio`, no ft wheels ([grpc/grpc#38762](https://github.com/grpc/grpc/issues/38762)). An HTTP-exporter path is deferred (`planning/deferred.md`) |
 | `pyroscope` | ❌ | ❌ | `pyroscope-io` is abi3-only, unmaintained, no ft wheels ([`planning/deferred.md`](../planning/deferred.md)) |
@@ -20,8 +20,9 @@ its extra, not `lite-bootstrap` itself.
 The CI matrix (`.github/workflows/_checks.yml`, `free-threaded` job) installs
 per Python version to match this table exactly: the 3.13t leg's extras stop at
 `logging,sentry,fastapi,faststream,fastapi-metrics,faststream-metrics`; the
-3.14t leg adds `litestar,litestar-metrics`. `orjson`, `otl`, `pyroscope`, and
-`fastmcp`/`fastmcp-metrics` are excluded from both legs.
+3.14t leg adds `litestar,litestar-metrics,fastmcp,fastmcp-metrics`. `orjson`,
+`otl`, and `pyroscope` are excluded from both legs; `fastmcp` runs on 3.14t only
+(3.13t is `cffi`-blocked).
 
 ## The `orjson` fallback
 
