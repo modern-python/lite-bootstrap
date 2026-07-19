@@ -69,3 +69,38 @@ jobs:
         run: uv pip install ".[${{ matrix.extras }}]"
       - name: Free-threaded smoke test
         run: .venv/bin/python scripts/ft_smoke.py
+
+  install-isolation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: "**/pyproject.toml"
+      - run: uv python install 3.10
+      - name: Each extra installs and imports in isolation
+        run: |
+          set -uo pipefail
+          # GitHub runs run-steps with `bash -eo pipefail`; disable errexit so a
+          # venv-create/cleanup hiccup can't abort the loop before every extra is
+          # checked — failures are collected explicitly in `failed` below.
+          set +e
+          extras="orjson sentry pyroscope otl otl-http logging free-all \
+            fastapi fastapi-sentry fastapi-otl fastapi-logging fastapi-metrics fastapi-all \
+            litestar litestar-sentry litestar-otl litestar-logging litestar-metrics litestar-all \
+            faststream faststream-sentry faststream-otl faststream-logging faststream-metrics faststream-all \
+            fastmcp fastmcp-metrics fastmcp-all"
+          failed=""
+          uv venv --python 3.10 .v-bare >/dev/null
+          if uv pip install --python .v-bare/bin/python . >/dev/null 2>&1 \
+               && .v-bare/bin/python -c "import lite_bootstrap"; then :; else failed="$failed __bare__"; fi
+          rm -rf .v-bare
+          for e in $extras; do
+            uv venv --python 3.10 ".v-$e" >/dev/null
+            if uv pip install --python ".v-$e/bin/python" ".[$e]" >/dev/null 2>&1 \
+                 && ".v-$e/bin/python" -c "import lite_bootstrap"; then :; else failed="$failed $e"; fi
+            rm -rf ".v-$e"
+          done
+          if [ -n "$failed" ]; then echo "::error::extras failed isolated install+import:$failed"; exit 1; fi
+          echo "all extras install and import in isolation"

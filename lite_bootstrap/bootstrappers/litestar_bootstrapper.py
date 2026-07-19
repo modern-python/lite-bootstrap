@@ -33,9 +33,15 @@ if import_checker.is_litestar_installed:
     from litestar.logging.config import StructLoggingConfig
     from litestar.openapi import OpenAPIConfig
     from litestar.openapi.plugins import SwaggerRenderPlugin
-    from litestar.plugins.prometheus import PrometheusConfig, PrometheusController
     from litestar.plugins.structlog import StructlogConfig, StructlogPlugin
     from litestar.static_files import create_static_files_router
+
+if import_checker.is_litestar_installed and import_checker.is_prometheus_client_installed:
+    # litestar.plugins.prometheus imports prometheus_client, which the `litestar`
+    # extra does not install (only `litestar-metrics` does). Used only inside
+    # LitestarPrometheusInstrument.bootstrap(), gated by check_dependencies() ->
+    # is_prometheus_client_installed, so this guard matches the usage.
+    from litestar.plugins.prometheus import PrometheusConfig, PrometheusController
 
 if import_checker.is_litestar_opentelemetry_installed:
     from litestar.middleware import ASGIMiddleware
