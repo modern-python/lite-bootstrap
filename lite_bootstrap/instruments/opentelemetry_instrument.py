@@ -6,14 +6,14 @@ import urllib.parse
 import warnings
 
 from lite_bootstrap import import_checker
-from lite_bootstrap.exceptions import TeardownError
+from lite_bootstrap.exceptions import InstrumentDependencyMissingWarning, TeardownError
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 
 
 if typing.TYPE_CHECKING:
     from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
 
-if import_checker.is_opentelemetry_installed:
+if import_checker.is_opentelemetry_sdk_installed:
     from opentelemetry.context import Context
     from opentelemetry.sdk import resources
     from opentelemetry.sdk.trace import ReadableSpan, SpanProcessor, TracerProvider
@@ -91,7 +91,7 @@ class OpenTelemetryConfig(OpenTelemetryServiceFieldsConfig):
         return host
 
 
-if import_checker.is_opentelemetry_installed and import_checker.is_pyroscope_installed:
+if import_checker.is_opentelemetry_sdk_installed and import_checker.is_pyroscope_installed:
     _OTEL_PROFILE_ID_KEY: typing.Final = "pyroscope.profile.id"
     _PYROSCOPE_SPAN_ID_KEY: typing.Final = "span_id"
     _PYROSCOPE_SPAN_NAME_KEY: typing.Final = "span_name"
@@ -131,7 +131,7 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
     """
 
     not_ready_message = "opentelemetry_endpoint is empty and opentelemetry_log_traces is False"
-    missing_dependency_message = "opentelemetry is not installed"
+    missing_dependency_message = "opentelemetry-sdk is not installed"
     _tracer_provider: "TracerProvider | None" = dataclasses.field(
         default_factory=lambda: None, init=False, repr=False, compare=False
     )
@@ -145,7 +145,9 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
 
     @staticmethod
     def check_dependencies() -> bool:
-        return import_checker.is_opentelemetry_installed
+        # The instrument imports from both the api (opentelemetry.trace/.context) and
+        # the sdk (opentelemetry.sdk.*), so it needs both distributions present.
+        return import_checker.is_opentelemetry_installed and import_checker.is_opentelemetry_sdk_installed
 
     def _build_excluded_urls(self) -> set[str]:
         excluded_urls: set[str] = set(self.bootstrap_config.opentelemetry_excluded_urls)
@@ -181,17 +183,23 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
             tracer_provider.add_span_processor(PyroscopeSpanProcessor())
         if self.bootstrap_config.opentelemetry_log_traces:
             tracer_provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter(formatter=_format_span)))
-        if (
-            self.bootstrap_config.opentelemetry_endpoint and import_checker.is_otlp_grpc_exporter_installed
-        ):  # pragma: no cover
-            tracer_provider.add_span_processor(
-                BatchSpanProcessor(
-                    OTLPSpanExporter(
-                        endpoint=self.bootstrap_config.opentelemetry_endpoint,
-                        insecure=self.bootstrap_config.opentelemetry_insecure,
+        if self.bootstrap_config.opentelemetry_endpoint:
+            if import_checker.is_otlp_grpc_exporter_installed:
+                tracer_provider.add_span_processor(  # pragma: no cover
+                    BatchSpanProcessor(
+                        OTLPSpanExporter(
+                            endpoint=self.bootstrap_config.opentelemetry_endpoint,
+                            insecure=self.bootstrap_config.opentelemetry_insecure,
+                        ),
                     ),
-                ),
-            )
+                )
+            else:
+                warnings.warn(
+                    "opentelemetry_endpoint is set but the gRPC OTLP exporter is not installed; "
+                    "spans will not be exported. Install lite-bootstrap[otl].",
+                    category=InstrumentDependencyMissingWarning,
+                    stacklevel=2,
+                )
         for one_instrumentor in self.bootstrap_config.opentelemetry_instrumentors:
             if isinstance(one_instrumentor, InstrumentorWithParams):
                 one_instrumentor.instrumentor.instrument(

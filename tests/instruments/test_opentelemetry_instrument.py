@@ -8,7 +8,7 @@ import pytest
 from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
 
 from lite_bootstrap import import_checker
-from lite_bootstrap.exceptions import TeardownError
+from lite_bootstrap.exceptions import InstrumentDependencyMissingWarning, TeardownError
 from lite_bootstrap.instruments.opentelemetry_instrument import (
     InstrumentorWithParams,
     OpenTelemetryConfig,
@@ -213,3 +213,29 @@ def test_opentelemetry_instrument_survives_missing_grpc_exporter() -> None:
             assert import_checker.is_otlp_grpc_exporter_installed is False
     finally:
         sys.modules.update(saved_submodules)
+
+
+def test_opentelemetry_instrument_survives_missing_sdk() -> None:
+    # opentelemetry-api present but opentelemetry-sdk absent (e.g. lite-bootstrap[fastmcp],
+    # which pulls bare opentelemetry-api transitively) must not crash importing
+    # opentelemetry_instrument, whose guarded block imports opentelemetry.sdk.* symbols.
+    with emulate_package_missing_with_module_reload(
+        "opentelemetry.sdk",
+        ["lite_bootstrap.instruments.opentelemetry_instrument"],
+    ):
+        assert import_checker.is_opentelemetry_sdk_installed is False
+        assert OpenTelemetryInstrument.check_dependencies() is False
+
+
+def test_bootstrap_warns_when_endpoint_set_without_grpc_exporter() -> None:
+    # SDK present but the grpc exporter absent, with an endpoint configured: bootstrap()
+    # must warn (configured-but-missing) rather than silently skip OTLP export.
+    instrument = OpenTelemetryInstrument(bootstrap_config=OpenTelemetryConfig(opentelemetry_endpoint="localhost:4317"))
+    try:
+        with (
+            patch.object(import_checker, "is_otlp_grpc_exporter_installed", False),
+            pytest.warns(InstrumentDependencyMissingWarning, match="gRPC OTLP exporter"),
+        ):
+            instrument.bootstrap()
+    finally:
+        instrument.teardown()
