@@ -1,5 +1,6 @@
 import dataclasses
 import gc
+import sys
 import warnings
 import weakref
 
@@ -16,13 +17,18 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import get_tracer_provider
 
-from lite_bootstrap import LitestarBootstrapper, LitestarConfig
+from lite_bootstrap import LitestarBootstrapper, LitestarConfig, import_checker
 from lite_bootstrap.bootstrappers.litestar_bootstrapper import (
     LitestarOpenTelemetryInstrumentationMiddleware,
     build_litestar_route_details_from_scope,
     build_span_name,
 )
-from tests.conftest import CustomInstrumentor, SentryTestTransport, emulate_package_missing
+from tests.conftest import (
+    CustomInstrumentor,
+    SentryTestTransport,
+    emulate_package_missing,
+    emulate_package_missing_with_module_reload,
+)
 
 
 logger = structlog.getLogger(__name__)
@@ -254,3 +260,22 @@ def test_litestar_otel_apps_cache_evicts_dead_refs() -> None:
 
     assert weak_app() is None
     assert len(middleware._otel_apps) == 0  # noqa: SLF001
+
+
+def test_litestar_bootstrap_without_prometheus_client() -> None:
+    # Regression: `import lite_bootstrap` with the `litestar` extra but not
+    # prometheus_client crashed because litestar_bootstrapper imported
+    # `litestar.plugins.prometheus` (which imports prometheus_client) under the
+    # is_litestar_installed guard alone. Evict the cached litestar.plugins.prometheus
+    # submodules so the module reload re-runs the real import path (otherwise the
+    # cached submodule short-circuits it and the bug is masked).
+    prom_submodules = [name for name in list(sys.modules) if name.startswith("litestar.plugins.prometheus")]
+    saved = {name: sys.modules.pop(name) for name in prom_submodules}
+    try:
+        with emulate_package_missing_with_module_reload(
+            "prometheus_client",
+            ["lite_bootstrap.bootstrappers.litestar_bootstrapper"],
+        ):
+            assert import_checker.is_prometheus_client_installed is False
+    finally:
+        sys.modules.update(saved)
