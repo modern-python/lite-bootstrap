@@ -72,9 +72,10 @@ Additional parameters:
 
 - `opentelemetry_service_name` - if provided, will be passed to the `Resource` instead of `service_name`.
 - `opentelemetry_container_name` - will be passed to the `Resource`.
-- `opentelemetry_endpoint` - will be passed to `OTLPSpanExporter` as endpoint.
+- `opentelemetry_endpoint` - will be passed to `OTLPSpanExporter` as endpoint. Under `opentelemetry_exporter_protocol="http"` this is a full URL (e.g. `http://collector:4318/v1/traces`).
 - `opentelemetry_namespace` - will be passed to the `Resource`.
-- `opentelemetry_insecure` - is opentelemetry connection secure.
+- `opentelemetry_exporter_protocol` - OTLP exporter transport: `"grpc"` (default, needs the `otl` extra) or `"http"` (needs the `otl-http` extra, no `grpcio` - installable on free-threaded Python).
+- `opentelemetry_insecure` - whether the gRPC OTLP connection is insecure (gRPC only; for `http` the endpoint URL scheme carries security).
 - `opentelemetry_instrumentors` - a list of extra instrumentors.
 - `opentelemetry_log_traces` - traces will be logged to stdout.
 - `opentelemetry_generate_health_check_spans` - generate spans for health check handlers if `True`.

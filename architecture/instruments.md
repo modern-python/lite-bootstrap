@@ -86,6 +86,20 @@ separate PyPI distributions — a real environment can have any subset. Three
   `InstrumentDependencyMissingWarning` ("…spans will not be exported. Install
   lite-bootstrap[otl].") rather than silently omitting the span processor — the
   standard configured-but-missing signal.
+- **`is_otlp_http_exporter_installed`**
+  (`_safe_find_spec("opentelemetry.exporter.otlp.proto.http.trace_exporter")`) —
+  the HTTP OTLP exporter (`opentelemetry-exporter-otlp-proto-http`, no `grpcio`,
+  so it installs on free-threaded builds; see `architecture/free-threading.md`).
+  Same guarded-import/guarded-use shape as the gRPC flag above; the missing-package
+  warning names `lite-bootstrap[otl-http]` instead.
+
+`OpenTelemetryConfig.opentelemetry_exporter_protocol` (`"grpc"` default | `"http"`)
+selects which exporter `bootstrap()` builds when `opentelemetry_endpoint` is set:
+`"grpc"` passes `endpoint`/`insecure` to `OTLPGrpcSpanExporter`; `"http"` passes
+only `endpoint` (a full URL) to `OTLPHttpSpanExporter` — the HTTP exporter has no
+`insecure` parameter, since that's carried by the URL scheme. Each branch checks
+its own installed-flag and warns independently if the corresponding exporter
+package is missing.
 
 ## Why instruments are not frozen
 
