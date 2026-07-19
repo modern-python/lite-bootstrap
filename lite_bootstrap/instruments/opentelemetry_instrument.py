@@ -24,7 +24,10 @@ if import_checker.is_otlp_grpc_exporter_installed:
     # opentelemetry-api can be present without the grpc otlp exporter package (e.g.
     # lite-bootstrap[fastmcp] pulls bare opentelemetry-api transitively); this must
     # stay a separate guard from is_opentelemetry_installed above.
-    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter as OTLPGrpcSpanExporter
+
+if import_checker.is_otlp_http_exporter_installed:
+    from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as OTLPHttpSpanExporter
 
 if import_checker.is_pyroscope_installed:
     import pyroscope
@@ -56,6 +59,7 @@ class OpenTelemetryConfig(OpenTelemetryServiceFieldsConfig):
     )
     opentelemetry_endpoint: str | None = None
     opentelemetry_insecure: bool = True
+    opentelemetry_exporter_protocol: typing.Literal["grpc", "http"] = "grpc"
     opentelemetry_instrumentors: list[typing.Union[InstrumentorWithParams, "BaseInstrumentor"]] = dataclasses.field(
         default_factory=list
     )
@@ -75,6 +79,8 @@ class OpenTelemetryConfig(OpenTelemetryServiceFieldsConfig):
 
     def _parse_remote_insecure_host(self) -> str | None:
         """Return the host name if the endpoint is insecure AND non-local; else None."""
+        if self.opentelemetry_exporter_protocol != "grpc":
+            return None
         if not self.opentelemetry_endpoint or not self.opentelemetry_insecure:
             return None
         if self.opentelemetry_endpoint.startswith("unix://"):
@@ -184,19 +190,33 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
         if self.bootstrap_config.opentelemetry_log_traces:
             tracer_provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter(formatter=_format_span)))
         if self.bootstrap_config.opentelemetry_endpoint:
-            if import_checker.is_otlp_grpc_exporter_installed:
-                tracer_provider.add_span_processor(  # pragma: no cover
-                    BatchSpanProcessor(
-                        OTLPSpanExporter(
-                            endpoint=self.bootstrap_config.opentelemetry_endpoint,
-                            insecure=self.bootstrap_config.opentelemetry_insecure,
+            if self.bootstrap_config.opentelemetry_exporter_protocol == "grpc":
+                if import_checker.is_otlp_grpc_exporter_installed:
+                    tracer_provider.add_span_processor(
+                        BatchSpanProcessor(
+                            OTLPGrpcSpanExporter(
+                                endpoint=self.bootstrap_config.opentelemetry_endpoint,
+                                insecure=self.bootstrap_config.opentelemetry_insecure,
+                            ),
                         ),
+                    )
+                else:
+                    warnings.warn(
+                        "opentelemetry_endpoint is set but the gRPC OTLP exporter is not installed; "
+                        "spans will not be exported. Install lite-bootstrap[otl].",
+                        category=InstrumentDependencyMissingWarning,
+                        stacklevel=2,
+                    )
+            elif import_checker.is_otlp_http_exporter_installed:
+                tracer_provider.add_span_processor(
+                    BatchSpanProcessor(
+                        OTLPHttpSpanExporter(endpoint=self.bootstrap_config.opentelemetry_endpoint),
                     ),
                 )
             else:
                 warnings.warn(
-                    "opentelemetry_endpoint is set but the gRPC OTLP exporter is not installed; "
-                    "spans will not be exported. Install lite-bootstrap[otl].",
+                    "opentelemetry_endpoint is set but the HTTP OTLP exporter is not installed; "
+                    "spans will not be exported. Install lite-bootstrap[otl-http].",
                     category=InstrumentDependencyMissingWarning,
                     stacklevel=2,
                 )
