@@ -106,7 +106,7 @@ bootstrapper:
 bootstrapper = FastAPIBootstrapper(config)
 app = bootstrapper.bootstrap()
 
-print(bootstrapper.build_summary())          # human-readable summary
+print(bootstrapper.build_summary())  # human-readable summary
 for cls, reason in bootstrapper.skipped_instruments:
     print(f"skipped {cls.__name__}: {reason}")
 ```

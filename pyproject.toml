@@ -178,6 +178,7 @@ ignore = [
     "COM812", # flake8-commas "Trailing comma missing"
     "ISC001", # flake8-implicit-str-concat
     "G004", # allow f-strings in logging
+    "CPY001", # no per-file copyright header
 ]
 isort.lines-after-imports = 2
 isort.no-lines-before = ["standard-library", "local-folder"]
