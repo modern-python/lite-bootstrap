@@ -156,8 +156,8 @@ import logging
 from lite_bootstrap import FastStreamConfig
 
 config = FastStreamConfig(
-    logging_log_level=logging.INFO,       # your application logs
-    faststream_log_level=logging.WARNING, # broker "Received"/"Processed" messages (default)
+    logging_log_level=logging.INFO,  # your application logs
+    faststream_log_level=logging.WARNING,  # broker "Received"/"Processed" messages (default)
 )
 ```
 
