@@ -479,13 +479,22 @@ def test_litestar_bootstrap_fills_unset_request_max_body_size(litestar_config: L
 
 def test_litestar_bootstrap_keeps_explicit_request_max_body_size(litestar_config: LitestarConfig) -> None:
     explicit_max_body_size = 42
+
+    @litestar.post("/echo")
+    async def echo_handler(data: dict[str, str]) -> dict[str, str]:
+        return data  # pragma: no cover -- body exceeds the limit before this runs
+
     config = dataclasses.replace(
-        litestar_config, application_config=AppConfig(request_max_body_size=explicit_max_body_size)
+        litestar_config,
+        application_config=AppConfig(route_handlers=[echo_handler], request_max_body_size=explicit_max_body_size),
     )
     application = LitestarBootstrapper(bootstrap_config=config).bootstrap()
 
-    with TestClient(app=application):
-        assert application.request_max_body_size == explicit_max_body_size
+    with TestClient(app=application) as client:
+        response = client.post("/echo", json={"key": "value" * explicit_max_body_size})
+
+    assert response.status_code == status_codes.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+    assert application.request_max_body_size == explicit_max_body_size
 
 
 def test_litestar_bootstrap_keeps_explicit_unlimited_request_max_body_size(litestar_config: LitestarConfig) -> None:

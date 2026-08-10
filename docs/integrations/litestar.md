@@ -119,3 +119,30 @@ LitestarConfig(
     prometheus_additional_params={"exclude_unhandled_paths": True},
 )
 ```
+
+## Request body size limit
+
+`LitestarBootstrapper` builds its app with `Litestar.from_config()`, which —
+unlike `Litestar(...)` — passes every `AppConfig` field explicitly and so
+skips the 10 MB `request_max_body_size` default that `Litestar(...)` applies.
+Left as-is, that means every handler that reads a request body returns `500:
+'request_max_body_size' set to 'Empty' on all layers`
+([litestar#4296](https://github.com/litestar-org/litestar/issues/4296)).
+
+The bootstrapper works around this by filling `request_max_body_size` with
+Litestar's own 10 MB default whenever your `AppConfig` leaves it unset. This
+is not exposed as a `LitestarConfig` field — set it on your own `AppConfig`
+instead, the same way as every other Litestar app-level knob:
+
+```python
+from litestar.config.app import AppConfig
+
+LitestarConfig(
+    service_name="microservice",
+    application_config=AppConfig(request_max_body_size=5_000_000),  # 5 MB limit
+)
+```
+
+Pass `request_max_body_size=None` for no limit. Any value you set — including
+`None` — is left untouched; the bootstrapper only fills it in when it is
+unset.

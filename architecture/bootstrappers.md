@@ -87,7 +87,7 @@ The guard is uniform: the same marker and warning apply to all four app-bearing
 frameworks. `attach` is typed `Callable[[], object]` because some hooks (FastStream's
 `on_shutdown`) return the callback.
 
-Litestar's `attach` thunk is `_apply_config`, which also normalizes the `AppConfig`
+Litestar's `attach` thunk wraps `_apply_config`, which also normalizes the `AppConfig`
 it is handed before `Litestar.from_config()` builds the app: it sets `debug` from
 `service_debug`, and fills `request_max_body_size` with Litestar's own 10 MB default
 when the config leaves it `Empty`. `from_config()` passes every field explicitly, so
