@@ -85,7 +85,10 @@ fastapi-all = [
     "lite-bootstrap[fastapi-sentry,fastapi-otl,fastapi-logging,fastapi-metrics,pyroscope]",
 ]
 litestar = [
-    "litestar>=2.9",
+    # >=2.13 for AppConfig.request_max_body_size (LitestarBootstrapper._apply_config reads it);
+    # >=2.15 for litestar.middleware.ASGIMiddleware (LitestarOpenTelemetryInstrumentationMiddleware
+    # subclasses it) -- the higher floor wins.
+    "litestar>=2.15",
 ]
 litestar-sentry = [
     "lite-bootstrap[litestar,sentry]",
