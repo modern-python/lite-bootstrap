@@ -1,3 +1,4 @@
+import contextlib
 import logging
 from io import StringIO
 from unittest.mock import patch
@@ -212,3 +213,17 @@ def test_logging_instrument_teardown_aggregates_handler_and_factory_errors() -> 
     assert any("handler boom" in m for m in error_msgs), error_msgs
     assert any("factory boom" in m for m in error_msgs), error_msgs
     assert instrument._logger_factory is None  # noqa: SLF001
+
+
+def test_logging_instrument_binds_log_stream_at_bootstrap() -> None:
+    """The memory logger writes to the stdout in effect at bootstrap, not the one bound at import."""
+    redirected_stdout = StringIO()
+    logging_instrument = LoggingInstrument(bootstrap_config=LoggingConfig(logging_buffer_capacity=0))
+    try:
+        with contextlib.redirect_stdout(redirected_stdout):
+            logging_instrument.bootstrap()
+            structlog.getLogger("log_stream_binding").info("bound at bootstrap")
+    finally:
+        logging_instrument.teardown()
+
+    assert "bound at bootstrap" in redirected_stdout.getvalue()

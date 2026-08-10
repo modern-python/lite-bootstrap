@@ -31,7 +31,9 @@ class _MemoryLoggerFactoryConfig:
     logging_buffer_capacity: int
     logging_flush_level: int
     logging_log_level: int
-    log_stream: typing.Any = sys.stdout
+    # default_factory, not a bare default: a bare one binds sys.stdout at import time, so a
+    # process that rebinds stdout before bootstrap would keep logging to the stale stream.
+    log_stream: typing.Any = dataclasses.field(default_factory=lambda: sys.stdout)
 
 
 def _dumps_orjson(value: typing.Any, **kwargs: typing.Any) -> str:  # noqa: ANN401

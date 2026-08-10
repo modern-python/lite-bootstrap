@@ -47,6 +47,13 @@ scoped to one job. It holds `MemoryLoggerFactory`, `_MemoryLoggerFactoryConfig`,
 the orjson structlog serializer, and the ASGI `AddressProtocol` /
 `RequestProtocol` typing protocols.
 
+`_MemoryLoggerFactoryConfig.log_stream` resolves `sys.stdout` through a
+`default_factory`, so the stream is bound when the instrument bootstraps rather
+than when the module is imported. A process that rebinds `sys.stdout` before
+bootstrap — `contextlib.redirect_stdout`, a supervisor, a test harness — is
+honored, and the structlog path agrees with the root-logger handler
+`_configure_foreign_loggers` installs at the same moment.
+
 ## Optional-dependency guard
 
 Optional packages stay optional. `lite_bootstrap/import_checker.py` exposes
