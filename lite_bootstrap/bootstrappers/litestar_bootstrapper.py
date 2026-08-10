@@ -3,6 +3,7 @@ import dataclasses
 import pathlib
 import re
 import typing
+import warnings
 import weakref
 
 from lite_bootstrap import import_checker
@@ -133,10 +134,21 @@ class LitestarConfig(
 ):
     application_config: "AppConfig" = dataclasses.field(default_factory=lambda: AppConfig())  # noqa: PLW0108
     litestar_logging_middleware_enabled: bool = False
+    litestar_logging_middleware_config: "LoggingMiddlewareConfig | None" = None
     prometheus_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     # Bounds path-label cardinality (Litestar defaults False -> raw URLs leak memory). See litestar#4891.
     prometheus_group_path: bool = True
     swagger_extra_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        # @dataclass(slots=True) replaces the class object, breaking bare super().
+        super(LitestarConfig, self).__post_init__()
+        if self.litestar_logging_middleware_config is not None and not self.litestar_logging_middleware_enabled:
+            warnings.warn(
+                "litestar_logging_middleware_config is ignored while litestar_logging_middleware_enabled is False; "
+                "set litestar_logging_middleware_enabled=True to turn access logging on.",
+                stacklevel=2,
+            )
 
 
 @dataclasses.dataclass(kw_only=True, slots=True)
@@ -198,6 +210,9 @@ class LitestarLoggingInstrument(LoggingInstrument):
         return [rf"^{re.escape(excluded_path)}(?:/|$)" for excluded_path in excluded_paths]
 
     def _build_logging_middleware_config(self) -> "LoggingMiddlewareConfig":
+        # A caller-supplied config replaces the hardened defaults wholesale, no merging.
+        if self.bootstrap_config.litestar_logging_middleware_config is not None:
+            return self.bootstrap_config.litestar_logging_middleware_config
         excluded_paths: typing.Final = self._build_logging_middleware_excluded_paths()
         return LoggingMiddlewareConfig(
             request_log_fields=_LOGGING_MIDDLEWARE_REQUEST_LOG_FIELDS,

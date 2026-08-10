@@ -13,6 +13,7 @@ import pytest
 import structlog
 from litestar import status_codes
 from litestar.config.app import AppConfig
+from litestar.middleware.logging import LoggingMiddlewareConfig
 from litestar.params import FromPath
 from litestar.testing import TestClient
 from opentelemetry.sdk.trace import TracerProvider
@@ -391,3 +392,27 @@ def test_litestar_access_logging_keeps_lookalike_paths(litestar_config: Litestar
 
     request_records = [record for record in _access_log_records(log_lines) if record["event"] == "HTTP Request"]
     assert [record["path"] for record in request_records] == ["/custom-healthy"]
+
+
+def test_litestar_access_logging_custom_config_replaces_defaults(litestar_config: LitestarConfig) -> None:
+    custom_config = LoggingMiddlewareConfig(
+        request_log_fields=("path", "query"),
+        response_log_fields=("status_code",),
+    )
+    log_lines = _post_password(
+        dataclasses.replace(
+            litestar_config,
+            litestar_logging_middleware_enabled=True,
+            litestar_logging_middleware_config=custom_config,
+        )
+    )
+
+    request_records = [record for record in _access_log_records(log_lines) if record["event"] == "HTTP Request"]
+    assert request_records
+    assert "query" in request_records[0]
+    assert "method" not in request_records[0]
+
+
+def test_litestar_logging_middleware_config_without_flag_warns(litestar_config: LitestarConfig) -> None:
+    with pytest.warns(UserWarning, match="litestar_logging_middleware_enabled"):
+        dataclasses.replace(litestar_config, litestar_logging_middleware_config=LoggingMiddlewareConfig())
