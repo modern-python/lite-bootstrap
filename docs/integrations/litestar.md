@@ -73,9 +73,16 @@ LitestarConfig(
 ```
 
 Enabled this way, it logs metadata only — `path`, `method`, `content_type`,
-`path_params` for requests and `status_code` for responses — and skips the
-Swagger docs, the offline static assets, the health-check path and the metrics
-path.
+`path_params` for requests and `status_code` for responses — and skips
+`swagger_path`, `swagger_static_path` (when `swagger_offline_docs` is on),
+`health_checks_path` and `prometheus_metrics_path`. Those four paths are
+excluded whether or not the corresponding instrument is actually configured —
+so if you disable health checks but still serve your own route at
+`health_checks_path`, that route is not access-logged either.
+
+`path` and `path_params` are logged, so a secret embedded in the URL itself
+(e.g. `/reset-password/{token}`) is recorded. Keep secrets in the request
+body, which is never logged.
 
 To take full control, pass your own config (it replaces the defaults above
 entirely, including the path exclusions):
@@ -86,9 +93,14 @@ from litestar.middleware.logging import LoggingMiddlewareConfig
 LitestarConfig(
     service_name="microservice",
     litestar_logging_middleware_enabled=True,
-    litestar_logging_middleware_config=LoggingMiddlewareConfig(request_log_fields=("path", "method", "headers")),
+    litestar_logging_middleware_config=LoggingMiddlewareConfig(request_log_fields=("path", "method", "content_type")),
 )
 ```
+
+A bare `LoggingMiddlewareConfig()` restores Litestar's own defaults wholesale
+— including full request/response body logging — so pass explicit
+`request_log_fields` / `response_log_fields` rather than relying on the
+built-in default.
 
 ## Prometheus
 

@@ -71,7 +71,8 @@ early before `super()` silently blocks the rest of the chain.
 `BaseConfig.__post_init__` is a deliberate no-op that **terminates** the
 cascade; without it the chain would raise `AttributeError` on `object`.
 
-`FastAPIConfig` uses the explicit `super(FastAPIConfig, self).__post_init__()`
+`FastAPIConfig` and `LitestarConfig` use the explicit
+`super(FastAPIConfig, self).__post_init__()` / `super(LitestarConfig, self).__post_init__()`
 form rather than bare `super()`. Under `@dataclass(slots=True)` the decorator
 replaces the class object after the body compiles, which breaks the bare-`super()`
 `__class__` cell; the explicit form is required.
