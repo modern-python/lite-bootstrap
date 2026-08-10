@@ -324,7 +324,7 @@ def _access_log_records(log_lines: list[str]) -> list[dict[str, typing.Any]]:
 def _post_password(config: LitestarConfig) -> list[str]:
     """Bootstrap, POST credentials, and return the log lines Litestar emitted for that request."""
 
-    @litestar.post("/login", request_max_body_size=1000)
+    @litestar.post("/login")
     async def _login_handler(data: dict[str, str]) -> dict[str, str]:
         return data
 
