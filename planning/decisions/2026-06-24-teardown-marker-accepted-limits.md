@@ -65,3 +65,13 @@ accepted; it is out of scope for this decision.
 - **Litestar:** sharing one `AppConfig` across multiple apps becomes a supported,
   documented pattern, or the attach is restructured to run at `bootstrap()` time
   (when the app exists). Then tag the built `Litestar` app instead of the config.
+
+## Update (1.4.0)
+
+[double-bootstrap-guard](../changes/2026-08-10.04-double-bootstrap-guard.md) changed
+the consequence both scenarios above describe. The FastMCP case is no longer "a
+second bootstrapper warns-and-skips instead of re-attaching" — its `bootstrap()`
+now raises `ConfigurationError`. The Litestar case is no longer "the second warns
+and skips, and its teardown never runs" — its `bootstrap()` raises before any
+instrument is applied, so there is nothing left half-wired. The marker and its two
+accepted limits are unchanged; only what happens once the marker is hit got louder.

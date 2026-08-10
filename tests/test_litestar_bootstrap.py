@@ -521,10 +521,13 @@ def test_second_litestar_bootstrapper_bootstrap_raises(litestar_config: Litestar
         warnings.simplefilter("ignore")
         second = LitestarBootstrapper(bootstrap_config=dataclasses.replace(litestar_config))
 
-    application = first.bootstrap()
+    try:
+        application = first.bootstrap()
 
-    with pytest.raises(ConfigurationError, match="LitestarBootstrapper"):
-        second.bootstrap()
+        with pytest.raises(ConfigurationError, match="LitestarBootstrapper"):
+            second.bootstrap()
 
-    with TestClient(app=application) as client:
-        assert client.get(litestar_config.health_checks_path).status_code == status_codes.HTTP_200_OK
+        with TestClient(app=application) as client:
+            assert client.get(litestar_config.health_checks_path).status_code == status_codes.HTTP_200_OK
+    finally:
+        first.teardown()
