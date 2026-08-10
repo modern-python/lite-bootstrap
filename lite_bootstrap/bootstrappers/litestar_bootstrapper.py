@@ -193,7 +193,9 @@ class LitestarLoggingInstrument(LoggingInstrument):
             normalized_path = candidate_path.rstrip("/")
             if normalized_path and normalized_path not in excluded_paths:
                 excluded_paths.append(normalized_path)
-        return [re.escape(excluded_path) for excluded_path in excluded_paths]
+        # Litestar matches exclude patterns with an unanchored search, so anchor each one to the
+        # path itself or a sub-path; a bare prefix would also suppress an unrelated /custom-healthy.
+        return [rf"^{re.escape(excluded_path)}(?:/|$)" for excluded_path in excluded_paths]
 
     def _build_logging_middleware_config(self) -> "LoggingMiddlewareConfig":
         excluded_paths: typing.Final = self._build_logging_middleware_excluded_paths()

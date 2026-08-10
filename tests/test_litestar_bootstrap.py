@@ -372,3 +372,22 @@ def test_litestar_access_logging_excludes_infrastructure_paths(litestar_config: 
         assert client.get(config.prometheus_metrics_path).status_code == status_codes.HTTP_200_OK
 
     assert _access_log_records(log_lines) == []
+
+
+def test_litestar_access_logging_keeps_lookalike_paths(litestar_config: LitestarConfig) -> None:
+    @litestar.get("/custom-healthy")
+    async def lookalike_handler() -> dict[str, str]:
+        return {"status": "ok"}
+
+    config = dataclasses.replace(
+        litestar_config,
+        litestar_logging_middleware_enabled=True,
+        application_config=AppConfig(route_handlers=[lookalike_handler]),
+    )
+    application = LitestarBootstrapper(bootstrap_config=config).bootstrap()
+
+    with TestClient(app=application) as client, _recorded_litestar_logs() as log_lines:
+        assert client.get("/custom-healthy").status_code == status_codes.HTTP_200_OK
+
+    request_records = [record for record in _access_log_records(log_lines) if record["event"] == "HTTP Request"]
+    assert [record["path"] for record in request_records] == ["/custom-healthy"]
