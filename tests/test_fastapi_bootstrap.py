@@ -10,6 +10,7 @@ from starlette.testclient import TestClient
 
 from lite_bootstrap import FastAPIBootstrapper, FastAPIConfig
 from lite_bootstrap.bootstrappers.fastapi_bootstrapper import _narrow_app
+from lite_bootstrap.exceptions import ConfigurationError
 from lite_bootstrap.types import UNSET
 from tests.conftest import CustomInstrumentor, SentryTestTransport, emulate_package_missing
 
@@ -166,3 +167,24 @@ def test_fastapi_config_inherits_otel_insecure_warning() -> None:
         )
     matching = [w for w in caught if "unencrypted" in str(w.message)]
     assert matching, [str(w.message) for w in caught]
+
+
+def test_second_fastapi_bootstrapper_bootstrap_raises(fastapi_config: FastAPIConfig) -> None:
+    application = fastapi.FastAPI()
+    first = FastAPIBootstrapper(bootstrap_config=dataclasses.replace(fastapi_config, application=application))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        second = FastAPIBootstrapper(bootstrap_config=dataclasses.replace(fastapi_config, application=application))
+
+    try:
+        first.bootstrap()
+        routes_after_first = len(application.routes)
+
+        with pytest.raises(ConfigurationError, match="FastAPIBootstrapper"):
+            second.bootstrap()
+
+        assert len(application.routes) == routes_after_first, (
+            "a refused second bootstrap must not register duplicate routes"
+        )
+    finally:
+        first.teardown()

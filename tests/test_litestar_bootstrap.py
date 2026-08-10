@@ -31,6 +31,7 @@ from lite_bootstrap.bootstrappers.litestar_bootstrapper import (
     build_litestar_route_details_from_scope,
     build_span_name,
 )
+from lite_bootstrap.exceptions import ConfigurationError
 from tests.conftest import (
     CustomInstrumentor,
     SentryTestTransport,
@@ -510,3 +511,18 @@ def test_litestar_default_request_max_body_size_matches_litestar() -> None:
     litestar_default = inspect.signature(litestar.Litestar.__init__).parameters["request_max_body_size"].default
 
     assert litestar_default == _LITESTAR_DEFAULT_REQUEST_MAX_BODY_SIZE
+
+
+def test_second_litestar_bootstrapper_bootstrap_raises(litestar_config: LitestarConfig) -> None:
+    first = LitestarBootstrapper(bootstrap_config=litestar_config)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        second = LitestarBootstrapper(bootstrap_config=dataclasses.replace(litestar_config))
+
+    application = first.bootstrap()
+
+    with pytest.raises(ConfigurationError, match="LitestarBootstrapper"):
+        second.bootstrap()
+
+    with TestClient(app=application) as client:
+        assert client.get(litestar_config.health_checks_path).status_code == status_codes.HTTP_200_OK

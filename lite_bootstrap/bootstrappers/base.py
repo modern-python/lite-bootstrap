@@ -5,6 +5,7 @@ import warnings
 
 from lite_bootstrap.exceptions import (
     BootstrapperNotReadyError,
+    ConfigurationError,
     InstrumentDependencyMissingWarning,
     TeardownError,
 )
@@ -43,6 +44,7 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
                 f"will not run on shutdown — construct one {type(self).__name__} per application.",
                 stacklevel=3,
             )
+            self._attach_skipped = True
             return
         # Mark only after a successful attach: if attach() raises, the target stays untagged
         # so a retry can re-attach rather than silently warning-and-skipping forever.
@@ -69,6 +71,8 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
 
     def __init__(self, bootstrap_config: BaseConfig) -> None:
         self.is_bootstrapped = False
+        # Set when another bootstrapper already owns this application; bootstrap() then refuses.
+        self._attach_skipped = False
         if not self.is_ready():
             msg = f"{type(self).__name__} is not ready: {self.not_ready_message}"
             raise BootstrapperNotReadyError(msg)
@@ -112,6 +116,13 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
     def is_ready(self) -> bool: ...
 
     def bootstrap(self) -> ApplicationT:
+        if self._attach_skipped:
+            msg = (
+                f"{type(self).__name__} shares its application with another lite-bootstrap "
+                f"bootstrapper, which has already applied its instruments. Construct one "
+                f"{type(self).__name__} per application."
+            )
+            raise ConfigurationError(msg)
         if self.is_bootstrapped:
             return self._prepare_application()
         self.is_bootstrapped = True
