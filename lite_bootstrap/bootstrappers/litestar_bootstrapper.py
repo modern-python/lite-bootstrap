@@ -31,6 +31,7 @@ if import_checker.is_litestar_installed:
     from litestar.config.app import AppConfig
     from litestar.config.cors import CORSConfig
     from litestar.logging.config import StructLoggingConfig
+    from litestar.middleware.logging import LoggingMiddlewareConfig
     from litestar.openapi import OpenAPIConfig
     from litestar.openapi.plugins import SwaggerRenderPlugin
     from litestar.plugins.structlog import StructlogConfig, StructlogPlugin
@@ -60,6 +61,13 @@ def build_span_name(method: str, route: str) -> str:
     if not route:
         return method
     return f"{method} {route}"
+
+
+# Litestar's own defaults include `body`, `headers`, `cookies` and `query`, which leak
+# credentials and dump static Swagger assets into the log. `path` is scope["path"],
+# so dropping `query` costs only the query string.
+_LOGGING_MIDDLEWARE_REQUEST_LOG_FIELDS: typing.Final = ("path", "method", "content_type", "path_params")
+_LOGGING_MIDDLEWARE_RESPONSE_LOG_FIELDS: typing.Final = ("status_code",)
 
 
 def build_litestar_route_details_from_scope(
@@ -170,6 +178,12 @@ class LitestarHealthChecksInstrument(HealthChecksInstrument):
 class LitestarLoggingInstrument(LoggingInstrument):
     bootstrap_config: LitestarConfig
 
+    def _build_logging_middleware_config(self) -> "LoggingMiddlewareConfig":
+        return LoggingMiddlewareConfig(
+            request_log_fields=_LOGGING_MIDDLEWARE_REQUEST_LOG_FIELDS,
+            response_log_fields=_LOGGING_MIDDLEWARE_RESPONSE_LOG_FIELDS,
+        )
+
     def bootstrap(self) -> None:
         self._unset_handlers()
         self.bootstrap_config.application_config.plugins.append(
@@ -185,6 +199,7 @@ class LitestarLoggingInstrument(LoggingInstrument):
                     ),
                     # Litestar defaults this to True, which logs full request/response bodies.
                     enable_middleware_logging=self.bootstrap_config.litestar_logging_middleware_enabled,
+                    middleware_logging_config=self._build_logging_middleware_config(),
                 ),
             )
         )

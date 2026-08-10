@@ -345,3 +345,17 @@ def test_litestar_access_logging_opt_in_emits_access_logs(litestar_config: Lites
     events = [record["event"] for record in _access_log_records(log_lines)]
     assert "HTTP Request" in events
     assert "HTTP Response" in events
+
+
+def test_litestar_access_logging_logs_metadata_only(litestar_config: LitestarConfig) -> None:
+    log_lines = _post_password(dataclasses.replace(litestar_config, litestar_logging_middleware_enabled=True))
+
+    assert not any("hunter2" in log_line for log_line in log_lines)
+    records = _access_log_records(log_lines)
+    assert records
+    for record in records:
+        assert not {"body", "headers", "cookies", "query"} & record.keys()
+    request_records = [record for record in records if record["event"] == "HTTP Request"]
+    assert request_records
+    assert request_records[0]["path"] == "/login"
+    assert request_records[0]["method"] == "POST"
