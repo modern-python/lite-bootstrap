@@ -1,6 +1,10 @@
+import contextlib
 import dataclasses
 import gc
+import json
+import logging
 import sys
+import typing
 import warnings
 import weakref
 
@@ -9,6 +13,7 @@ import pytest
 import structlog
 from litestar import status_codes
 from litestar.config.app import AppConfig
+from litestar.middleware.logging import LoggingMiddlewareConfig
 from litestar.params import FromPath
 from litestar.testing import TestClient
 from opentelemetry.sdk.trace import TracerProvider
@@ -19,6 +24,7 @@ from opentelemetry.trace import get_tracer_provider
 
 from lite_bootstrap import LitestarBootstrapper, LitestarConfig, import_checker
 from lite_bootstrap.bootstrappers.litestar_bootstrapper import (
+    LitestarLoggingInstrument,
     LitestarOpenTelemetryInstrumentationMiddleware,
     build_litestar_route_details_from_scope,
     build_span_name,
@@ -279,3 +285,175 @@ def test_litestar_bootstrap_without_prometheus_client() -> None:
             assert import_checker.is_prometheus_client_installed is False
     finally:
         sys.modules.update(saved)
+
+
+class _RecordingHandler(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__()
+        self.lines: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.lines.append(record.getMessage())
+
+
+@contextlib.contextmanager
+def _recorded_litestar_logs() -> typing.Iterator[list[str]]:
+    """Record Litestar's rendered log lines.
+
+    Enter this inside the TestClient context: Litestar's StructLoggingConfig runs dictConfig at
+    startup, which drops handlers attached earlier, and MemoryLoggerFactory sets propagate=False,
+    so the handler has to sit on the "litestar" logger itself.
+    """
+    handler = _RecordingHandler()
+    litestar_logger = logging.getLogger("litestar")
+    litestar_logger.addHandler(handler)
+    try:
+        yield handler.lines
+    finally:
+        litestar_logger.removeHandler(handler)
+
+
+def _access_log_records(log_lines: list[str]) -> list[dict[str, typing.Any]]:
+    """Return the LoggingMiddleware lines among the recorded structlog lines."""
+    records = [json.loads(log_line) for log_line in log_lines]
+    return [record for record in records if record.get("event") in {"HTTP Request", "HTTP Response"}]
+
+
+def _post_password(config: LitestarConfig) -> list[str]:
+    """Bootstrap, POST credentials, and return the log lines Litestar emitted for that request."""
+
+    @litestar.post("/login", request_max_body_size=1000)
+    async def _login_handler(data: dict[str, str]) -> dict[str, str]:
+        return data
+
+    config = dataclasses.replace(config, application_config=AppConfig(route_handlers=[_login_handler]))
+    application = LitestarBootstrapper(bootstrap_config=config).bootstrap()
+    with TestClient(app=application) as client, _recorded_litestar_logs() as log_lines:
+        response = client.post("/login", json={"username": "user", "password": "hunter2"})
+        assert response.status_code == status_codes.HTTP_201_CREATED
+    return log_lines
+
+
+def test_litestar_access_logging_disabled_by_default(litestar_config: LitestarConfig) -> None:
+    log_lines = _post_password(litestar_config)
+
+    assert _access_log_records(log_lines) == []
+    assert not any("hunter2" in log_line for log_line in log_lines)
+
+
+def test_litestar_access_logging_opt_in_emits_access_logs(litestar_config: LitestarConfig) -> None:
+    log_lines = _post_password(dataclasses.replace(litestar_config, litestar_logging_middleware_enabled=True))
+
+    events = [record["event"] for record in _access_log_records(log_lines)]
+    assert "HTTP Request" in events
+    assert "HTTP Response" in events
+
+
+def test_litestar_access_logging_logs_metadata_only(litestar_config: LitestarConfig) -> None:
+    log_lines = _post_password(dataclasses.replace(litestar_config, litestar_logging_middleware_enabled=True))
+
+    assert not any("hunter2" in log_line for log_line in log_lines)
+    records = _access_log_records(log_lines)
+    assert records
+    for record in records:
+        assert not {"body", "headers", "cookies", "query"} & record.keys()
+    request_records = [record for record in records if record["event"] == "HTTP Request"]
+    assert request_records
+    assert request_records[0]["path"] == "/login"
+    assert request_records[0]["method"] == "POST"
+
+
+def test_litestar_access_logging_excludes_infrastructure_paths(litestar_config: LitestarConfig) -> None:
+    config = dataclasses.replace(litestar_config, litestar_logging_middleware_enabled=True)
+    application = LitestarBootstrapper(bootstrap_config=config).bootstrap()
+
+    with TestClient(app=application) as client, _recorded_litestar_logs() as log_lines:
+        assert client.get(config.swagger_path).status_code == status_codes.HTTP_200_OK
+        assert client.get(f"{config.swagger_static_path}/swagger-ui.css").status_code == status_codes.HTTP_200_OK
+        assert client.get(config.health_checks_path).status_code == status_codes.HTTP_200_OK
+        assert client.get(config.prometheus_metrics_path).status_code == status_codes.HTTP_200_OK
+
+    assert _access_log_records(log_lines) == []
+
+
+def test_litestar_access_logging_keeps_lookalike_paths(litestar_config: LitestarConfig) -> None:
+    @litestar.get("/custom-healthy")
+    async def lookalike_handler() -> dict[str, str]:
+        return {"status": "ok"}
+
+    config = dataclasses.replace(
+        litestar_config,
+        litestar_logging_middleware_enabled=True,
+        application_config=AppConfig(route_handlers=[lookalike_handler]),
+    )
+    application = LitestarBootstrapper(bootstrap_config=config).bootstrap()
+
+    with TestClient(app=application) as client, _recorded_litestar_logs() as log_lines:
+        assert client.get("/custom-healthy").status_code == status_codes.HTTP_200_OK
+
+    request_records = [record for record in _access_log_records(log_lines) if record["event"] == "HTTP Request"]
+    assert [record["path"] for record in request_records] == ["/custom-healthy"]
+
+
+def test_litestar_access_logging_custom_config_replaces_defaults(litestar_config: LitestarConfig) -> None:
+    custom_config = LoggingMiddlewareConfig(
+        request_log_fields=("path", "query"),
+        response_log_fields=("status_code",),
+    )
+    log_lines = _post_password(
+        dataclasses.replace(
+            litestar_config,
+            litestar_logging_middleware_enabled=True,
+            litestar_logging_middleware_config=custom_config,
+        )
+    )
+
+    request_records = [record for record in _access_log_records(log_lines) if record["event"] == "HTTP Request"]
+    assert request_records
+    assert "query" in request_records[0]
+    assert "method" not in request_records[0]
+
+
+def test_litestar_logging_middleware_config_without_flag_warns(litestar_config: LitestarConfig) -> None:
+    with pytest.warns(UserWarning, match="litestar_logging_middleware_enabled"):
+        dataclasses.replace(litestar_config, litestar_logging_middleware_config=LoggingMiddlewareConfig())
+
+
+def test_litestar_access_logging_excluded_paths_drops_degenerate_and_duplicates(
+    litestar_config: LitestarConfig,
+) -> None:
+    # swagger_path is empty (dropped), swagger_static_path is a bare "/" (degenerate, dropped even
+    # though swagger_offline_docs is on), and prometheus_metrics_path duplicates health_checks_path
+    # once both are stripped of trailing slashes.
+    config = dataclasses.replace(
+        litestar_config,
+        swagger_path="",
+        swagger_offline_docs=True,
+        swagger_static_path="/",
+        health_checks_path="/api/",
+        prometheus_metrics_path="/api",
+    )
+    instrument = LitestarLoggingInstrument(bootstrap_config=config)
+
+    excluded_paths = instrument._build_logging_middleware_excluded_paths()  # noqa: SLF001
+
+    assert excluded_paths == [r"^/api(?:/|$)"]
+    middleware_config = instrument._build_logging_middleware_config()  # noqa: SLF001
+    assert middleware_config.exclude == excluded_paths
+
+
+def test_litestar_access_logging_excluded_paths_none_when_all_degenerate(
+    litestar_config: LitestarConfig,
+) -> None:
+    config = dataclasses.replace(
+        litestar_config,
+        swagger_path="",
+        swagger_offline_docs=True,
+        swagger_static_path="/",
+        health_checks_path="/",
+        prometheus_metrics_path="",
+    )
+    instrument = LitestarLoggingInstrument(bootstrap_config=config)
+
+    assert instrument._build_logging_middleware_excluded_paths() == []  # noqa: SLF001
+    assert instrument._build_logging_middleware_config().exclude is None  # noqa: SLF001

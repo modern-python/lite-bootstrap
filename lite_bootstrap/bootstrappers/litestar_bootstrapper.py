@@ -1,7 +1,9 @@
 import contextlib
 import dataclasses
 import pathlib
+import re
 import typing
+import warnings
 import weakref
 
 from lite_bootstrap import import_checker
@@ -31,6 +33,7 @@ if import_checker.is_litestar_installed:
     from litestar.config.app import AppConfig
     from litestar.config.cors import CORSConfig
     from litestar.logging.config import StructLoggingConfig
+    from litestar.middleware.logging import LoggingMiddlewareConfig
     from litestar.openapi import OpenAPIConfig
     from litestar.openapi.plugins import SwaggerRenderPlugin
     from litestar.plugins.structlog import StructlogConfig, StructlogPlugin
@@ -60,6 +63,13 @@ def build_span_name(method: str, route: str) -> str:
     if not route:
         return method
     return f"{method} {route}"
+
+
+# Litestar's own defaults include `body`, `headers`, `cookies` and `query`, which leak
+# credentials and dump static Swagger assets into the log. `path` is scope["path"],
+# so dropping `query` costs only the query string.
+_LOGGING_MIDDLEWARE_REQUEST_LOG_FIELDS: typing.Final = ("path", "method", "content_type", "path_params")
+_LOGGING_MIDDLEWARE_RESPONSE_LOG_FIELDS: typing.Final = ("status_code",)
 
 
 def build_litestar_route_details_from_scope(
@@ -123,10 +133,22 @@ class LitestarConfig(
     SwaggerConfig,
 ):
     application_config: "AppConfig" = dataclasses.field(default_factory=lambda: AppConfig())  # noqa: PLW0108
+    litestar_logging_middleware_config: "LoggingMiddlewareConfig | None" = None
+    litestar_logging_middleware_enabled: bool = False
     prometheus_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     # Bounds path-label cardinality (Litestar defaults False -> raw URLs leak memory). See litestar#4891.
     prometheus_group_path: bool = True
     swagger_extra_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        # @dataclass(slots=True) replaces the class object, breaking bare super().
+        super(LitestarConfig, self).__post_init__()
+        if self.litestar_logging_middleware_config is not None and not self.litestar_logging_middleware_enabled:
+            warnings.warn(
+                "litestar_logging_middleware_config is ignored while litestar_logging_middleware_enabled is False; "
+                "set litestar_logging_middleware_enabled=True to turn access logging on.",
+                stacklevel=2,
+            )
 
 
 @dataclasses.dataclass(kw_only=True, slots=True)
@@ -169,6 +191,35 @@ class LitestarHealthChecksInstrument(HealthChecksInstrument):
 class LitestarLoggingInstrument(LoggingInstrument):
     bootstrap_config: LitestarConfig
 
+    def _build_logging_middleware_excluded_paths(self) -> list[str]:
+        """Regex-escaped path prefixes for infrastructure routes not worth an access log line."""
+        candidate_paths: typing.Final = (
+            self.bootstrap_config.swagger_path,
+            self.bootstrap_config.swagger_static_path if self.bootstrap_config.swagger_offline_docs else "",
+            self.bootstrap_config.health_checks_path,
+            self.bootstrap_config.prometheus_metrics_path,
+        )
+        excluded_paths: list[str] = []
+        for candidate_path in candidate_paths:
+            # A bare "/" would exclude every route, so it is dropped along with empty values.
+            normalized_path = candidate_path.rstrip("/")
+            if normalized_path and normalized_path not in excluded_paths:
+                excluded_paths.append(normalized_path)
+        # Litestar matches exclude patterns with an unanchored search, so anchor each one to the
+        # path itself or a sub-path; a bare prefix would also suppress an unrelated /custom-healthy.
+        return [rf"^{re.escape(excluded_path)}(?:/|$)" for excluded_path in excluded_paths]
+
+    def _build_logging_middleware_config(self) -> "LoggingMiddlewareConfig":
+        # A caller-supplied config replaces the hardened defaults wholesale, no merging.
+        if self.bootstrap_config.litestar_logging_middleware_config is not None:
+            return self.bootstrap_config.litestar_logging_middleware_config
+        excluded_paths: typing.Final = self._build_logging_middleware_excluded_paths()
+        return LoggingMiddlewareConfig(
+            request_log_fields=_LOGGING_MIDDLEWARE_REQUEST_LOG_FIELDS,
+            response_log_fields=_LOGGING_MIDDLEWARE_RESPONSE_LOG_FIELDS,
+            exclude=excluded_paths or None,
+        )
+
     def bootstrap(self) -> None:
         self._unset_handlers()
         self.bootstrap_config.application_config.plugins.append(
@@ -182,6 +233,9 @@ class LitestarLoggingInstrument(LoggingInstrument):
                         pretty_print_tty=False,
                         standard_lib_logging_config=None,
                     ),
+                    # Litestar defaults this to True, which logs full request/response bodies.
+                    enable_middleware_logging=self.bootstrap_config.litestar_logging_middleware_enabled,
+                    middleware_logging_config=self._build_logging_middleware_config(),
                 ),
             )
         )

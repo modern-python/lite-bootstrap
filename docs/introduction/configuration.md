@@ -140,6 +140,13 @@ async def handler(request: Request) -> dict[str, str]:
     return {"status": "ok"}
 ```
 
+Additional parameters for Litestar's access-log middleware:
+
+- `litestar_logging_middleware_enabled` - turn on request/response access logging (default: `False`).
+- `litestar_logging_middleware_config` - a caller-supplied `LoggingMiddlewareConfig` that replaces the built-in defaults wholesale.
+
+See [the Litestar integration guide](../integrations/litestar.md#logging) for what gets logged and why access logging defaults to off.
+
 ### Structlog FastStream
 
 When using FastStream, the structlog logger is automatically injected into the broker so that all broker
