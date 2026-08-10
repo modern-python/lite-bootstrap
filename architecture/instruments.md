@@ -25,7 +25,13 @@ single `bootstrap_config: ConfigT`. Subclasses implement:
 One file per instrument:
 
 - `logging_instrument.py` — structlog setup (`LoggingInstrument`), skipped when
-  `logging_enabled=False`.
+  `logging_enabled=False`. The Litestar subclass also owns Litestar's
+  `LoggingMiddleware`: it is off unless `litestar_logging_middleware_enabled`
+  is set, and when on it logs request/response metadata only (never bodies,
+  headers, cookies or query strings) and excludes the swagger, static,
+  health-check and metrics paths, matched as the path itself or a sub-path. A
+  caller-supplied `litestar_logging_middleware_config` replaces those defaults
+  wholesale.
 - `opentelemetry_instrument.py` — OTel tracer provider + span export.
 - `sentry_instrument.py` — Sentry SDK init, skipped when `sentry_dsn` empty.
 - `prometheus_instrument.py` — Prometheus metrics; framework variants wrap it.

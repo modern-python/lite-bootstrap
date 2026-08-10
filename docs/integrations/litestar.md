@@ -61,6 +61,35 @@ async def list_items(request: Request) -> list[str]:
     return []
 ```
 
+Litestar's own `LoggingMiddleware` is **off by default** here. Its defaults log
+full request and response bodies, which puts credentials and the whole offline
+Swagger bundle into your logs. Turn it on explicitly:
+
+```python
+LitestarConfig(
+    service_name="microservice",
+    litestar_logging_middleware_enabled=True,
+)
+```
+
+Enabled this way, it logs metadata only — `path`, `method`, `content_type`,
+`path_params` for requests and `status_code` for responses — and skips the
+Swagger docs, the offline static assets, the health-check path and the metrics
+path.
+
+To take full control, pass your own config (it replaces the defaults above
+entirely, including the path exclusions):
+
+```python
+from litestar.middleware.logging import LoggingMiddlewareConfig
+
+LitestarConfig(
+    service_name="microservice",
+    litestar_logging_middleware_enabled=True,
+    litestar_logging_middleware_config=LoggingMiddlewareConfig(request_log_fields=("path", "method", "headers")),
+)
+```
+
 ## Prometheus
 
 `prometheus_group_path` defaults to `True`, so the `path` metric label uses the
