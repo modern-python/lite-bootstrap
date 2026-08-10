@@ -87,6 +87,25 @@ The guard is uniform: the same marker and warning apply to all four app-bearing
 frameworks. `attach` is typed `Callable[[], object]` because some hooks (FastStream's
 `on_shutdown`) return the callback.
 
+The marker gates more than the teardown hook: it also gates instrument
+application. `_attach_teardown_once` records the skip on `self._attach_skipped`
+before returning, and `bootstrap()` checks that flag first — the losing
+bootstrapper raises `ConfigurationError` naming itself rather than re-applying
+every instrument against an application another bootstrapper already owns.
+Construction only warns; the losing bootstrapper is unusable from that point —
+only the failure itself is deferred to `bootstrap()`. `FreeBootstrapper` never
+calls `_attach_teardown_once` — it has no attach target — so it is unaffected;
+two `FreeBootstrapper`s bootstrap independently.
+
+Nothing clears `_TEARDOWN_MARKER`, including `teardown()`. So once an
+application has been bootstrapped, it stays owned for the life of the process —
+a fresh bootstrapper constructed on it later still warns at construction and
+raises at `bootstrap()`. Clearing the marker on teardown is not the fix: for
+FastAPI, the lifespan wrapper the first bootstrapper installed via `_wrap_lifespan`
+stays merged into the app regardless of the marker, so a second bootstrapper would
+still be stacking its teardown behind one that's already there. The remedy is to
+construct a fresh application.
+
 Litestar's `attach` thunk wraps `_apply_config`, which also normalizes the `AppConfig`
 it is handed before `Litestar.from_config()` builds the app: it sets `debug` from
 `service_debug`, and fills `request_max_body_size` with Litestar's own 10 MB default

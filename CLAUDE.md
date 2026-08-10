@@ -54,9 +54,10 @@ Invariants (what must not break) — see the capability page for the full accoun
   instance is ignored. Construct exactly one `OpenTelemetryInstrument` per process. →
   `architecture/instruments.md`
 - **Teardown attaches once.** `_attach_teardown_once` guards against double-attach via
-  the `_lite_bootstrap_teardown_attached` marker; `_lite_bootstrap_*`-prefixed
-  attributes are the sanctioned way to tag user-supplied apps. →
-  `architecture/bootstrappers.md`
+  the `_lite_bootstrap_teardown_attached` marker; a second bootstrapper on an already-marked
+  target warns at construction and its `bootstrap()` raises `ConfigurationError`.
+  `_lite_bootstrap_*`-prefixed attributes are the sanctioned way to tag user-supplied
+  apps. → `architecture/bootstrappers.md`
 
 Capability index (all of `architecture/`):
 

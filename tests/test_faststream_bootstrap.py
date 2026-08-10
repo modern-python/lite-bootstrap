@@ -22,6 +22,7 @@ from lite_bootstrap.bootstrappers.faststream_bootstrapper import (
     FastStreamLoggingInstrument,
     FastStreamOpenTelemetryInstrument,
 )
+from lite_bootstrap.exceptions import ConfigurationError
 from tests.conftest import (
     CustomInstrumentor,
     SentryTestTransport,
@@ -299,3 +300,18 @@ def test_faststream_logging_teardown_runs_super_when_broker_write_raises(broker:
         instrument.teardown()
     # If super().teardown() ran, structlog defaults were reset — no exception below.
     structlog.get_logger("verify-reset")
+
+
+def test_second_faststream_bootstrapper_bootstrap_raises(broker: RedisBroker) -> None:
+    config_a = build_faststream_config(broker=broker)
+    first = FastStreamBootstrapper(bootstrap_config=config_a)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        second = FastStreamBootstrapper(bootstrap_config=dataclasses.replace(config_a))
+
+    try:
+        first.bootstrap()
+        with pytest.raises(ConfigurationError, match="FastStreamBootstrapper"):
+            second.bootstrap()
+    finally:
+        first.teardown()

@@ -31,6 +31,7 @@ from lite_bootstrap.bootstrappers.litestar_bootstrapper import (
     build_litestar_route_details_from_scope,
     build_span_name,
 )
+from lite_bootstrap.exceptions import ConfigurationError
 from tests.conftest import (
     CustomInstrumentor,
     SentryTestTransport,
@@ -74,6 +75,8 @@ def test_second_litestar_bootstrapper_on_same_config_warns_not_stacks(litestar_c
 
     matching = [w for w in caught if "already has a lite-bootstrap teardown hook" in str(w.message)]
     assert matching, "expected warning about existing lite-bootstrap teardown hook"
+    assert "cannot be used" in str(matching[0].message)
+    assert "bootstrap() will raise" in str(matching[0].message)
     assert len(config_a.application_config.on_shutdown) == on_shutdown_after_first, (
         "second bootstrapper must not stack another on_shutdown teardown"
     )
@@ -510,3 +513,21 @@ def test_litestar_default_request_max_body_size_matches_litestar() -> None:
     litestar_default = inspect.signature(litestar.Litestar.__init__).parameters["request_max_body_size"].default
 
     assert litestar_default == _LITESTAR_DEFAULT_REQUEST_MAX_BODY_SIZE
+
+
+def test_second_litestar_bootstrapper_bootstrap_raises(litestar_config: LitestarConfig) -> None:
+    first = LitestarBootstrapper(bootstrap_config=litestar_config)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        second = LitestarBootstrapper(bootstrap_config=dataclasses.replace(litestar_config))
+
+    try:
+        application = first.bootstrap()
+
+        with pytest.raises(ConfigurationError, match="LitestarBootstrapper"):
+            second.bootstrap()
+
+        with TestClient(app=application) as client:
+            assert client.get(litestar_config.health_checks_path).status_code == status_codes.HTTP_200_OK
+    finally:
+        first.teardown()
