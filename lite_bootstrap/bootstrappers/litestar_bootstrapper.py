@@ -1,6 +1,7 @@
 import contextlib
 import dataclasses
 import pathlib
+import re
 import typing
 import weakref
 
@@ -178,10 +179,28 @@ class LitestarHealthChecksInstrument(HealthChecksInstrument):
 class LitestarLoggingInstrument(LoggingInstrument):
     bootstrap_config: LitestarConfig
 
+    def _build_logging_middleware_excluded_paths(self) -> list[str]:
+        """Regex-escaped path prefixes for infrastructure routes not worth an access log line."""
+        candidate_paths: typing.Final = (
+            self.bootstrap_config.swagger_path,
+            self.bootstrap_config.swagger_static_path if self.bootstrap_config.swagger_offline_docs else "",
+            self.bootstrap_config.health_checks_path,
+            self.bootstrap_config.prometheus_metrics_path,
+        )
+        excluded_paths: list[str] = []
+        for candidate_path in candidate_paths:
+            # A bare "/" would exclude every route, so it is dropped along with empty values.
+            normalized_path = candidate_path.rstrip("/")
+            if normalized_path and normalized_path not in excluded_paths:
+                excluded_paths.append(normalized_path)
+        return [re.escape(excluded_path) for excluded_path in excluded_paths]
+
     def _build_logging_middleware_config(self) -> "LoggingMiddlewareConfig":
+        excluded_paths: typing.Final = self._build_logging_middleware_excluded_paths()
         return LoggingMiddlewareConfig(
             request_log_fields=_LOGGING_MIDDLEWARE_REQUEST_LOG_FIELDS,
             response_log_fields=_LOGGING_MIDDLEWARE_RESPONSE_LOG_FIELDS,
+            exclude=excluded_paths or None,
         )
 
     def bootstrap(self) -> None:

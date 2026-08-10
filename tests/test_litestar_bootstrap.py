@@ -359,3 +359,16 @@ def test_litestar_access_logging_logs_metadata_only(litestar_config: LitestarCon
     assert request_records
     assert request_records[0]["path"] == "/login"
     assert request_records[0]["method"] == "POST"
+
+
+def test_litestar_access_logging_excludes_infrastructure_paths(litestar_config: LitestarConfig) -> None:
+    config = dataclasses.replace(litestar_config, litestar_logging_middleware_enabled=True)
+    application = LitestarBootstrapper(bootstrap_config=config).bootstrap()
+
+    with TestClient(app=application) as client, _recorded_litestar_logs() as log_lines:
+        assert client.get(config.swagger_path).status_code == status_codes.HTTP_200_OK
+        assert client.get(f"{config.swagger_static_path}/swagger-ui.css").status_code == status_codes.HTTP_200_OK
+        assert client.get(config.health_checks_path).status_code == status_codes.HTTP_200_OK
+        assert client.get(config.prometheus_metrics_path).status_code == status_codes.HTTP_200_OK
+
+    assert _access_log_records(log_lines) == []
