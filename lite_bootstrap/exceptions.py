@@ -7,7 +7,11 @@ class BootstrapperNotReadyError(LiteBootstrapError):
 
 
 class ConfigurationError(LiteBootstrapError):
-    """Raised when a config is invalid or a required optional dependency is missing."""
+    """Raised when a config is invalid or a required optional dependency is missing.
+
+    Also raised when a bootstrapper is constructed on an application another bootstrapper
+    already owns.
+    """
 
 
 class TeardownError(LiteBootstrapError):

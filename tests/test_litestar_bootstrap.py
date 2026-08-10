@@ -75,6 +75,8 @@ def test_second_litestar_bootstrapper_on_same_config_warns_not_stacks(litestar_c
 
     matching = [w for w in caught if "already has a lite-bootstrap teardown hook" in str(w.message)]
     assert matching, "expected warning about existing lite-bootstrap teardown hook"
+    assert "cannot be used" in str(matching[0].message)
+    assert "bootstrap() will raise" in str(matching[0].message)
     assert len(config_a.application_config.on_shutdown) == on_shutdown_after_first, (
         "second bootstrapper must not stack another on_shutdown teardown"
     )

@@ -119,7 +119,7 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
         if self._attach_skipped:
             msg = (
                 f"{type(self).__name__} shares its application with another lite-bootstrap "
-                f"bootstrapper, which has already applied its instruments. Construct one "
+                f"bootstrapper, which already owns it. Construct one "
                 f"{type(self).__name__} per application."
             )
             raise ConfigurationError(msg)
