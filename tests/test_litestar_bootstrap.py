@@ -24,6 +24,7 @@ from opentelemetry.trace import get_tracer_provider
 
 from lite_bootstrap import LitestarBootstrapper, LitestarConfig, import_checker
 from lite_bootstrap.bootstrappers.litestar_bootstrapper import (
+    LitestarLoggingInstrument,
     LitestarOpenTelemetryInstrumentationMiddleware,
     build_litestar_route_details_from_scope,
     build_span_name,
@@ -318,13 +319,13 @@ def _access_log_records(log_lines: list[str]) -> list[dict[str, typing.Any]]:
     return [record for record in records if record.get("event") in {"HTTP Request", "HTTP Response"}]
 
 
-@litestar.post("/login", request_max_body_size=1000)
-async def _login_handler(data: dict[str, str]) -> dict[str, str]:
-    return data
-
-
 def _post_password(config: LitestarConfig) -> list[str]:
     """Bootstrap, POST credentials, and return the log lines Litestar emitted for that request."""
+
+    @litestar.post("/login", request_max_body_size=1000)
+    async def _login_handler(data: dict[str, str]) -> dict[str, str]:
+        return data
+
     config = dataclasses.replace(config, application_config=AppConfig(route_handlers=[_login_handler]))
     application = LitestarBootstrapper(bootstrap_config=config).bootstrap()
     with TestClient(app=application) as client, _recorded_litestar_logs() as log_lines:
@@ -416,3 +417,43 @@ def test_litestar_access_logging_custom_config_replaces_defaults(litestar_config
 def test_litestar_logging_middleware_config_without_flag_warns(litestar_config: LitestarConfig) -> None:
     with pytest.warns(UserWarning, match="litestar_logging_middleware_enabled"):
         dataclasses.replace(litestar_config, litestar_logging_middleware_config=LoggingMiddlewareConfig())
+
+
+def test_litestar_access_logging_excluded_paths_drops_degenerate_and_duplicates(
+    litestar_config: LitestarConfig,
+) -> None:
+    # swagger_path is empty (dropped), swagger_static_path is a bare "/" (degenerate, dropped even
+    # though swagger_offline_docs is on), and prometheus_metrics_path duplicates health_checks_path
+    # once both are stripped of trailing slashes.
+    config = dataclasses.replace(
+        litestar_config,
+        swagger_path="",
+        swagger_offline_docs=True,
+        swagger_static_path="/",
+        health_checks_path="/api/",
+        prometheus_metrics_path="/api",
+    )
+    instrument = LitestarLoggingInstrument(bootstrap_config=config)
+
+    excluded_paths = instrument._build_logging_middleware_excluded_paths()  # noqa: SLF001
+
+    assert excluded_paths == [r"^/api(?:/|$)"]
+    middleware_config = instrument._build_logging_middleware_config()  # noqa: SLF001
+    assert middleware_config.exclude == excluded_paths
+
+
+def test_litestar_access_logging_excluded_paths_none_when_all_degenerate(
+    litestar_config: LitestarConfig,
+) -> None:
+    config = dataclasses.replace(
+        litestar_config,
+        swagger_path="",
+        swagger_offline_docs=True,
+        swagger_static_path="/",
+        health_checks_path="/",
+        prometheus_metrics_path="",
+    )
+    instrument = LitestarLoggingInstrument(bootstrap_config=config)
+
+    assert instrument._build_logging_middleware_excluded_paths() == []  # noqa: SLF001
+    assert instrument._build_logging_middleware_config().exclude is None  # noqa: SLF001
