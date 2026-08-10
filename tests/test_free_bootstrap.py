@@ -251,3 +251,19 @@ def test_build_summary_renders_none_for_empty_sections() -> None:
     bootstrapper.skipped_instruments = []
     summary = bootstrapper.build_summary()
     assert summary == "FreeBootstrapper:\n  configured:\n    (none)\n  skipped:\n    (none)"
+
+
+def test_two_free_bootstrappers_both_bootstrap(free_bootstrapper_config: FreeConfig) -> None:
+    """FreeBootstrapper has no application to own, so the double-bootstrap guard must not fire."""
+    first = FreeBootstrapper(bootstrap_config=free_bootstrapper_config)
+    second = FreeBootstrapper(bootstrap_config=free_bootstrapper_config)
+
+    try:
+        first.bootstrap()
+        second.bootstrap()
+
+        assert first.is_bootstrapped
+        assert second.is_bootstrapped
+    finally:
+        second.teardown()
+        first.teardown()

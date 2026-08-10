@@ -12,6 +12,7 @@ from starlette.testclient import TestClient
 
 from lite_bootstrap import BootstrapperNotReadyError, FastMcpBootstrapper, FastMcpConfig
 from lite_bootstrap.bootstrappers.fastmcp_bootstrapper import FastMcpLoggingMiddleware
+from lite_bootstrap.exceptions import ConfigurationError
 from tests.conftest import emulate_package_missing, emulate_package_missing_with_module_reload
 
 
@@ -302,3 +303,18 @@ def test_fastmcp_bootstrap_without_structlog() -> None:
             bootstrapper = FastMcpBootstrapper(bootstrap_config=FastMcpConfig())
         bootstrapper.bootstrap()
         bootstrapper.teardown()
+
+
+def test_second_fastmcp_bootstrapper_bootstrap_raises() -> None:
+    application = FastMCP()
+    first = FastMcpBootstrapper(bootstrap_config=FastMcpConfig(application=application, service_name="a"))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        second = FastMcpBootstrapper(bootstrap_config=FastMcpConfig(application=application, service_name="b"))
+
+    try:
+        first.bootstrap()
+        with pytest.raises(ConfigurationError, match="FastMcpBootstrapper"):
+            second.bootstrap()
+    finally:
+        first.teardown()

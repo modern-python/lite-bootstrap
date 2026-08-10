@@ -40,8 +40,8 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
         if getattr(target, self._TEARDOWN_MARKER, False):
             warnings.warn(
                 f"{type(self).__name__} already has a lite-bootstrap teardown hook attached to this "
-                f"application or its configuration; skipping. This {type(self).__name__}'s teardown "
-                f"will not run on shutdown — construct one {type(self).__name__} per application.",
+                f"application or its configuration; skipping. This {type(self).__name__} cannot be used — "
+                f"its bootstrap() will raise — so construct one {type(self).__name__} per application.",
                 stacklevel=3,
             )
             self._attach_skipped = True
