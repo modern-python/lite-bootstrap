@@ -123,6 +123,7 @@ class LitestarConfig(
     SwaggerConfig,
 ):
     application_config: "AppConfig" = dataclasses.field(default_factory=lambda: AppConfig())  # noqa: PLW0108
+    litestar_logging_middleware_enabled: bool = False
     prometheus_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     # Bounds path-label cardinality (Litestar defaults False -> raw URLs leak memory). See litestar#4891.
     prometheus_group_path: bool = True
@@ -182,6 +183,8 @@ class LitestarLoggingInstrument(LoggingInstrument):
                         pretty_print_tty=False,
                         standard_lib_logging_config=None,
                     ),
+                    # Litestar defaults this to True, which logs full request/response bodies.
+                    enable_middleware_logging=self.bootstrap_config.litestar_logging_middleware_enabled,
                 ),
             )
         )

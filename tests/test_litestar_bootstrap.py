@@ -1,6 +1,10 @@
+import contextlib
 import dataclasses
 import gc
+import json
+import logging
 import sys
+import typing
 import warnings
 import weakref
 
@@ -279,3 +283,65 @@ def test_litestar_bootstrap_without_prometheus_client() -> None:
             assert import_checker.is_prometheus_client_installed is False
     finally:
         sys.modules.update(saved)
+
+
+class _RecordingHandler(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__()
+        self.lines: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.lines.append(record.getMessage())
+
+
+@contextlib.contextmanager
+def _recorded_litestar_logs() -> typing.Iterator[list[str]]:
+    """Record Litestar's rendered log lines.
+
+    Enter this inside the TestClient context: Litestar's StructLoggingConfig runs dictConfig at
+    startup, which drops handlers attached earlier, and MemoryLoggerFactory sets propagate=False,
+    so the handler has to sit on the "litestar" logger itself.
+    """
+    handler = _RecordingHandler()
+    litestar_logger = logging.getLogger("litestar")
+    litestar_logger.addHandler(handler)
+    try:
+        yield handler.lines
+    finally:
+        litestar_logger.removeHandler(handler)
+
+
+def _access_log_records(log_lines: list[str]) -> list[dict[str, typing.Any]]:
+    """Return the LoggingMiddleware lines among the recorded structlog lines."""
+    records = [json.loads(log_line) for log_line in log_lines]
+    return [record for record in records if record.get("event") in {"HTTP Request", "HTTP Response"}]
+
+
+@litestar.post("/login", request_max_body_size=1000)
+async def _login_handler(data: dict[str, str]) -> dict[str, str]:
+    return data
+
+
+def _post_password(config: LitestarConfig) -> list[str]:
+    """Bootstrap, POST credentials, and return the log lines Litestar emitted for that request."""
+    config = dataclasses.replace(config, application_config=AppConfig(route_handlers=[_login_handler]))
+    application = LitestarBootstrapper(bootstrap_config=config).bootstrap()
+    with TestClient(app=application) as client, _recorded_litestar_logs() as log_lines:
+        response = client.post("/login", json={"username": "user", "password": "hunter2"})
+        assert response.status_code == status_codes.HTTP_201_CREATED
+    return log_lines
+
+
+def test_litestar_access_logging_disabled_by_default(litestar_config: LitestarConfig) -> None:
+    log_lines = _post_password(litestar_config)
+
+    assert _access_log_records(log_lines) == []
+    assert not any("hunter2" in log_line for log_line in log_lines)
+
+
+def test_litestar_access_logging_opt_in_emits_access_logs(litestar_config: LitestarConfig) -> None:
+    log_lines = _post_password(dataclasses.replace(litestar_config, litestar_logging_middleware_enabled=True))
+
+    events = [record["event"] for record in _access_log_records(log_lines)]
+    assert "HTTP Request" in events
+    assert "HTTP Response" in events
