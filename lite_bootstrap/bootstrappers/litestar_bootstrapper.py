@@ -38,6 +38,7 @@ if import_checker.is_litestar_installed:
     from litestar.openapi.plugins import SwaggerRenderPlugin
     from litestar.plugins.structlog import StructlogConfig, StructlogPlugin
     from litestar.static_files import create_static_files_router
+    from litestar.types import Empty
 
 if import_checker.is_litestar_installed and import_checker.is_prometheus_client_installed:
     # litestar.plugins.prometheus imports prometheus_client, which the `litestar`
@@ -70,6 +71,11 @@ def build_span_name(method: str, route: str) -> str:
 # so dropping `query` costs only the query string.
 _LOGGING_MIDDLEWARE_REQUEST_LOG_FIELDS: typing.Final = ("path", "method", "content_type", "path_params")
 _LOGGING_MIDDLEWARE_RESPONSE_LOG_FIELDS: typing.Final = ("status_code",)
+
+# Litestar.from_config() passes every AppConfig field explicitly, so the default that
+# Litestar.__init__ applies never reaches an app built from a config. Pinned to Litestar's
+# own default by a guard test. See https://github.com/litestar-org/litestar/issues/4296.
+_LITESTAR_DEFAULT_REQUEST_MAX_BODY_SIZE: typing.Final = 10_000_000
 
 
 def build_litestar_route_details_from_scope(
@@ -348,6 +354,9 @@ class LitestarBootstrapper(BaseBootstrapper["litestar.Litestar"]):
 
     def _apply_config(self, application_config: "AppConfig") -> None:
         application_config.debug = self.bootstrap_config.service_debug
+        # An Empty value reaches layer resolution and 500s every body-reading handler.
+        if application_config.request_max_body_size is Empty:
+            application_config.request_max_body_size = _LITESTAR_DEFAULT_REQUEST_MAX_BODY_SIZE
         application_config.on_shutdown.append(self.teardown)
 
     def is_ready(self) -> bool:

@@ -1,6 +1,7 @@
 import contextlib
 import dataclasses
 import gc
+import inspect
 import json
 import logging
 import sys
@@ -24,6 +25,7 @@ from opentelemetry.trace import get_tracer_provider
 
 from lite_bootstrap import LitestarBootstrapper, LitestarConfig, import_checker
 from lite_bootstrap.bootstrappers.litestar_bootstrapper import (
+    _LITESTAR_DEFAULT_REQUEST_MAX_BODY_SIZE,
     LitestarLoggingInstrument,
     LitestarOpenTelemetryInstrumentationMiddleware,
     build_litestar_route_details_from_scope,
@@ -322,7 +324,7 @@ def _access_log_records(log_lines: list[str]) -> list[dict[str, typing.Any]]:
 def _post_password(config: LitestarConfig) -> list[str]:
     """Bootstrap, POST credentials, and return the log lines Litestar emitted for that request."""
 
-    @litestar.post("/login", request_max_body_size=1000)
+    @litestar.post("/login")
     async def _login_handler(data: dict[str, str]) -> dict[str, str]:
         return data
 
@@ -457,3 +459,54 @@ def test_litestar_access_logging_excluded_paths_none_when_all_degenerate(
 
     assert instrument._build_logging_middleware_excluded_paths() == []  # noqa: SLF001
     assert instrument._build_logging_middleware_config().exclude is None  # noqa: SLF001
+
+
+def test_litestar_bootstrap_fills_unset_request_max_body_size(litestar_config: LitestarConfig) -> None:
+    @litestar.post("/echo")
+    async def echo_handler(data: dict[str, str]) -> dict[str, str]:
+        return data
+
+    config = dataclasses.replace(litestar_config, application_config=AppConfig(route_handlers=[echo_handler]))
+    application = LitestarBootstrapper(bootstrap_config=config).bootstrap()
+
+    with TestClient(app=application) as client:
+        response = client.post("/echo", json={"key": "value"})
+
+    assert response.status_code == status_codes.HTTP_201_CREATED
+    assert response.json() == {"key": "value"}
+    assert application.request_max_body_size == _LITESTAR_DEFAULT_REQUEST_MAX_BODY_SIZE
+
+
+def test_litestar_bootstrap_keeps_explicit_request_max_body_size(litestar_config: LitestarConfig) -> None:
+    explicit_max_body_size = 42
+
+    @litestar.post("/echo")
+    async def echo_handler(data: dict[str, str]) -> dict[str, str]:
+        return data  # pragma: no cover -- body exceeds the limit before this runs
+
+    config = dataclasses.replace(
+        litestar_config,
+        application_config=AppConfig(route_handlers=[echo_handler], request_max_body_size=explicit_max_body_size),
+    )
+    application = LitestarBootstrapper(bootstrap_config=config).bootstrap()
+
+    with TestClient(app=application) as client:
+        response = client.post("/echo", json={"key": "value" * explicit_max_body_size})
+
+    assert response.status_code == status_codes.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+    assert application.request_max_body_size == explicit_max_body_size
+
+
+def test_litestar_bootstrap_keeps_explicit_unlimited_request_max_body_size(litestar_config: LitestarConfig) -> None:
+    config = dataclasses.replace(litestar_config, application_config=AppConfig(request_max_body_size=None))
+    application = LitestarBootstrapper(bootstrap_config=config).bootstrap()
+
+    with TestClient(app=application):
+        assert application.request_max_body_size is None
+
+
+def test_litestar_default_request_max_body_size_matches_litestar() -> None:
+    """Guard: our constant must stay equal to the default Litestar's own __init__ applies."""
+    litestar_default = inspect.signature(litestar.Litestar.__init__).parameters["request_max_body_size"].default
+
+    assert litestar_default == _LITESTAR_DEFAULT_REQUEST_MAX_BODY_SIZE
