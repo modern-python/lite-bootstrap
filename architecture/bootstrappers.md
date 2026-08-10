@@ -87,6 +87,16 @@ The guard is uniform: the same marker and warning apply to all four app-bearing
 frameworks. `attach` is typed `Callable[[], object]` because some hooks (FastStream's
 `on_shutdown`) return the callback.
 
+The marker now gates more than the teardown hook: it gates instrument application
+too. `_attach_teardown_once` records the skip on `self._attach_skipped` before
+returning, and `bootstrap()` checks that flag first — the losing bootstrapper
+raises `ConfigurationError` naming itself rather than re-applying every instrument
+against an application another bootstrapper already owns. Construction is
+unchanged: it still only warns, since sharing an application is not yet a mistake
+until `bootstrap()` is actually called. `FreeBootstrapper` never calls
+`_attach_teardown_once` — it has no attach target — so it is unaffected; two
+`FreeBootstrapper`s bootstrap independently.
+
 Litestar's `attach` thunk wraps `_apply_config`, which also normalizes the `AppConfig`
 it is handed before `Litestar.from_config()` builds the app: it sets `debug` from
 `service_debug`, and fills `request_max_body_size` with Litestar's own 10 MB default
