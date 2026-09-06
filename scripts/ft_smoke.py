@@ -6,7 +6,7 @@ orjson is absent, the logging serializer's stdlib-json fallback produces
 parseable output, a FastAPI bootstrap runs bootstrap()/teardown() clean, and
 OTLP export works over the http exporter (grpc/grpcio stays absent). Not a
 pytest test (conftest.py hard-imports opentelemetry, which the ft leg does
-not install). See architecture/free-threading.md.
+not install).
 """
 
 import sys

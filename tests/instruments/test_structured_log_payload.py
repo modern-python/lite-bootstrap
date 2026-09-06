@@ -48,8 +48,8 @@ def test_parse_truthy_skip_sentry_sets_flag() -> None:
 
 
 def test_parse_falsy_skip_sentry_is_stripped_from_extra() -> None:
-    # DES-4 (planning/audits/2026-06-05-bug-audit-v2.md): a falsy skip_sentry flag
-    # must not leak into extra; it is a meta-key, stripped regardless of value.
+    # A falsy skip_sentry flag must not leak into extra; it is a meta-key,
+    # stripped regardless of value.
     payload = StructuredLogPayload.parse('{"event": "keep", "skip_sentry": false, "foo": "bar"}')
 
     assert payload is not None
