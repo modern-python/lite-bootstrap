@@ -27,7 +27,7 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
 
     # Marker tagged on a user-supplied app (or its config) once this bootstrapper has
     # attached its teardown to the framework's shutdown lifecycle. Prevents a second
-    # bootstrapper on the same app from re-attaching. See architecture/bootstrappers.md.
+    # bootstrapper on the same app from re-attaching. Its accepted limits: ADR-0003.
     _TEARDOWN_MARKER: typing.ClassVar[str] = "_lite_bootstrap_teardown_attached"
 
     def _attach_teardown_once(self, target: object, attach: typing.Callable[[], object]) -> None:

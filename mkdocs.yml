@@ -52,6 +52,10 @@ theme:
         icon: material/brightness-4
         name: Switch to system preference
 
+# docs/adr/ is an internal decision record, not user documentation; it is not published.
+exclude_docs: |
+  /adr/
+
 validation:
   omitted_files: warn
   absolute_links: warn

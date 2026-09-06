@@ -9,11 +9,13 @@ import structlog
 from lite_bootstrap import (
     FreeBootstrapper,
     FreeConfig,
+    InstrumentDependencyMissingWarning,
     TeardownError,
 )
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
 from lite_bootstrap.instruments.logging_instrument import LoggingInstrument
 from lite_bootstrap.instruments.pyroscope_instrument import PyroscopeInstrument
+from lite_bootstrap.instruments.sentry_instrument import SentryInstrument
 from tests.conftest import CustomInstrumentor, SentryTestTransport, emulate_package_missing
 
 
@@ -224,6 +226,42 @@ def test_config_skip_emits_no_warning() -> None:
             ),
         )
     assert LoggingInstrument in {cls for cls, _ in bootstrapper.skipped_instruments}
+
+
+def test_only_the_silent_skip_path_lands_in_skipped_instruments() -> None:
+    """INVARIANT: a config skip is recorded in `skipped_instruments`; a dependency skip is not.
+
+    The two skips mean opposite things. "You did not ask for Sentry" is the normal case and gets no
+    warning, so `skipped_instruments` (and the `build_summary()` line built from it) is the only
+    place it is visible — that list is the answer to "why is this instrument not running." "You
+    asked for Sentry and sentry-sdk is not installed" is a deployment surprise that already shouts
+    through a warning and a `logger.warning`, and adding it to the same list would put a fault and a
+    non-fault next to each other under one heading, making the quiet one impossible to scan for.
+
+    Folding the dependency path into `skipped_instruments` is what breaks it, and it is an inviting
+    change to make: the list looks incomplete until you know it is a list of one specific thing.
+    `skipped_instruments` is public — documented for programmatic inspection — so a consumer
+    filtering on it would start seeing entries that mean the opposite of what it filtered for.
+    """
+    config_skip = FreeBootstrapper(
+        bootstrap_config=FreeConfig(logging_enabled=False, logging_buffer_capacity=0),
+    )
+    assert LoggingInstrument in {cls for cls, _ in config_skip.skipped_instruments}
+
+    with (
+        emulate_package_missing("sentry_sdk"),
+        pytest.warns(InstrumentDependencyMissingWarning, match="sentry_sdk"),
+    ):
+        dependency_skip = FreeBootstrapper(
+            bootstrap_config=FreeConfig(
+                sentry_dsn="https://testdsn@localhost/1",
+                logging_enabled=False,
+                logging_buffer_capacity=0,
+            ),
+        )
+
+    assert SentryInstrument not in {cls for cls, _ in dependency_skip.skipped_instruments}
+    assert SentryInstrument not in {type(i) for i in dependency_skip.instruments}
 
 
 def test_missing_dependency_warning_logs_via_logger_too(

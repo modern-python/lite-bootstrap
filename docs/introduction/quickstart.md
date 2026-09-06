@@ -1,7 +1,7 @@
 # Quickstart
 
 This walkthrough takes you from an empty project to a **FastAPI service with
-production instrumentation** — metrics, health checks, CORS, Swagger, and
+production observability** — metrics, health checks, CORS, Swagger, and
 structured logging — wired up in a few lines. The same pattern applies to
 [Litestar](../integrations/litestar.md), [FastStream](../integrations/faststream.md),
 [FastMCP](../integrations/fastmcp.md), and
