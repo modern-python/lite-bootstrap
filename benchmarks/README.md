@@ -1,31 +1,22 @@
 # What the observability stack costs a lite-bootstrap FastAPI service
 
-The question comes from the PyCon Russia 2026 talk
-[«Делай это, чтобы увеличить RPS в 10 раз»](https://pycon.ru/delay_eto_chtoby_uvelichit_rps_v_10_raz)
-by Maxim Sakhno: popular libraries, used per their documentation, quietly eat most of a FastAPI
-service's RPS.
+## 1. The short answer
 
-## 1. What the source material actually says
+On a do-nothing endpoint through uvicorn, the full stack costs **70% of throughput**
+(7978 → 2389 RPS). Roughly half of that is recoverable without giving up observability, and
+**OpenTelemetry costs twice what Sentry does** - not the ordering most people expect.
 
-I could not validate the talk's claims against the talk itself. The only public material at the
-time of measuring (September 2026) was the abstract on pycon.ru: the talk takes a typical FastAPI
-app, finds bottlenecks in popular libraries, and removes them for a ~10x RPS gain "without
-changing the stack or the architecture". No slides, no video, no article. PyCon RU publishes
-recordings roughly a month after the event; the conference was 24-25 July 2026. **Nothing below is a quote from the talk.**
-It is an independent measurement of the four libraries lite-bootstrap wires up, which is the
-category of claim the talk makes.
-
-The closest public corroboration for the Sentry part is
-[getsentry/sentry-python#2116](https://github.com/getsentry/sentry-python/issues/2116)
-(open since 2023): a Starlette app dropping from ~2000 to ~1000 RPS after adding the SDK, against
-Sentry's own claim of
+Two published figures about the Sentry half look contradictory and are both correct.
+[getsentry/sentry-python#2116](https://github.com/getsentry/sentry-python/issues/2116), open
+since 2023, reports a Starlette app dropping from ~2000 to ~1000 RPS after adding the SDK;
+Sentry's own docs claim
 [under 1 ms of instrumentation overhead per request](https://docs.sentry.io/product/insights/performance-overhead/).
-Both are true at once, and that is the whole story: the absolute cost is small, and it is
-enormous relative to a handler that does nothing.
+Both hold at once, because the added cost is a fixed ~80 µs: small in absolute terms, and
+enormous next to a handler that does nothing.
 
-**Verdict on the 10x claim: credible, for a thin endpoint, once the whole documented stack is on.**
-Measured below: 14.5x in-process, 3.3x through a real server, of which roughly half is recoverable
-without giving up observability.
+That is also the caveat on everything below. These ratios are an upper bound. A service that
+does real work per request - a database round trip, a downstream call - pays the same absolute
+cost against a much larger denominator, so read the µs columns rather than the percentages.
 
 ## 2. Method
 
@@ -75,7 +66,7 @@ Same endpoint plus three structlog records per request:
 In-process (SDK cost isolated, baseline 16.2 µs/req): full stack 61628 → 4268 RPS, **14.5x**.
 Tuned recovers it to 9150, **2.14x** over the untuned stack.
 
-So the tuning is worth **+75% RPS** on the real server and the untuned stack really does cost an
+The tuning is worth **+75% RPS** on the real server, and in-process the untuned stack costs an
 order of magnitude of a do-nothing handler's throughput.
 
 ## 4. Per-instrument breakdown
