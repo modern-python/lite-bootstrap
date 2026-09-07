@@ -75,7 +75,7 @@ The following intentionally differ:
 
 ## 📦 [PyPI](https://pypi.org/project/lite-bootstrap)
 
-## 📝 [License](LICENSE)
+## 📝 [License](https://github.com/modern-python/lite-bootstrap/blob/main/LICENSE)
 
 ## Part of `modern-python`
 
