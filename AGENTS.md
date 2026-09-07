@@ -54,3 +54,9 @@ Two suppression spellings recur and are both correct as written: `# ty: ignore[i
 on a framework subclass's `is_configured` classmethod, which narrows its parameter type where `ty`
 enforces invariance, and `# ty: ignore[unresolved-attribute]` on the optional OTel/pyroscope symbols
 whose guard `ty` does not follow.
+
+## Agent skills
+
+- **Domain docs** — [`CONTEXT.md`](CONTEXT.md) owns the vocabulary and [`docs/adr/`](docs/adr/)
+  holds the decisions. Both follow the `domain-modeling` skill: invoke it when writing either,
+  rather than restating its rules here.
