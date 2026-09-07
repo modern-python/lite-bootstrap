@@ -25,6 +25,26 @@ The accepted cost is semantic: `Provider` is FastMCP's general extension abstrac
 resources and prompts, and using one purely for a shutdown callback is thin. A one-line comment at
 the registration site says so.
 
-**Revisit trigger:** FastMCP grows a first-class shutdown hook (an `on_shutdown` API, or a
-documented public way to compose a lifespan post-construction). At that point the provider is the
-indirect route and should be replaced by the direct one.
+## FastMCP 4 fired the trigger, and the replacement was rejected
+
+FastMCP 4 added `FastMCP.add_extension(extension: ServerExtension)`, whose
+`ServerExtension.lifespan()` is documented as "A context manager entered with the server's lifespan,
+exited on shutdown", to "start and stop resources an extension owns". That is literally the second
+clause of this ADR's original trigger, "a documented public way to compose a lifespan
+post-construction". The first clause did not fire: `on_shutdown` and `on_startup` are still absent
+in 4.0.3.
+
+Rejected: **switch `_TeardownProvider` to a `ServerExtension`.** It trades a thin misuse for a
+client-visible one. `ServerExtension.identifier` is a required reverse-DNS string, validated at
+registration, and its own comment states it is "advertised under `ServerCapabilities.extensions`".
+Registering one purely for a shutdown callback would announce a protocol capability the bootstrapper
+does not implement, where the `Provider` route's thinness is invisible outside the process. A
+teardown hook must not change what the server tells its clients it can do.
+
+Reinforcing it: the `fastmcp` extra declares an unbounded `"fastmcp"`, so `ServerExtension` may not
+exist at runtime. Adopting it would force a `fastmcp>=4` floor on an optional extra to buy a
+semantically worse hook.
+
+**Revisit trigger:** FastMCP grows a shutdown hook that is neither client-visible nor tied to
+another abstraction's semantics, most likely an `on_shutdown` API. `add_extension` does not qualify
+and should not be revisited on version bumps alone.
