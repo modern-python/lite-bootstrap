@@ -1,17 +1,17 @@
 # What the observability stack costs a lite-bootstrap FastAPI service
 
-Research note, 2026-09-07. Trigger: the PyCon Russia 2026 talk
+The question comes from the PyCon Russia 2026 talk
 [«Делай это, чтобы увеличить RPS в 10 раз»](https://pycon.ru/delay_eto_chtoby_uvelichit_rps_v_10_raz)
-by Maxim Sakhno, which claims popular libraries used per their documentation quietly
-eat most of a FastAPI service's RPS.
+by Maxim Sakhno: popular libraries, used per their documentation, quietly eat most of a FastAPI
+service's RPS.
 
 ## 1. What the source material actually says
 
-I could not validate the talk's claims against the talk itself. As of today the only public
-material is the abstract on pycon.ru: the talk takes a typical FastAPI app, finds bottlenecks in
-popular libraries, and removes them for a ~10x RPS gain "without changing the stack or the
-architecture". No slides, no video, no article. PyCon RU publishes recordings roughly a month
-after the event; the conference was 24-25 July 2026. **Nothing below is a quote from the talk.**
+I could not validate the talk's claims against the talk itself. The only public material at the
+time of measuring (September 2026) was the abstract on pycon.ru: the talk takes a typical FastAPI
+app, finds bottlenecks in popular libraries, and removes them for a ~10x RPS gain "without
+changing the stack or the architecture". No slides, no video, no article. PyCon RU publishes
+recordings roughly a month after the event; the conference was 24-25 July 2026. **Nothing below is a quote from the talk.**
 It is an independent measurement of the four libraries lite-bootstrap wires up, which is the
 category of claim the talk makes.
 
