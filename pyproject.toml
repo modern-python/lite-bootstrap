@@ -188,6 +188,7 @@ isort.no-lines-before = ["standard-library", "local-folder"]
 
 [tool.ruff.lint.per-file-ignores]
 "scripts/*.py" = ["INP001"] # standalone scripts, not an importable package
+"benchmarks/*.py" = ["INP001", "T201", "SLF001"] # standalone scripts: print tables, read SDK internals
 
 [tool.pytest.ini_options]
 addopts = "--cov=. --cov-report term-missing --cov-fail-under=100"
