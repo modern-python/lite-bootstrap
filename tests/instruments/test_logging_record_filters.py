@@ -1,15 +1,19 @@
 import json
 import logging
+import re
 import typing
 
 import faststream.asgi
 import pytest
 import structlog
+from fastmcp import FastMCP
 from faststream.redis import RedisBroker
 
 from lite_bootstrap import (
     FastAPIBootstrapper,
     FastAPIConfig,
+    FastMcpBootstrapper,
+    FastMcpConfig,
     FastStreamBootstrapper,
     FastStreamConfig,
     FreeBootstrapper,
@@ -75,17 +79,21 @@ def sentry_config(sentry_mock: SentryTestTransport) -> SentryConfig:
     )
 
 
-def test_default_config_attaches_no_filters() -> None:
-    """A config that does not ask for filters leaves every logger's filter list untouched."""
+def test_default_config_attaches_no_filters(
+    rendered_lines: typing.Callable[[], list[dict[str, typing.Any]]],
+) -> None:
+    """A config that does not ask for filters leaves loggers and rendered records untouched."""
     package_logger = logging.getLogger("default_compat.package")
     filters_before = list(package_logger.filters)
     instrument = LoggingInstrument(bootstrap_config=LoggingConfig(logging_buffer_capacity=0))
     try:
         instrument.bootstrap()
+        package_logger.error("nothing filtered here")
         assert package_logger.filters == filters_before
-        assert instrument._attached_filters == []  # noqa: SLF001
     finally:
         instrument.teardown()
+
+    assert [(line["event"], line["level"]) for line in rendered_lines()] == [("nothing filtered here", "error")]
 
 
 def test_filter_receives_records_from_its_exact_logger() -> None:
@@ -110,9 +118,9 @@ def test_filter_on_parent_logger_does_not_see_child_records() -> None:
 
     `logging.Logger.handle` consults `self.filters` and then walks *ancestors' handlers*, never
     ancestors' filters, so a filter on `package` is dead weight for anything `package.child` emits.
-    Reading `logging_record_filters` as a prefix map is the mistake this pins: a user who writes
-    `{"aiokafka": (...)}` expecting to catch `aiokafka.consumer.group_coordinator` gets silence,
-    and silence is indistinguishable from a filter that ran and declined to match.
+    Reading `logging_record_filters` as a prefix map is the mistake this pins: a user who names the
+    top-level package expecting to catch the submodule that actually logs gets silence, and silence
+    is indistinguishable from a filter that ran and declined to match.
     """
     parent_filter = RecordingFilter()
     instrument = LoggingInstrument(
@@ -131,44 +139,55 @@ def test_filter_on_parent_logger_does_not_see_child_records() -> None:
     assert [record.getMessage() for record in parent_filter.seen] == ["from the parent"]
 
 
+class CapturingHandler(logging.Handler):
+    """A downstream handler: root reaches it through ``callHandlers``, after logger filters ran."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.records: list[logging.LogRecord] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
+
+
 def test_filter_demotes_level_before_handlers_render_it(
     rendered_lines: typing.Callable[[], list[dict[str, typing.Any]]],
 ) -> None:
-    observed: list[tuple[int, str]] = []
-
-    class ObservingFilter(logging.Filter):
-        def filter(self, record: logging.LogRecord) -> bool:
-            observed.append((record.levelno, record.levelname))
-            return True
-
     instrument = LoggingInstrument(
         bootstrap_config=LoggingConfig(
             logging_buffer_capacity=0,
-            logging_record_filters={
-                "demotion.target": (DemotingFilter("expected failure"), ObservingFilter()),
-            },
+            logging_record_filters={"demotion.target": (DemotingFilter("expected failure"),)},
         ),
     )
+    downstream_handler = CapturingHandler()
     try:
         instrument.bootstrap()
+        logging.getLogger().addHandler(downstream_handler)
         logging.getLogger("demotion.target").error("expected failure, retrying")
     finally:
         instrument.teardown()
 
-    assert observed == [(logging.WARNING, "WARNING")]
+    assert [(record.levelno, record.levelname) for record in downstream_handler.records] == [
+        (logging.WARNING, "WARNING")
+    ]
     assert [(line["event"], line["level"]) for line in rendered_lines()] == [("expected failure, retrying", "warning")]
 
 
+@pytest.mark.parametrize("sentry_first", [False, True])
 def test_demoted_record_creates_no_sentry_issue_event(
-    sentry_config: SentryConfig, sentry_mock: SentryTestTransport
+    sentry_config: SentryConfig, sentry_mock: SentryTestTransport, sentry_first: bool
 ) -> None:
     """INVARIANT: a filter demoting a record below Sentry's event level keeps it out of Sentry.
 
     Sentry's `LoggingIntegration` patches `logging.Logger.callHandlers`, which `Logger.handle`
     reaches only after `self.filter(record)` returns truthy — so a logger filter is upstream of
-    Sentry whatever order the bootstrapper installs the two instruments in. Moving this seam to a
-    structlog processor or a root *handler* filter is what breaks it: both run downstream of the
-    patched `callHandlers`, and the issue is already created by the time they see the record.
+    Sentry whichever instrument bootstraps first. That independence is load-bearing rather than
+    incidental: only `FreeBootstrapper` lists `LoggingInstrument` before `SentryInstrument`; the
+    FastAPI, Litestar, FastStream and FastMCP bootstrappers all install Sentry first.
+
+    Moving this seam to a structlog processor or a root *handler* filter is what breaks it: both
+    run downstream of the patched `callHandlers`, and the issue is already created by the time
+    they see the record.
     """
     logging_instrument = LoggingInstrument(
         bootstrap_config=LoggingConfig(
@@ -178,8 +197,12 @@ def test_demoted_record_creates_no_sentry_issue_event(
     )
     sentry_instrument = SentryInstrument(bootstrap_config=sentry_config)
     try:
-        logging_instrument.bootstrap()
-        sentry_instrument.bootstrap()
+        if sentry_first:
+            sentry_instrument.bootstrap()
+            logging_instrument.bootstrap()
+        else:
+            logging_instrument.bootstrap()
+            sentry_instrument.bootstrap()
 
         target_logger = logging.getLogger("sentry_demotion.target")
         target_logger.error("expected failure, retrying")
@@ -221,7 +244,7 @@ def test_non_matching_record_renders_identically_with_and_without_filters(
 ) -> None:
     timestamper = structlog.processors.TimeStamper(fmt="iso")
 
-    def render_untouched(record_filters: dict[str, tuple[logging.Filter, ...]]) -> dict[str, typing.Any]:
+    def render_untouched(record_filters: dict[str, tuple[logging.Filter, ...]]) -> str:
         instrument = LoggingInstrument(
             bootstrap_config=LoggingConfig(
                 logging_buffer_capacity=0,
@@ -234,9 +257,8 @@ def test_non_matching_record_renders_identically_with_and_without_filters(
             logging.getLogger("untouched.target").error("an unrelated failure")
         finally:
             instrument.teardown()
-        rendered: dict[str, typing.Any] = json.loads(capsys.readouterr().out)
-        del rendered["timestamp"]
-        return rendered
+        # The timestamp is the one nondeterministic field; everything else must match byte for byte.
+        return re.sub(r'"timestamp":"[^"]*"', "", capsys.readouterr().out)
 
     assert render_untouched({"untouched.target": (SuppressingFilter("drop me"),)}) == render_untouched({})
 
@@ -291,7 +313,6 @@ def test_teardown_removes_filters_even_when_a_handler_close_fails() -> None:
         instrument.teardown()
 
     assert target_logger.filters == []
-    assert instrument._attached_filters == []  # noqa: SLF001
 
 
 def test_bootstrap_teardown_bootstrap_attaches_each_filter_once() -> None:
@@ -351,6 +372,16 @@ def _build_litestar_bootstrapper(record_filters: dict[str, tuple[logging.Filter,
     )
 
 
+def _build_fastmcp_bootstrapper(record_filters: dict[str, tuple[logging.Filter, ...]]) -> FastMcpBootstrapper:
+    return FastMcpBootstrapper(
+        bootstrap_config=FastMcpConfig(
+            logging_buffer_capacity=0,
+            logging_record_filters=record_filters,
+            application=FastMCP[typing.Any](name="microservice"),
+        ),
+    )
+
+
 @pytest.mark.parametrize(
     ("framework", "build_bootstrapper"),
     [
@@ -358,6 +389,7 @@ def _build_litestar_bootstrapper(record_filters: dict[str, tuple[logging.Filter,
         ("fastapi", _build_fastapi_bootstrapper),
         ("faststream", _build_faststream_bootstrapper),
         ("litestar", _build_litestar_bootstrapper),
+        ("fastmcp", _build_fastmcp_bootstrapper),
     ],
 )
 def test_every_bootstrapper_installs_configured_filters(

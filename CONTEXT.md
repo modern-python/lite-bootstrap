@@ -57,3 +57,12 @@ and traceback together. One event is one rendered line is one physical line of s
 never diverge.
 _Avoid_: formatted message — reserve that for Sentry's own `logentry.formatted` field, which holds
 a rendered line only until the seam lifts the message out of it.
+
+**Record filter**:
+A `logging.Filter` attached to a named standard-library logger through `logging_record_filters`. It
+runs inside `Logger.handle`, so it sees a `LogRecord` before any handler renders it and before
+Sentry's patched `callHandlers` turns it into an issue; it may rewrite the record or drop it. The
+logger name is exact — a filter on `package` never sees `package.child`.
+_Avoid_: processor — a structlog processor runs on an event dict inside the rendering chain, too
+late to change what Sentry captured; `logging_extra_processors` takes those. Also avoid bare
+"filter" where a handler filter or `structlog.stdlib.filter_by_level` could be meant.

@@ -165,16 +165,7 @@ class LoggingInstrument(BaseInstrument[LoggingConfig]):
         root_logger.setLevel(self.bootstrap_config.logging_log_level)
 
     def _attach_record_filters(self) -> None:
-        """Attach the configured filters to their loggers, remembering each pair for teardown.
-
-        A filter goes on the *logger*, not on a handler: `logging.Logger.handle` runs it before
-        `callHandlers`, which is where Sentry's `LoggingIntegration` patches in. A filter here
-        therefore sees — and can demote or drop — a record before any handler or Sentry does.
-
-        Standard-library semantics apply: the filter runs only for records emitted by that exact
-        logger, never for a child's. `""` is the root logger, and reaches only records logged
-        through the root logger itself.
-        """
+        """Attach each configured filter to its logger, remembering the pair for teardown."""
         for logger_name, record_filters in self.bootstrap_config.logging_record_filters.items():
             target_logger = logging.getLogger(logger_name)
             for record_filter in record_filters:

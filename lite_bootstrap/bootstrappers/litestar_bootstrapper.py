@@ -227,11 +227,7 @@ class LitestarLoggingInstrument(LoggingInstrument):
         )
 
     def _configure_structlog_loggers(self) -> None:
-        """Register Litestar's StructlogPlugin instead of calling ``structlog.configure`` directly.
-
-        Overriding this one step rather than ``bootstrap()`` keeps every other step the base
-        instrument performs — including attaching ``logging_record_filters``.
-        """
+        """Register Litestar's StructlogPlugin instead of calling ``structlog.configure`` directly."""
         self.bootstrap_config.application_config.plugins.append(
             StructlogPlugin(
                 config=StructlogConfig(
