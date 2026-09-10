@@ -31,6 +31,16 @@ drift impossible, and would change the emitted log shape for every user. The del
 top-level meta-processor whose key is not added to `STRUCTLOG_META_KEYS` still leaks, and that is a
 known, accepted limit.
 
+**Deferring the render to `ProcessorFormatter.wrap_for_formatter`.** This is structlog's own
+idiomatic stdlib integration, it is already what `_configure_foreign_loggers` uses ten lines away,
+and it was the obvious fix for #193's double-rendered traceback. It is incompatible with this seam.
+`wrap_for_formatter` moves rendering to handler-flush time, so `record.msg` is the `EventDict`
+rather than a rendered line; `sentry_sdk` builds `logentry.formatted` from `record.getMessage()`,
+which for a dict `msg` is a Python repr. That repr opens with `{`, so `StructuredLogPayload.parse`
+accepts it, fails to decode it, and returns `None` — `skip_sentry` stops being honoured and
+`contexts.structlog` stops being attached, with nothing failing. The seam requires that the line
+be rendered before it becomes a `LogRecord`; anything downstream of the chain is transport only.
+
 `IGNORED_STRUCTLOG_ATTRIBUTES` survives in `sentry_instrument.py` as a silent alias of
 `STRUCTLOG_META_KEYS` for external importers of the old name.
 

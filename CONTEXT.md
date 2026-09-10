@@ -50,3 +50,10 @@ Without a web framework — `FreeBootstrapper`, `FreeConfig`, the `free-all` ext
 application, so nothing to attach teardown to and no double-bootstrap guard.
 _Avoid_: bare "free" for PEP 703 free-threaded CPython, which this project also supports. Write
 "free-threaded" in full.
+
+**Rendered line**:
+The complete JSON string the logging instrument produces for one event — message, level, metadata
+and traceback together. One event is one rendered line is one physical line of stdout; the three
+never diverge.
+_Avoid_: formatted message — reserve that for Sentry's own `logentry.formatted` field, which holds
+a rendered line only until the seam lifts the message out of it.

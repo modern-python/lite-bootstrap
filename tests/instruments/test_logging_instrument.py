@@ -1,4 +1,5 @@
 import contextlib
+import json
 import logging
 from io import StringIO
 from unittest.mock import patch
@@ -227,3 +228,57 @@ def test_logging_instrument_binds_log_stream_at_bootstrap() -> None:
         logging_instrument.teardown()
 
     assert "bound at bootstrap" in redirected_stdout.getvalue()
+
+
+def test_one_rendered_event_is_one_physical_line(capsys: pytest.CaptureFixture[str]) -> None:
+    """INVARIANT: a structlog event reaches stdout as exactly one physical line.
+
+    The processor chain renders the whole event — traceback included, under the `exception` key —
+    before the string ever becomes a `LogRecord`. Everything downstream of that is transport, so
+    the handler must emit the rendered string verbatim.
+
+    Dropping the formatter from the stream handler `MemoryLoggerFactory` builds is what breaks it,
+    and the break is invisible until something raises: stdlib's `Logger.exception` hardcodes
+    `exc_info=True` on the record, so the default `logging.Formatter` appends `record.exc_text`
+    after the JSON and the same traceback ships twice. Every line-oriented log shipper reads the
+    suffix as four malformed events.
+    """
+    logging_instrument = LoggingInstrument(bootstrap_config=LoggingConfig(logging_buffer_capacity=0))
+    try:
+        logging_instrument.bootstrap()
+        logger = structlog.getLogger("one_physical_line")
+        try:
+            msg = "some error"
+            raise ValueError(msg)  # noqa: TRY301
+        except ValueError:
+            logger.exception("logging error")
+    finally:
+        logging_instrument.teardown()
+
+    lines = capsys.readouterr().out.splitlines()
+
+    assert len(lines) == 1, lines
+    payload = json.loads(lines[0])
+    assert payload["event"] == "logging error"
+    assert "ValueError: some error" in payload["exception"]
+
+
+def test_foreign_logger_exception_is_one_physical_line(capsys: pytest.CaptureFixture[str]) -> None:
+    """The same one-line contract holds for a plain stdlib logger going through the root handler."""
+    logging_instrument = LoggingInstrument(bootstrap_config=LoggingConfig(logging_buffer_capacity=0))
+    try:
+        logging_instrument.bootstrap()
+        try:
+            msg = "some error"
+            raise ValueError(msg)  # noqa: TRY301
+        except ValueError:
+            logging.getLogger("foreign_one_physical_line").exception("logging error")
+    finally:
+        logging_instrument.teardown()
+
+    lines = capsys.readouterr().out.splitlines()
+
+    assert len(lines) == 1, lines
+    payload = json.loads(lines[0])
+    assert payload["event"] == "logging error"
+    assert "ValueError: some error" in payload["exception"]
