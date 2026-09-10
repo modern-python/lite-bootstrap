@@ -96,6 +96,13 @@ class StructuredLogPayload:
         return cls(message=message, extra=extra, skip_sentry=skip_sentry)
 
 
+class _RenderedLineFormatter(logging.Formatter):
+    """Emit the rendered line verbatim; stdlib appends nothing after it."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        return record.getMessage()
+
+
 if import_checker.is_structlog_installed:
     import structlog
 
@@ -113,6 +120,7 @@ if import_checker.is_structlog_installed:
         def __call__(self, *args: typing.Any) -> logging.Logger:  # noqa: ANN401
             logger: typing.Final = super().__call__(*args)
             stream_handler: typing.Final = logging.StreamHandler(stream=self.config.log_stream)
+            stream_handler.setFormatter(_RenderedLineFormatter())
             handler: typing.Final = logging.handlers.MemoryHandler(
                 capacity=self.config.logging_buffer_capacity,
                 flushLevel=self.config.logging_flush_level,
