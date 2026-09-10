@@ -128,12 +128,9 @@ config = FastAPIConfig(
 
 ### Filtering standard-library log records
 
-`logging_record_filters` maps a logger name to the filters to attach to it. Each filter is a plain
-`logging.Filter`, run on every record that logger emits — before any handler renders it and before
-Sentry turns it into an issue. A filter may leave the record alone, rewrite it, or return `False` to
-drop it entirely.
-
-Use it to demote a third-party failure you already handle, without touching that library's code:
+`logging_record_filters` attaches `logging.Filter` instances to loggers by name. A filter sees every
+record its logger emits, before any handler renders it, and may rewrite the record or return `False`
+to drop it — useful for demoting a third-party error you already handle:
 
 ```python
 import logging
@@ -141,11 +138,9 @@ import logging
 from lite_bootstrap import FreeBootstrapper, FreeConfig
 
 
-class ExpectedThirdPartyFailureFilter(logging.Filter):
-    """Demote the one failure this service already retries; leave every other error alone."""
-
+class ExpectedFailureFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
-        if record.levelno == logging.ERROR and "RequestTimedOutError" in record.getMessage():
+        if record.levelno == logging.ERROR and "expected failure" in record.getMessage():
             record.levelno = logging.WARNING
             record.levelname = "WARNING"
         return True
@@ -153,25 +148,17 @@ class ExpectedThirdPartyFailureFilter(logging.Filter):
 
 bootstrapper = FreeBootstrapper(
     bootstrap_config=FreeConfig(
-        logging_record_filters={
-            "some_library.internal.worker": (ExpectedThirdPartyFailureFilter(),),
-        },
+        logging_record_filters={"some_library.worker": (ExpectedFailureFilter(),)},
     ),
 )
 ```
 
-Both `levelno` and `levelname` must be set: handlers and Sentry read them independently.
-
-Two properties come from the standard library, not from `lite-bootstrap`:
-
-- **The logger name must be exact.** A filter on `some_library` does *not* see records from
-  `some_library.internal.worker`. `logging.Logger.handle` consults its own filters and then walks
-  its ancestors' *handlers*, never their filters. Name every logger you want filtered.
-- **`""` is the root logger**, and it too only sees records logged through the root logger itself —
-  not records that propagate up to it from a named logger.
-
-Teardown removes only the filters `lite-bootstrap` attached; anything your application or another
-library put on the same logger stays.
+- **Set both `levelno` and `levelname`** when changing a level: handlers read them independently.
+- **The logger name is exact.** A filter on `some_library` never sees `some_library.worker`, and
+  `""` is the root logger, matching only records logged through root itself. That is standard
+  `logging` behaviour: a logger consults its own filters, then its ancestors' *handlers*.
+- **Teardown removes only what it attached**, leaving filters your application put on the same
+  logger in place.
 
 ### Structlog Litestar
 
