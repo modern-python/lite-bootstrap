@@ -114,6 +114,7 @@ Additional parameters:
 - `logging_buffer_capacity`
 - `logging_extra_processors`
 - `logging_unset_handlers`
+- `logging_record_filters` - standard-library `logging.Filter` instances to attach to named loggers (see below).
 - `logging_time_stamper` - a `structlog.processors.TimeStamper` instance controlling timestamp format (default: `TimeStamper(fmt="iso")`). Pass a custom instance to change the format or enable UTC:
 
 ```python
@@ -124,6 +125,53 @@ config = FastAPIConfig(
     logging_time_stamper=structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S", utc=True),
 )
 ```
+
+### Filtering standard-library log records
+
+`logging_record_filters` maps a logger name to the filters to attach to it. Each filter is a plain
+`logging.Filter`, run on every record that logger emits — before any handler renders it and before
+Sentry turns it into an issue. A filter may leave the record alone, rewrite it, or return `False` to
+drop it entirely.
+
+Use it to demote a third-party failure you already handle, without touching that library's code:
+
+```python
+import logging
+
+from lite_bootstrap import FreeBootstrapper, FreeConfig
+
+
+class ExpectedThirdPartyFailureFilter(logging.Filter):
+    """Demote the one failure this service already retries; leave every other error alone."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno == logging.ERROR and "RequestTimedOutError" in record.getMessage():
+            record.levelno = logging.WARNING
+            record.levelname = "WARNING"
+        return True
+
+
+bootstrapper = FreeBootstrapper(
+    bootstrap_config=FreeConfig(
+        logging_record_filters={
+            "some_library.internal.worker": (ExpectedThirdPartyFailureFilter(),),
+        },
+    ),
+)
+```
+
+Both `levelno` and `levelname` must be set: handlers and Sentry read them independently.
+
+Two properties come from the standard library, not from `lite-bootstrap`:
+
+- **The logger name must be exact.** A filter on `some_library` does *not* see records from
+  `some_library.internal.worker`. `logging.Logger.handle` consults its own filters and then walks
+  its ancestors' *handlers*, never their filters. Name every logger you want filtered.
+- **`""` is the root logger**, and it too only sees records logged through the root logger itself —
+  not records that propagate up to it from a named logger.
+
+Teardown removes only the filters `lite-bootstrap` attached; anything your application or another
+library put on the same logger stays.
 
 ### Structlog Litestar
 
