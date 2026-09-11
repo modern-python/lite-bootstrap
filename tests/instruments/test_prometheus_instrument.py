@@ -9,7 +9,7 @@ def test_prometheus_instrument_configured_with_default_path() -> None:
 def test_prometheus_instrument_not_configured_with_empty_path() -> None:
     config = PrometheusConfig(prometheus_metrics_path="")
     assert not PrometheusInstrument.is_configured(config)
-    assert PrometheusInstrument.not_ready_message == "prometheus_metrics_path is empty or not valid"
+    assert PrometheusInstrument.not_configured_reason == "prometheus_metrics_path is empty or not valid"
 
 
 def test_prometheus_instrument_not_configured_with_invalid_path() -> None:
@@ -29,5 +29,5 @@ def test_prometheus_config_defaults() -> None:
     assert config.prometheus_metrics_include_in_schema is False
 
 
-def test_prometheus_check_dependencies() -> None:
-    assert PrometheusInstrument.check_dependencies() is True
+def test_prometheus_dependencies_installed() -> None:
+    assert PrometheusInstrument.dependencies_installed() is True

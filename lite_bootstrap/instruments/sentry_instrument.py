@@ -82,7 +82,7 @@ def wrap_before_send_callbacks(
 
 @dataclasses.dataclass(kw_only=True, slots=True)
 class SentryInstrument(BaseInstrument[SentryConfig]):
-    not_ready_message = "sentry_dsn is empty"
+    not_configured_reason = "sentry_dsn is empty"
     missing_dependency_message = "sentry_sdk is not installed"
 
     @classmethod
@@ -90,7 +90,7 @@ class SentryInstrument(BaseInstrument[SentryConfig]):
         return bool(bootstrap_config.sentry_dsn)
 
     @staticmethod
-    def check_dependencies() -> bool:
+    def dependencies_installed() -> bool:
         return import_checker.is_sentry_installed
 
     def bootstrap(self) -> None:

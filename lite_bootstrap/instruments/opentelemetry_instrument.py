@@ -136,7 +136,7 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
     ``OpenTelemetryInstrument`` per process; do not bootstrap a second instance.
     """
 
-    not_ready_message = "opentelemetry_endpoint is empty and opentelemetry_log_traces is False"
+    not_configured_reason = "opentelemetry_endpoint is empty and opentelemetry_log_traces is False"
     missing_dependency_message = "opentelemetry-sdk is not installed"
     _tracer_provider: "TracerProvider | None" = dataclasses.field(
         default_factory=lambda: None, init=False, repr=False, compare=False
@@ -150,7 +150,7 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
         return bool(bootstrap_config.opentelemetry_endpoint or bootstrap_config.opentelemetry_log_traces)
 
     @staticmethod
-    def check_dependencies() -> bool:
+    def dependencies_installed() -> bool:
         # The instrument imports from both the api (opentelemetry.trace/.context) and
         # the sdk (opentelemetry.sdk.*), so it needs both distributions present.
         return import_checker.is_opentelemetry_installed and import_checker.is_opentelemetry_sdk_installed

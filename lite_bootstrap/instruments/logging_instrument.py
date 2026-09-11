@@ -80,7 +80,7 @@ class LoggingConfig(BaseConfig):
 
 @dataclasses.dataclass(kw_only=True, slots=True)
 class LoggingInstrument(BaseInstrument[LoggingConfig]):
-    not_ready_message = "logging_enabled is False"
+    not_configured_reason = "logging_enabled is False"
     missing_dependency_message = "structlog is not installed"
     _logger_factory: "MemoryLoggerFactory | None" = dataclasses.field(
         default_factory=lambda: None, init=False, repr=False, compare=False
@@ -107,7 +107,7 @@ class LoggingInstrument(BaseInstrument[LoggingConfig]):
         return bootstrap_config.logging_enabled
 
     @staticmethod
-    def check_dependencies() -> bool:
+    def dependencies_installed() -> bool:
         return import_checker.is_structlog_installed
 
     def _unset_handlers(self) -> None:

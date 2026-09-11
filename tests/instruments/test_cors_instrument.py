@@ -7,7 +7,7 @@ from lite_bootstrap.instruments.cors_instrument import CorsConfig, CorsInstrumen
 def test_cors_instrument_not_configured_without_origins_or_regex() -> None:
     config = CorsConfig()
     assert not CorsInstrument.is_configured(config)
-    assert CorsInstrument.not_ready_message == "cors_allowed_origins or cors_allowed_origin_regex must be provided"
+    assert CorsInstrument.not_configured_reason == "cors_allowed_origins or cors_allowed_origin_regex must be provided"
 
 
 def test_cors_instrument_configured_with_origins() -> None:
@@ -40,8 +40,8 @@ def test_cors_instrument_config_defaults() -> None:
     assert config.cors_max_age == expected_max_age
 
 
-def test_cors_check_dependencies() -> None:
-    assert CorsInstrument.check_dependencies() is True
+def test_cors_dependencies_installed() -> None:
+    assert CorsInstrument.dependencies_installed() is True
 
 
 @pytest.mark.parametrize(

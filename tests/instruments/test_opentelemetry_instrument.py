@@ -225,7 +225,7 @@ def test_opentelemetry_instrument_survives_missing_sdk() -> None:
         ["lite_bootstrap.instruments.opentelemetry_instrument"],
     ):
         assert import_checker.is_opentelemetry_sdk_installed is False
-        assert OpenTelemetryInstrument.check_dependencies() is False
+        assert OpenTelemetryInstrument.dependencies_installed() is False
 
 
 def test_bootstrap_warns_when_endpoint_set_without_grpc_exporter() -> None:

@@ -43,7 +43,7 @@ if import_checker.is_litestar_installed:
 if import_checker.is_litestar_installed and import_checker.is_prometheus_client_installed:
     # litestar.plugins.prometheus imports prometheus_client, which the `litestar`
     # extra does not install (only `litestar-metrics` does). Used only inside
-    # LitestarPrometheusInstrument.bootstrap(), gated by check_dependencies() ->
+    # LitestarPrometheusInstrument.bootstrap(), gated by dependencies_installed() ->
     # is_prometheus_client_installed, so this guard matches the usage.
     from litestar.plugins.prometheus import PrometheusConfig, PrometheusController
 
@@ -162,15 +162,7 @@ class LitestarCorsInstrument(CorsInstrument):
     bootstrap_config: LitestarConfig
 
     def bootstrap(self) -> None:
-        self.bootstrap_config.application_config.cors_config = CORSConfig(
-            allow_origins=self.bootstrap_config.cors_allowed_origins,
-            allow_methods=self.bootstrap_config.cors_allowed_methods,  # ty: ignore[invalid-argument-type]
-            allow_headers=self.bootstrap_config.cors_allowed_headers,
-            allow_credentials=self.bootstrap_config.cors_allowed_credentials,
-            allow_origin_regex=self.bootstrap_config.cors_allowed_origin_regex,
-            expose_headers=self.bootstrap_config.cors_exposed_headers,
-            max_age=self.bootstrap_config.cors_max_age,
-        )
+        self.bootstrap_config.application_config.cors_config = CORSConfig(**self.cors_kwargs)
 
 
 @dataclasses.dataclass(kw_only=True, slots=True)
@@ -267,7 +259,7 @@ class LitestarPrometheusInstrument(PrometheusInstrument):
     missing_dependency_message = "prometheus_client is not installed"
 
     @staticmethod
-    def check_dependencies() -> bool:
+    def dependencies_installed() -> bool:
         return import_checker.is_prometheus_client_installed
 
     def bootstrap(self) -> None:
@@ -293,7 +285,7 @@ class LitestarPrometheusInstrument(PrometheusInstrument):
 @dataclasses.dataclass(kw_only=True)
 class LitestarSwaggerInstrument(SwaggerInstrument):
     bootstrap_config: LitestarConfig
-    not_ready_message = "swagger_path is empty or not valid"
+    not_configured_reason = "swagger_path is empty or not valid"
 
     @classmethod
     def is_configured(cls, bootstrap_config: "LitestarConfig") -> bool:  # ty: ignore[invalid-method-override]

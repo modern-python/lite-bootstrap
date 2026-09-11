@@ -72,12 +72,13 @@ class FastAPIConfig(
         elif self.application_kwargs:
             warnings.warn("application_kwargs must be used without application", stacklevel=2)
 
-
-def _narrow_app(config: "FastAPIConfig") -> "fastapi.FastAPI":
-    if isinstance(config.application, UnsetType):
-        msg = "FastAPIConfig.application is UNSET; __post_init__ did not run"
-        raise TypeError(msg)
-    return config.application
+    @property
+    def app(self) -> "fastapi.FastAPI":
+        """The application narrowed past the UNSET sentinel that ``__post_init__`` has replaced."""
+        if isinstance(self.application, UnsetType):
+            msg = "FastAPIConfig.application is UNSET; __post_init__ did not run"
+            raise TypeError(msg)
+        return self.application
 
 
 @dataclasses.dataclass(kw_only=True, slots=True)
@@ -85,16 +86,7 @@ class FastAPICorsInstrument(CorsInstrument):
     bootstrap_config: FastAPIConfig
 
     def bootstrap(self) -> None:
-        _narrow_app(self.bootstrap_config).add_middleware(
-            CORSMiddleware,
-            allow_origins=self.bootstrap_config.cors_allowed_origins,
-            allow_methods=self.bootstrap_config.cors_allowed_methods,
-            allow_headers=self.bootstrap_config.cors_allowed_headers,
-            allow_credentials=self.bootstrap_config.cors_allowed_credentials,
-            allow_origin_regex=self.bootstrap_config.cors_allowed_origin_regex,
-            expose_headers=self.bootstrap_config.cors_exposed_headers,
-            max_age=self.bootstrap_config.cors_max_age,
-        )
+        self.bootstrap_config.app.add_middleware(CORSMiddleware, **self.cors_kwargs)
 
 
 @dataclasses.dataclass(kw_only=True, slots=True)
@@ -114,7 +106,7 @@ class FastAPIHealthChecksInstrument(HealthChecksInstrument):
         return fastapi_router
 
     def bootstrap(self) -> None:
-        _narrow_app(self.bootstrap_config).include_router(self.build_fastapi_health_check_router())
+        self.bootstrap_config.app.include_router(self.build_fastapi_health_check_router())
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -124,13 +116,13 @@ class FastAPIOpenTelemetryInstrument(OpenTelemetryInstrument):
     def bootstrap(self) -> None:
         super().bootstrap()
         FastAPIInstrumentor.instrument_app(
-            app=_narrow_app(self.bootstrap_config),
+            app=self.bootstrap_config.app,
             tracer_provider=get_tracer_provider(),
             excluded_urls=",".join(self._build_excluded_urls()),
         )
 
     def teardown(self) -> None:
-        FastAPIInstrumentor.uninstrument_app(_narrow_app(self.bootstrap_config))
+        FastAPIInstrumentor.uninstrument_app(self.bootstrap_config.app)
         super().teardown()
 
 
@@ -140,11 +132,11 @@ class FastAPIPrometheusInstrument(PrometheusInstrument):
     missing_dependency_message = "prometheus_fastapi_instrumentator is not installed"
 
     @staticmethod
-    def check_dependencies() -> bool:
+    def dependencies_installed() -> bool:
         return import_checker.is_prometheus_fastapi_instrumentator_installed
 
     def bootstrap(self) -> None:
-        application = _narrow_app(self.bootstrap_config)
+        application = self.bootstrap_config.app
         Instrumentator(**self.bootstrap_config.prometheus_instrumentator_params).instrument(
             application,
             **self.bootstrap_config.prometheus_instrument_params,
@@ -161,7 +153,7 @@ class FastAPISwaggerInstrument(SwaggerInstrument):
     bootstrap_config: FastAPIConfig
 
     def bootstrap(self) -> None:
-        application = _narrow_app(self.bootstrap_config)
+        application = self.bootstrap_config.app
         if self.bootstrap_config.swagger_path != application.docs_url:
             warnings.warn(
                 f"swagger_path differs from docs_url, {application.docs_url} will be used for docs path",
@@ -196,7 +188,7 @@ class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI"]):
 
     def __init__(self, bootstrap_config: FastAPIConfig) -> None:
         super().__init__(bootstrap_config)
-        application = _narrow_app(self.bootstrap_config)
+        application = self.bootstrap_config.app
         self._attach_teardown_once(application, lambda: self._wrap_lifespan(application))
 
     def _wrap_lifespan(self, application: "fastapi.FastAPI") -> None:
@@ -210,4 +202,4 @@ class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI"]):
         return import_checker.is_fastapi_installed
 
     def _prepare_application(self) -> "fastapi.FastAPI":
-        return _narrow_app(self.bootstrap_config)
+        return self.bootstrap_config.app

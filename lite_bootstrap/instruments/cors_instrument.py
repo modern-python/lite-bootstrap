@@ -34,8 +34,22 @@ class CorsConfig(BaseConfig):
 
 @dataclasses.dataclass(kw_only=True, slots=True)
 class CorsInstrument(BaseInstrument[CorsConfig]):
-    not_ready_message = "cors_allowed_origins or cors_allowed_origin_regex must be provided"
+    not_configured_reason = "cors_allowed_origins or cors_allowed_origin_regex must be provided"
 
     @classmethod
     def is_configured(cls, bootstrap_config: "CorsConfig") -> bool:
         return bool(bootstrap_config.cors_allowed_origins) or bool(bootstrap_config.cors_allowed_origin_regex)
+
+    @property
+    def cors_kwargs(self) -> dict[str, typing.Any]:
+        """The CORS settings under the keyword names Starlette's CORSMiddleware and Litestar's CORSConfig share."""
+        config = self.bootstrap_config
+        return {
+            "allow_origins": config.cors_allowed_origins,
+            "allow_methods": config.cors_allowed_methods,
+            "allow_headers": config.cors_allowed_headers,
+            "allow_credentials": config.cors_allowed_credentials,
+            "allow_origin_regex": config.cors_allowed_origin_regex,
+            "expose_headers": config.cors_exposed_headers,
+            "max_age": config.cors_max_age,
+        }

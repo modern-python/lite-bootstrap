@@ -35,8 +35,9 @@ several inputs `is_configured` reads; most instruments have no enabled flag at a
 A *bootstrapper* is ready when its framework package is importable — `is_ready()`, checked once in
 `__init__`, raising `BootstrapperNotReadyError` when false. It is about the environment, never about
 the config, and it is a different question from whether an instrument is **configured**.
-_Avoid_: configured, for this sense. (Instruments carry a `not_ready_message` that is really the
-not-configured reason; the attribute name predates the split and the two senses still meet there.)
+_Avoid_: configured, for this sense. The attribute names follow the split: a bootstrapper carries
+`not_ready_message`, an instrument carries `not_configured_reason`. An instrument written against
+the old `not_ready_message` still works — `BaseInstrument.__init_subclass__` forwards it.
 
 **Skipped**:
 An instrument the bootstrapper decided not to instantiate. Two paths, deliberately different

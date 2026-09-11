@@ -20,7 +20,7 @@ class PyroscopeConfig(OpenTelemetryServiceFieldsConfig):
 
 @dataclasses.dataclass(kw_only=True, slots=True)
 class PyroscopeInstrument(BaseInstrument[PyroscopeConfig]):
-    not_ready_message = "pyroscope_endpoint is empty"
+    not_configured_reason = "pyroscope_endpoint is empty"
     missing_dependency_message = "pyroscope is not installed"
 
     @classmethod
@@ -28,7 +28,7 @@ class PyroscopeInstrument(BaseInstrument[PyroscopeConfig]):
         return bool(bootstrap_config.pyroscope_endpoint)
 
     @staticmethod
-    def check_dependencies() -> bool:
+    def dependencies_installed() -> bool:
         return import_checker.is_pyroscope_installed
 
     def bootstrap(self) -> None:
