@@ -9,7 +9,6 @@ from starlette import status
 from starlette.testclient import TestClient
 
 from lite_bootstrap import FastAPIBootstrapper, FastAPIConfig
-from lite_bootstrap.bootstrappers.fastapi_bootstrapper import _narrow_app
 from lite_bootstrap.exceptions import ConfigurationError
 from lite_bootstrap.types import UNSET
 from tests.conftest import CustomInstrumentor, SentryTestTransport, emulate_package_missing
@@ -135,13 +134,13 @@ def test_second_fastapi_bootstrapper_on_same_app_warns_not_stacks(fastapi_config
     )
 
 
-def test_narrow_app_raises_when_application_unset() -> None:
+def test_app_property_raises_when_application_unset() -> None:
     # Build a config and forcibly reset application to UNSET to simulate the
-    # invariant violation `_narrow_app` was guarding with an assert.
+    # invariant violation `FastAPIConfig.app` guards.
     config = FastAPIConfig()
     object.__setattr__(config, "application", UNSET)
     with pytest.raises(TypeError, match="application is UNSET"):
-        _narrow_app(config)
+        _ = config.app
 
 
 def test_user_supplied_app_keeps_title_version_debug() -> None:

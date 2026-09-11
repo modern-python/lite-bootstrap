@@ -14,7 +14,7 @@ class PrometheusConfig(BaseConfig):
 
 @dataclasses.dataclass(kw_only=True, slots=True)
 class PrometheusInstrument(BaseInstrument[PrometheusConfig]):
-    not_ready_message = "prometheus_metrics_path is empty or not valid"
+    not_configured_reason = "prometheus_metrics_path is empty or not valid"
 
     @classmethod
     def is_configured(cls, bootstrap_config: "PrometheusConfig") -> bool:

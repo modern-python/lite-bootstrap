@@ -37,11 +37,25 @@ class BaseConfig:
 ConfigT = typing.TypeVar("ConfigT", bound=BaseConfig)
 
 
+# Legacy name -> current name; __init_subclass__ forwards an out-of-tree instrument's old spelling.
+_RENAMED_ATTRIBUTES: typing.Final = {
+    "not_ready_message": "not_configured_reason",
+    "check_dependencies": "dependencies_installed",
+}
+
+
 @dataclasses.dataclass(kw_only=True, slots=True)
 class BaseInstrument(typing.Generic[ConfigT]):
     bootstrap_config: ConfigT
-    not_ready_message = ""
+    not_configured_reason = ""
     missing_dependency_message = ""
+
+    def __init_subclass__(cls, **kwargs: object) -> None:
+        # @dataclass(slots=True) replaces the class object, breaking bare super().
+        super(BaseInstrument, cls).__init_subclass__(**kwargs)
+        for legacy_name, current_name in _RENAMED_ATTRIBUTES.items():
+            if legacy_name in cls.__dict__ and current_name not in cls.__dict__:
+                setattr(cls, current_name, cls.__dict__[legacy_name])
 
     def bootstrap(self) -> None: ...
 
@@ -53,5 +67,6 @@ class BaseInstrument(typing.Generic[ConfigT]):
         return True
 
     @staticmethod
-    def check_dependencies() -> bool:
+    def dependencies_installed() -> bool:
+        """Return True if this instrument's optional package is importable. Default: nothing to import."""
         return True

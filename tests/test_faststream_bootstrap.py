@@ -165,7 +165,7 @@ def test_faststream_bootstrapper_with_missing_instrument_dependency(broker: Redi
 def test_faststream_bootstrap_without_prometheus_client(broker: RedisBroker) -> None:
     # Regression: issue #87 bug 1 — FastStreamPrometheusInstrument's
     # default_factory called prometheus_client.CollectorRegistry() during
-    # dataclass __init__, raising NameError before check_dependencies() ran.
+    # dataclass __init__, raising NameError before dependencies_installed() ran.
     bootstrap_config = build_faststream_config(broker=broker)
     with emulate_package_missing_with_module_reload(
         "prometheus_client",

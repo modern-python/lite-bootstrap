@@ -105,7 +105,7 @@ class FastMcpPrometheusInstrument(PrometheusInstrument):
     missing_dependency_message = "prometheus_client is not installed"
 
     @staticmethod
-    def check_dependencies() -> bool:
+    def dependencies_installed() -> bool:
         return import_checker.is_prometheus_client_installed
 
     def bootstrap(self) -> None:

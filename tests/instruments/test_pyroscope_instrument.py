@@ -45,8 +45,8 @@ def test_pyroscope_instrument_is_configured() -> None:
     assert PyroscopeInstrument.is_configured(config)
 
 
-def test_pyroscope_check_dependencies() -> None:
-    assert PyroscopeInstrument.check_dependencies()
+def test_pyroscope_dependencies_installed() -> None:
+    assert PyroscopeInstrument.dependencies_installed()
 
 
 def test_pyroscope_instrument_bootstrap_and_teardown() -> None:

@@ -147,7 +147,7 @@ class FastStreamLoggingInstrument(LoggingInstrument):
 @dataclasses.dataclass(kw_only=True)
 class FastStreamOpenTelemetryInstrument(OpenTelemetryInstrument):
     bootstrap_config: FastStreamConfig
-    not_ready_message = OpenTelemetryInstrument.not_ready_message + " or opentelemetry_middleware_cls is empty"
+    not_configured_reason = OpenTelemetryInstrument.not_configured_reason + " or opentelemetry_middleware_cls is empty"
 
     @classmethod
     def is_configured(cls, bootstrap_config: "FastStreamConfig") -> bool:  # ty: ignore[invalid-method-override]
@@ -168,7 +168,7 @@ def _make_collector_registry() -> "prometheus_client.CollectorRegistry":
 class FastStreamPrometheusInstrument(PrometheusInstrument):
     bootstrap_config: FastStreamConfig
     collector_registry: "prometheus_client.CollectorRegistry" = dataclasses.field(init=False)
-    not_ready_message = PrometheusInstrument.not_ready_message + " or prometheus_middleware_cls is missing"
+    not_configured_reason = PrometheusInstrument.not_configured_reason + " or prometheus_middleware_cls is missing"
     missing_dependency_message = "prometheus_client is not installed"
 
     def __post_init__(self) -> None:
@@ -180,7 +180,7 @@ class FastStreamPrometheusInstrument(PrometheusInstrument):
         return super().is_configured(bootstrap_config) and bool(bootstrap_config.prometheus_middleware_cls)
 
     @staticmethod
-    def check_dependencies() -> bool:
+    def dependencies_installed() -> bool:
         return import_checker.is_prometheus_client_installed
 
     def bootstrap(self) -> None:

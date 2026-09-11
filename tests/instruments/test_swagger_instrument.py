@@ -13,5 +13,5 @@ def test_swagger_config_defaults() -> None:
     assert config.swagger_offline_docs is False
 
 
-def test_swagger_check_dependencies() -> None:
-    assert SwaggerInstrument.check_dependencies() is True
+def test_swagger_dependencies_installed() -> None:
+    assert SwaggerInstrument.dependencies_installed() is True

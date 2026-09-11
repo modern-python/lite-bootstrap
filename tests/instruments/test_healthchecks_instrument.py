@@ -9,7 +9,7 @@ def test_healthchecks_instrument_configured_by_default() -> None:
 def test_healthchecks_instrument_not_configured_when_disabled() -> None:
     config = HealthChecksConfig(health_checks_enabled=False)
     assert not HealthChecksInstrument.is_configured(config)
-    assert HealthChecksInstrument.not_ready_message == "health_checks_enabled is False"
+    assert HealthChecksInstrument.not_configured_reason == "health_checks_enabled is False"
 
 
 def test_healthchecks_render_data_default() -> None:
@@ -41,5 +41,5 @@ def test_healthchecks_config_defaults() -> None:
     assert config.health_checks_include_in_schema is False
 
 
-def test_healthchecks_check_dependencies() -> None:
-    assert HealthChecksInstrument.check_dependencies() is True
+def test_healthchecks_dependencies_installed() -> None:
+    assert HealthChecksInstrument.dependencies_installed() is True

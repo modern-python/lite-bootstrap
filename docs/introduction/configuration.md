@@ -238,9 +238,9 @@ Additional params:
 
 When a bootstrapper is constructed, each registered instrument is checked twice:
 
-1. **`is_configured(config)`** (classmethod, runs before instantiation) — returns False if the user's config indicates this instrument shouldn't run (e.g. `sentry_dsn` empty, `logging_enabled=False`, `pyroscope_endpoint` empty). When False, the instrument is **silently skipped** and recorded in `bootstrapper.skipped_instruments: list[tuple[type, str]]` — each entry is the instrument class plus its `not_ready_message`.
+1. **`is_configured(config)`** (classmethod, runs before instantiation) — returns False if the user's config indicates this instrument shouldn't run (e.g. `sentry_dsn` empty, `logging_enabled=False`, `pyroscope_endpoint` empty). When False, the instrument is **silently skipped** and recorded in `bootstrapper.skipped_instruments: list[tuple[type, str]]` — each entry is the instrument class plus its `not_configured_reason`.
 
-2. **`check_dependencies()`** — runs only if `is_configured()` returned True. If the instrument's optional package is missing, an `InstrumentDependencyMissingWarning` is emitted. This is a real "configured but dependency missing" deployment surprise.
+2. **`dependencies_installed()`** — runs only if `is_configured()` returned True. If the instrument's optional package is missing, an `InstrumentDependencyMissingWarning` is emitted. This is a real "configured but dependency missing" deployment surprise.
 
 After the loop, the bootstrapper emits one INFO-level summary log listing configured + skipped instruments. Default Python logging suppresses INFO; opt in via `logging.basicConfig(level=logging.INFO)`.
 

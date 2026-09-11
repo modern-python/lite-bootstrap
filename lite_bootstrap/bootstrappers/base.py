@@ -21,6 +21,7 @@ InstrumentT = typing.TypeVar("InstrumentT", bound=BaseInstrument)
 
 class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
     instruments_types: typing.ClassVar[list[type[BaseInstrument]]]
+    not_ready_message: typing.ClassVar[str]
     instruments: list[BaseInstrument]
     skipped_instruments: list[tuple[type[BaseInstrument], str]]
     bootstrap_config: BaseConfig
@@ -85,10 +86,10 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
             # missing-optional-dep doesn't fail in a dataclass default_factory before we
             # can decide the user opted out.
             if not instrument_type.is_configured(self.bootstrap_config):
-                self.skipped_instruments.append((instrument_type, instrument_type.not_ready_message))
+                self.skipped_instruments.append((instrument_type, instrument_type.not_configured_reason))
                 continue
             # Dep-missing for a CONFIGURED instrument is a genuine deployment surprise.
-            if not instrument_type.check_dependencies():
+            if not instrument_type.dependencies_installed():
                 warnings.warn(
                     instrument_type.missing_dependency_message,
                     category=InstrumentDependencyMissingWarning,
@@ -104,10 +105,6 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
 
         if logger.isEnabledFor(logging.INFO):
             logger.info(self.build_summary())
-
-    @property
-    @abc.abstractmethod
-    def not_ready_message(self) -> str: ...
 
     @abc.abstractmethod
     def _prepare_application(self) -> ApplicationT: ...

@@ -258,7 +258,7 @@ def test_fastmcp_bootstrapper_with_missing_instrument_dependency(
 
 def test_fastmcp_bootstrap_without_prometheus_client() -> None:
     # Regression guard mirroring the FastStream prometheus-missing test: ensures
-    # FastMcpPrometheusInstrument.check_dependencies() prevents construction-time
+    # FastMcpPrometheusInstrument.dependencies_installed() prevents construction-time
     # failure when prometheus_client is absent.
     with emulate_package_missing_with_module_reload(
         "prometheus_client",
