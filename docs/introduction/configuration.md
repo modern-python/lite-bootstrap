@@ -114,6 +114,7 @@ Additional parameters:
 - `logging_buffer_capacity`
 - `logging_extra_processors`
 - `logging_unset_handlers`
+- `logging_record_filters` - standard-library `logging.Filter` instances to attach to named loggers (see below).
 - `logging_time_stamper` - a `structlog.processors.TimeStamper` instance controlling timestamp format (default: `TimeStamper(fmt="iso")`). Pass a custom instance to change the format or enable UTC:
 
 ```python
@@ -124,6 +125,40 @@ config = FastAPIConfig(
     logging_time_stamper=structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S", utc=True),
 )
 ```
+
+### Filtering standard-library log records
+
+`logging_record_filters` attaches `logging.Filter` instances to loggers by name. A filter sees every
+record its logger emits, before any handler renders it, and may rewrite the record or return `False`
+to drop it — useful for demoting a third-party error you already handle:
+
+```python
+import logging
+
+from lite_bootstrap import FreeBootstrapper, FreeConfig
+
+
+class ExpectedFailureFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno == logging.ERROR and "expected failure" in record.getMessage():
+            record.levelno = logging.WARNING
+            record.levelname = "WARNING"
+        return True
+
+
+bootstrapper = FreeBootstrapper(
+    bootstrap_config=FreeConfig(
+        logging_record_filters={"some_library.worker": (ExpectedFailureFilter(),)},
+    ),
+)
+```
+
+- **Set both `levelno` and `levelname`** when changing a level: handlers read them independently.
+- **The logger name is exact.** A filter on `some_library` never sees `some_library.worker`, and
+  `""` is the root logger, matching only records logged through root itself. That is standard
+  `logging` behaviour: a logger consults its own filters, then its ancestors' *handlers*.
+- **Teardown removes only what it attached**, leaving filters your application put on the same
+  logger in place.
 
 ### Structlog Litestar
 

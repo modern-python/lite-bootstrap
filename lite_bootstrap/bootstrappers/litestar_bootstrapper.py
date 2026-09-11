@@ -226,8 +226,8 @@ class LitestarLoggingInstrument(LoggingInstrument):
             exclude=excluded_paths or None,
         )
 
-    def bootstrap(self) -> None:
-        self._unset_handlers()
+    def _configure_structlog_loggers(self) -> None:
+        """Register Litestar's StructlogPlugin instead of calling ``structlog.configure`` directly."""
         self.bootstrap_config.application_config.plugins.append(
             StructlogPlugin(
                 config=StructlogConfig(
@@ -245,7 +245,6 @@ class LitestarLoggingInstrument(LoggingInstrument):
                 ),
             )
         )
-        self._configure_foreign_loggers()
 
 
 @dataclasses.dataclass(kw_only=True)

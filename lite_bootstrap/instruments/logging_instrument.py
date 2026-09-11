@@ -73,6 +73,7 @@ class LoggingConfig(BaseConfig):
     logging_unset_handlers: list[str] = dataclasses.field(
         default_factory=list,
     )
+    logging_record_filters: dict[str, tuple[logging.Filter, ...]] = dataclasses.field(default_factory=dict)
     logging_time_stamper: "structlog.processors.TimeStamper | None" = None
     logging_enabled: bool = True
 
@@ -83,6 +84,9 @@ class LoggingInstrument(BaseInstrument[LoggingConfig]):
     missing_dependency_message = "structlog is not installed"
     _logger_factory: "MemoryLoggerFactory | None" = dataclasses.field(
         default_factory=lambda: None, init=False, repr=False, compare=False
+    )
+    _attached_filters: list[tuple[logging.Logger, logging.Filter]] = dataclasses.field(
+        default_factory=list, init=False, repr=False, compare=False
     )
 
     @property
@@ -160,15 +164,32 @@ class LoggingInstrument(BaseInstrument[LoggingConfig]):
         root_logger.addHandler(stream_handler)
         root_logger.setLevel(self.bootstrap_config.logging_log_level)
 
+    def _attach_record_filters(self) -> None:
+        """Attach each configured filter to its logger, remembering the pair for teardown."""
+        for logger_name, record_filters in self.bootstrap_config.logging_record_filters.items():
+            target_logger = logging.getLogger(logger_name)
+            for record_filter in record_filters:
+                target_logger.addFilter(record_filter)
+                self._attached_filters.append((target_logger, record_filter))
+
+    def _detach_record_filters(self) -> None:
+        """Remove only the filters this instrument attached, leaving any others in place."""
+        for target_logger, record_filter in self._attached_filters:
+            target_logger.removeFilter(record_filter)
+        self._attached_filters.clear()
+
     def bootstrap(self) -> None:
         self._unset_handlers()
         self._configure_structlog_loggers()
         self._configure_foreign_loggers()
+        self._attach_record_filters()
 
     def teardown(self) -> None:
         """Reset structlog and root logger.
 
         Root logger level is unconditionally set to WARNING; pre-existing user configuration is overwritten.
+        Filters from ``logging_record_filters`` are removed one pair at a time, so a filter the
+        application or another library put on the same logger survives.
 
         Best-effort cleanup: errors from individual ``handler.close()`` calls and from the memory
         logger factory's ``close_handlers()`` are collected and re-raised together via
@@ -188,6 +209,7 @@ class LoggingInstrument(BaseInstrument[LoggingConfig]):
                     errors.append((type(h).__name__, e))
             root_logger.setLevel(logging.WARNING)
         finally:
+            self._detach_record_filters()
             if self._logger_factory is not None:
                 try:
                     self._logger_factory.close_handlers()
