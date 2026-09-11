@@ -51,7 +51,8 @@ class BaseInstrument(typing.Generic[ConfigT]):
     missing_dependency_message = ""
 
     def __init_subclass__(cls, **kwargs: object) -> None:
-        super().__init_subclass__(**kwargs)
+        # @dataclass(slots=True) replaces the class object, breaking bare super().
+        super(BaseInstrument, cls).__init_subclass__(**kwargs)
         for legacy_name, current_name in _RENAMED_ATTRIBUTES.items():
             if legacy_name in cls.__dict__ and current_name not in cls.__dict__:
                 setattr(cls, current_name, cls.__dict__[legacy_name])
