@@ -7,6 +7,7 @@ from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
 from lite_bootstrap.exceptions import ConfigurationError
 from lite_bootstrap.helpers.fastapi_helpers import enable_offline_docs
+from lite_bootstrap.helpers.warn import warn_at_caller
 from lite_bootstrap.instruments.cors_instrument import CorsConfig, CorsInstrument
 from lite_bootstrap.instruments.healthchecks_instrument import (
     HealthChecksConfig,
@@ -70,7 +71,7 @@ class FastAPIConfig(
             application.debug = self.service_debug
             application.version = self.service_version
         elif self.application_kwargs:
-            warnings.warn("application_kwargs must be used without application", stacklevel=2)
+            warn_at_caller("application_kwargs must be used without application")
 
     @property
     def app(self) -> "fastapi.FastAPI":

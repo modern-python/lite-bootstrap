@@ -3,12 +3,12 @@ import dataclasses
 import pathlib
 import re
 import typing
-import warnings
 import weakref
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
 from lite_bootstrap.helpers.path import is_valid_path
+from lite_bootstrap.helpers.warn import warn_at_caller
 from lite_bootstrap.instruments.cors_instrument import CorsConfig, CorsInstrument
 from lite_bootstrap.instruments.healthchecks_instrument import (
     HealthChecksConfig,
@@ -150,10 +150,9 @@ class LitestarConfig(
         # @dataclass(slots=True) replaces the class object, breaking bare super().
         super(LitestarConfig, self).__post_init__()
         if self.litestar_logging_middleware_config is not None and not self.litestar_logging_middleware_enabled:
-            warnings.warn(
+            warn_at_caller(
                 "litestar_logging_middleware_config is ignored while litestar_logging_middleware_enabled is False; "
-                "set litestar_logging_middleware_enabled=True to turn access logging on.",
-                stacklevel=2,
+                "set litestar_logging_middleware_enabled=True to turn access logging on."
             )
 
 

@@ -420,8 +420,10 @@ def test_litestar_access_logging_custom_config_replaces_defaults(litestar_config
 
 
 def test_litestar_logging_middleware_config_without_flag_warns(litestar_config: LitestarConfig) -> None:
-    with pytest.warns(UserWarning, match="litestar_logging_middleware_enabled"):
+    with pytest.warns(UserWarning, match="litestar_logging_middleware_enabled") as caught:
         dataclasses.replace(litestar_config, litestar_logging_middleware_config=LoggingMiddlewareConfig())
+
+    assert caught[0].filename == __file__
 
 
 def test_litestar_access_logging_excluded_paths_drops_degenerate_and_duplicates(
