@@ -7,6 +7,7 @@ import warnings
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.exceptions import InstrumentDependencyMissingWarning, TeardownError
+from lite_bootstrap.helpers.warn import warn_at_caller
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 
 
@@ -70,10 +71,9 @@ class OpenTelemetryConfig(OpenTelemetryServiceFieldsConfig):
     def __post_init__(self) -> None:
         host = self._parse_remote_insecure_host()
         if host is not None:
-            warnings.warn(
+            warn_at_caller(
                 f"OTLP exporter sending traces unencrypted to non-local host {host!r}; "
-                "set opentelemetry_insecure=False or use a localhost/unix endpoint.",
-                stacklevel=2,
+                "set opentelemetry_insecure=False or use a localhost/unix endpoint."
             )
         super().__post_init__()
 

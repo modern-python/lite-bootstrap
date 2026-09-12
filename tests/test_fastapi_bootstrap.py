@@ -96,8 +96,10 @@ def test_fastapi_bootstrapper_docs_url_differ(fastapi_config: FastAPIConfig) -> 
 
 
 def test_fastapi_bootstrapper_apps_and_kwargs_warning(fastapi_config: FastAPIConfig) -> None:
-    with pytest.warns(UserWarning, match="application_kwargs must be used without application"):
+    with pytest.warns(UserWarning, match="application_kwargs must be used without application") as caught:
         dataclasses.replace(fastapi_config, application=fastapi.FastAPI(), application_kwargs={"title": "some title"})
+
+    assert caught[0].filename == __file__
 
 
 @pytest.mark.parametrize(
