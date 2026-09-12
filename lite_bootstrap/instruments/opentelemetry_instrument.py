@@ -18,7 +18,12 @@ if import_checker.is_opentelemetry_sdk_installed:
     from opentelemetry.context import Context
     from opentelemetry.sdk import resources
     from opentelemetry.sdk.trace import ReadableSpan, SpanProcessor, TracerProvider
-    from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter, SimpleSpanProcessor
+    from opentelemetry.sdk.trace.export import (
+        BatchSpanProcessor,
+        ConsoleSpanExporter,
+        SimpleSpanProcessor,
+        SpanExporter,
+    )
     from opentelemetry.trace import Span, format_span_id, set_tracer_provider
 
 if import_checker.is_otlp_grpc_exporter_installed:
@@ -166,11 +171,13 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
                 excluded_urls.add(health_path)
         return excluded_urls
 
-    def bootstrap(self) -> None:
+    def _silence_otel_loggers(self) -> None:
         for logger_name in ("opentelemetry.instrumentation.instrumentor", "opentelemetry.trace"):
             otel_logger = logging.getLogger(logger_name)
             self._prior_logger_disabled[logger_name] = otel_logger.disabled
             otel_logger.disabled = True
+
+    def _build_resource(self) -> "resources.Resource":
         attributes = {
             resources.SERVICE_NAME: self.bootstrap_config.opentelemetry_service_name
             or self.bootstrap_config.service_name,
@@ -179,47 +186,38 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
             resources.SERVICE_VERSION: self.bootstrap_config.service_version,
             resources.CONTAINER_NAME: self.bootstrap_config.opentelemetry_container_name,
         }
-        resource: typing.Final = resources.Resource.create(
-            attributes={k: v for k, v in attributes.items() if v},
-        )
-        tracer_provider = TracerProvider(resource=resource)
-        set_tracer_provider(tracer_provider)
-        self._tracer_provider = tracer_provider
-        if import_checker.is_pyroscope_installed and getattr(self.bootstrap_config, "pyroscope_endpoint", None):
-            tracer_provider.add_span_processor(PyroscopeSpanProcessor())
-        if self.bootstrap_config.opentelemetry_log_traces:
-            tracer_provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter(formatter=_format_span)))
-        if self.bootstrap_config.opentelemetry_endpoint:
-            if self.bootstrap_config.opentelemetry_exporter_protocol == "grpc":
-                if import_checker.is_otlp_grpc_exporter_installed:
-                    tracer_provider.add_span_processor(
-                        BatchSpanProcessor(
-                            OTLPGrpcSpanExporter(
-                                endpoint=self.bootstrap_config.opentelemetry_endpoint,
-                                insecure=self.bootstrap_config.opentelemetry_insecure,
-                            ),
-                        ),
-                    )
-                else:
-                    warnings.warn(
-                        "opentelemetry_endpoint is set but the gRPC OTLP exporter is not installed; "
-                        "spans will not be exported. Install lite-bootstrap[otl].",
-                        category=InstrumentDependencyMissingWarning,
-                        stacklevel=2,
-                    )
-            elif import_checker.is_otlp_http_exporter_installed:
-                tracer_provider.add_span_processor(
-                    BatchSpanProcessor(
-                        OTLPHttpSpanExporter(endpoint=self.bootstrap_config.opentelemetry_endpoint),
-                    ),
-                )
-            else:
+        return resources.Resource.create(attributes={k: v for k, v in attributes.items() if v})
+
+    def _build_span_exporter(self) -> "SpanExporter | None":
+        """Return the OTLP exporter for the configured protocol, or None after warning it is missing.
+
+        Only call this once opentelemetry_endpoint is set: both warnings claim that it is.
+        """
+        # stacklevel counts this frame as well as bootstrap()'s, to land on bootstrap()'s caller.
+        if self.bootstrap_config.opentelemetry_exporter_protocol == "grpc":
+            if not import_checker.is_otlp_grpc_exporter_installed:
                 warnings.warn(
-                    "opentelemetry_endpoint is set but the HTTP OTLP exporter is not installed; "
-                    "spans will not be exported. Install lite-bootstrap[otl-http].",
+                    "opentelemetry_endpoint is set but the gRPC OTLP exporter is not installed; "
+                    "spans will not be exported. Install lite-bootstrap[otl].",
                     category=InstrumentDependencyMissingWarning,
-                    stacklevel=2,
+                    stacklevel=3,
                 )
+                return None
+            return OTLPGrpcSpanExporter(
+                endpoint=self.bootstrap_config.opentelemetry_endpoint,
+                insecure=self.bootstrap_config.opentelemetry_insecure,
+            )
+        if not import_checker.is_otlp_http_exporter_installed:
+            warnings.warn(
+                "opentelemetry_endpoint is set but the HTTP OTLP exporter is not installed; "
+                "spans will not be exported. Install lite-bootstrap[otl-http].",
+                category=InstrumentDependencyMissingWarning,
+                stacklevel=3,
+            )
+            return None
+        return OTLPHttpSpanExporter(endpoint=self.bootstrap_config.opentelemetry_endpoint)
+
+    def _apply_instrumentors(self, tracer_provider: "TracerProvider") -> None:
         for one_instrumentor in self.bootstrap_config.opentelemetry_instrumentors:
             if isinstance(one_instrumentor, InstrumentorWithParams):
                 one_instrumentor.instrumentor.instrument(
@@ -228,6 +226,19 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
                 )
             else:
                 one_instrumentor.instrument(tracer_provider=tracer_provider)
+
+    def bootstrap(self) -> None:
+        self._silence_otel_loggers()
+        tracer_provider = TracerProvider(resource=self._build_resource())
+        set_tracer_provider(tracer_provider)
+        self._tracer_provider = tracer_provider
+        if import_checker.is_pyroscope_installed and getattr(self.bootstrap_config, "pyroscope_endpoint", None):
+            tracer_provider.add_span_processor(PyroscopeSpanProcessor())
+        if self.bootstrap_config.opentelemetry_log_traces:
+            tracer_provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter(formatter=_format_span)))
+        if self.bootstrap_config.opentelemetry_endpoint and (span_exporter := self._build_span_exporter()):
+            tracer_provider.add_span_processor(BatchSpanProcessor(span_exporter))
+        self._apply_instrumentors(tracer_provider)
 
     def teardown(self) -> None:
         errors: list[tuple[str, BaseException]] = []
