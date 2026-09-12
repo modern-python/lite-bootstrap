@@ -6,7 +6,7 @@ import urllib.parse
 import warnings
 
 from lite_bootstrap import import_checker
-from lite_bootstrap.exceptions import InstrumentDependencyMissingWarning, TeardownError
+from lite_bootstrap.exceptions import InstrumentDependencyMissingWarning, collect_teardown_errors
 from lite_bootstrap.helpers.warn import warn_at_caller
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 
@@ -161,12 +161,13 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
         return import_checker.is_opentelemetry_installed and import_checker.is_opentelemetry_sdk_installed
 
     def _build_excluded_urls(self) -> set[str]:
-        excluded_urls: set[str] = set(self.bootstrap_config.opentelemetry_excluded_urls)
-        prometheus_path = getattr(self.bootstrap_config, "prometheus_metrics_path", None)
+        config = self.bootstrap_config
+        excluded_urls: set[str] = set(config.opentelemetry_excluded_urls)
+        prometheus_path = getattr(config, "prometheus_metrics_path", None)
         if prometheus_path:
             excluded_urls.add(prometheus_path)
-        if not self.bootstrap_config.opentelemetry_generate_health_check_spans:
-            health_path = getattr(self.bootstrap_config, "health_checks_path", None)
+        if not config.opentelemetry_generate_health_check_spans:
+            health_path = getattr(config, "health_checks_path", None)
             if health_path:
                 excluded_urls.add(health_path)
         return excluded_urls
@@ -178,13 +179,13 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
             otel_logger.disabled = True
 
     def _build_resource(self) -> "resources.Resource":
+        config = self.bootstrap_config
         attributes = {
-            resources.SERVICE_NAME: self.bootstrap_config.opentelemetry_service_name
-            or self.bootstrap_config.service_name,
+            resources.SERVICE_NAME: config.opentelemetry_service_name or config.service_name,
             resources.TELEMETRY_SDK_LANGUAGE: "python",
-            resources.SERVICE_NAMESPACE: self.bootstrap_config.opentelemetry_namespace,
-            resources.SERVICE_VERSION: self.bootstrap_config.service_version,
-            resources.CONTAINER_NAME: self.bootstrap_config.opentelemetry_container_name,
+            resources.SERVICE_NAMESPACE: config.opentelemetry_namespace,
+            resources.SERVICE_VERSION: config.service_version,
+            resources.CONTAINER_NAME: config.opentelemetry_container_name,
         }
         return resources.Resource.create(attributes={k: v for k, v in attributes.items() if v})
 
@@ -193,8 +194,9 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
 
         Only call this once opentelemetry_endpoint is set: both warnings claim that it is.
         """
+        config = self.bootstrap_config
         # stacklevel counts this frame as well as bootstrap()'s, to land on bootstrap()'s caller.
-        if self.bootstrap_config.opentelemetry_exporter_protocol == "grpc":
+        if config.opentelemetry_exporter_protocol == "grpc":
             if not import_checker.is_otlp_grpc_exporter_installed:
                 warnings.warn(
                     "opentelemetry_endpoint is set but the gRPC OTLP exporter is not installed; "
@@ -204,8 +206,8 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
                 )
                 return None
             return OTLPGrpcSpanExporter(
-                endpoint=self.bootstrap_config.opentelemetry_endpoint,
-                insecure=self.bootstrap_config.opentelemetry_insecure,
+                endpoint=config.opentelemetry_endpoint,
+                insecure=config.opentelemetry_insecure,
             )
         if not import_checker.is_otlp_http_exporter_installed:
             warnings.warn(
@@ -215,7 +217,7 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
                 stacklevel=3,
             )
             return None
-        return OTLPHttpSpanExporter(endpoint=self.bootstrap_config.opentelemetry_endpoint)
+        return OTLPHttpSpanExporter(endpoint=config.opentelemetry_endpoint)
 
     def _apply_instrumentors(self, tracer_provider: "TracerProvider") -> None:
         for one_instrumentor in self.bootstrap_config.opentelemetry_instrumentors:
@@ -228,40 +230,36 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
                 one_instrumentor.instrument(tracer_provider=tracer_provider)
 
     def bootstrap(self) -> None:
+        config = self.bootstrap_config
         self._silence_otel_loggers()
         tracer_provider = TracerProvider(resource=self._build_resource())
         set_tracer_provider(tracer_provider)
         self._tracer_provider = tracer_provider
-        if import_checker.is_pyroscope_installed and getattr(self.bootstrap_config, "pyroscope_endpoint", None):
+        if import_checker.is_pyroscope_installed and getattr(config, "pyroscope_endpoint", None):
             tracer_provider.add_span_processor(PyroscopeSpanProcessor())
-        if self.bootstrap_config.opentelemetry_log_traces:
+        if config.opentelemetry_log_traces:
             tracer_provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter(formatter=_format_span)))
-        if self.bootstrap_config.opentelemetry_endpoint and (span_exporter := self._build_span_exporter()):
+        if config.opentelemetry_endpoint and (span_exporter := self._build_span_exporter()):
             tracer_provider.add_span_processor(BatchSpanProcessor(span_exporter))
         self._apply_instrumentors(tracer_provider)
 
     def teardown(self) -> None:
-        errors: list[tuple[str, BaseException]] = []
-        for one_instrumentor in self.bootstrap_config.opentelemetry_instrumentors:
-            try:
-                if isinstance(one_instrumentor, InstrumentorWithParams):
-                    one_instrumentor.instrumentor.uninstrument(**one_instrumentor.additional_params)
-                else:
-                    one_instrumentor.uninstrument()
-            except Exception as e:  # noqa: BLE001, PERF203
-                errors.append((type(one_instrumentor).__name__, e))
-        for logger_name, prior in self._prior_logger_disabled.items():
-            logging.getLogger(logger_name).disabled = prior
-        self._prior_logger_disabled.clear()
-        if self._tracer_provider is not None:
-            try:
-                self._tracer_provider.shutdown()
-            except Exception as e:  # noqa: BLE001
-                errors.append(("TracerProvider", e))
-            finally:
-                self._tracer_provider = None
-        if errors:
-            raise TeardownError(errors) from errors[0][1]
+        with collect_teardown_errors() as teardown_errors:
+            for one_instrumentor in self.bootstrap_config.opentelemetry_instrumentors:
+                with teardown_errors.capture(type(one_instrumentor).__name__):
+                    if isinstance(one_instrumentor, InstrumentorWithParams):
+                        one_instrumentor.instrumentor.uninstrument(**one_instrumentor.additional_params)
+                    else:
+                        one_instrumentor.uninstrument()
+            for logger_name, prior in self._prior_logger_disabled.items():
+                logging.getLogger(logger_name).disabled = prior
+            self._prior_logger_disabled.clear()
+            if self._tracer_provider is not None:
+                try:
+                    with teardown_errors.capture("TracerProvider"):
+                        self._tracer_provider.shutdown()
+                finally:
+                    self._tracer_provider = None
 
 
 # Backward-compatible alias preserved for users importing the old (lowercase t) spelling.

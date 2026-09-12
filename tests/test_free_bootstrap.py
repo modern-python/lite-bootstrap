@@ -118,6 +118,23 @@ def test_free_bootstrapper_with_missing_instrument_dependency(
         FreeBootstrapper(bootstrap_config=free_bootstrapper_config)
 
 
+def test_missing_dependency_warning_points_at_the_bootstrapper_construction_site(
+    free_bootstrapper_config: FreeConfig,
+) -> None:
+    """INVARIANT: the dep-missing warning is attributed to the line that constructed the bootstrapper.
+
+    The warning is raised several frames below the user — inside instrument selection, under
+    ``BaseBootstrapper.__init__``, under the subclass's own ``__init__`` — and its literal
+    ``stacklevel`` counts every one of them. Adding or removing a frame between the
+    ``warnings.warn`` call and the constructor silently re-points the warning at lite-bootstrap's
+    own source, where it tells the user nothing about which bootstrapper asked for the instrument.
+    """
+    with emulate_package_missing("sentry_sdk"), pytest.warns(InstrumentDependencyMissingWarning) as caught:
+        FreeBootstrapper(bootstrap_config=free_bootstrapper_config)
+
+    assert [one_warning.filename for one_warning in caught] == [__file__]
+
+
 def test_attach_teardown_once_attaches_then_warns_and_skips(free_bootstrapper_config: FreeConfig) -> None:
     bootstrapper = FreeBootstrapper(bootstrap_config=free_bootstrapper_config)
     target = types.SimpleNamespace()

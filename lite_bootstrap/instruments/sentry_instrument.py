@@ -94,22 +94,21 @@ class SentryInstrument(BaseInstrument[SentryConfig]):
         return import_checker.is_sentry_installed
 
     def bootstrap(self) -> None:
+        config = self.bootstrap_config
         sentry_sdk.init(
-            dsn=self.bootstrap_config.sentry_dsn,
-            sample_rate=self.bootstrap_config.sentry_sample_rate,
-            traces_sample_rate=self.bootstrap_config.sentry_traces_sample_rate,
-            environment=self.bootstrap_config.service_environment,
-            max_breadcrumbs=self.bootstrap_config.sentry_max_breadcrumbs,
-            max_value_length=self.bootstrap_config.sentry_max_value_length,
-            attach_stacktrace=self.bootstrap_config.sentry_attach_stacktrace,
-            integrations=self.bootstrap_config.sentry_integrations,
-            default_integrations=self.bootstrap_config.sentry_default_integrations,
-            before_send=wrap_before_send_callbacks(
-                enrich_sentry_event_from_structlog_log, self.bootstrap_config.sentry_before_send
-            ),
-            **self.bootstrap_config.sentry_additional_params,
+            dsn=config.sentry_dsn,
+            sample_rate=config.sentry_sample_rate,
+            traces_sample_rate=config.sentry_traces_sample_rate,
+            environment=config.service_environment,
+            max_breadcrumbs=config.sentry_max_breadcrumbs,
+            max_value_length=config.sentry_max_value_length,
+            attach_stacktrace=config.sentry_attach_stacktrace,
+            integrations=config.sentry_integrations,
+            default_integrations=config.sentry_default_integrations,
+            before_send=wrap_before_send_callbacks(enrich_sentry_event_from_structlog_log, config.sentry_before_send),
+            **config.sentry_additional_params,
         )
-        tags: dict[str, str] = self.bootstrap_config.sentry_tags or {}
+        tags: dict[str, str] = config.sentry_tags or {}
         sentry_sdk.set_tags(tags)
 
     def teardown(self) -> None:

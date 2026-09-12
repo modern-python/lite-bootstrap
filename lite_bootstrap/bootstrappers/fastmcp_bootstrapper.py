@@ -89,11 +89,13 @@ class FastMcpHealthChecksInstrument(HealthChecksInstrument):
     bootstrap_config: FastMcpConfig
 
     def bootstrap(self) -> None:
-        @self.bootstrap_config.application.custom_route(
-            self.bootstrap_config.health_checks_path,
+        config = self.bootstrap_config
+
+        @config.application.custom_route(
+            config.health_checks_path,
             methods=["GET"],
             name="health_check",
-            include_in_schema=self.bootstrap_config.health_checks_include_in_schema,
+            include_in_schema=config.health_checks_include_in_schema,
         )
         async def health_check_handler(_: "Request") -> "JSONResponse":
             return JSONResponse(dict(self.render_health_check_data()))
@@ -109,11 +111,13 @@ class FastMcpPrometheusInstrument(PrometheusInstrument):
         return import_checker.is_prometheus_client_installed
 
     def bootstrap(self) -> None:
-        @self.bootstrap_config.application.custom_route(
-            self.bootstrap_config.prometheus_metrics_path,
+        config = self.bootstrap_config
+
+        @config.application.custom_route(
+            config.prometheus_metrics_path,
             methods=["GET"],
             name="metrics",
-            include_in_schema=self.bootstrap_config.prometheus_metrics_include_in_schema,
+            include_in_schema=config.prometheus_metrics_include_in_schema,
         )
         async def metrics_handler(_: "Request") -> "Response":
             return Response(
