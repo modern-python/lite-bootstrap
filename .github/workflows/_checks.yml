@@ -63,8 +63,7 @@ jobs:
       - run: uv python install ${{ matrix.python-version }}
       - run: uv python pin ${{ matrix.python-version }}
       - run: just install
-      - run: just test . --cov=. --cov-report xml
-
+      - run: just test-ci
   free-threaded:
     runs-on: ubuntu-latest
     strategy:
