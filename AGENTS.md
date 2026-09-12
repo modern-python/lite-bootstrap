@@ -1,50 +1,39 @@
 # AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Project Overview
 
-`lite-bootstrap` bootstraps a Python microservice with pre-configured observability;
-[`CONTEXT.md`](CONTEXT.md) opens with what it does and owns the vocabulary — read it before naming a
-concept in code, a test name, or an issue title. The distinction between an instrument being
-**configured** and a bootstrapper being **ready**, and between the two kinds of **skip**, is defined
-there and is load-bearing throughout.
+`lite-bootstrap` bootstraps a Python microservice with pre-configured observability.
+[`CONTEXT.md`](CONTEXT.md) owns the vocabulary — read it before naming a concept in code, a test, or
+an issue. An instrument being **configured** versus a bootstrapper being **ready**, and the two
+kinds of **skip**, are defined there and are load-bearing throughout.
 
 ## Commands
 
-`just` (task runner) and `uv` (package manager). The [`justfile`](justfile) is the source of truth —
-`just --list`, or read it; every non-obvious recipe carries its intent as a comment.
+`just` (task runner) and `uv` (package manager). The [`justfile`](justfile) is the source of truth;
+every non-obvious recipe carries its intent as a comment.
 
 ## Architecture
 
-`lite_bootstrap/` is one file per concern and named for what it does: `instruments/<name>_instrument.py`
-owns one observability concern, `bootstrappers/<framework>_bootstrapper.py` owns one framework's
-bindings, and `import_checker.py` owns every optional-dependency probe. Read them.
+One file per concern, named for it: `instruments/<name>_instrument.py` owns one observability
+concern, `bootstrappers/<framework>_bootstrapper.py` owns one framework's bindings, and
+`import_checker.py` owns every optional-dependency probe.
 
 ## Workflow
 
 Real work **not scheduled** becomes a GitHub issue.
 
-Every link in `README.md` must be absolute: `https://github.com/modern-python/<repo>/blob/main/<path>`,
-or `.../tree/main/<path>` for a directory. Never a relative path: `README.md` is also the PyPI long
-description, and PyPI does not rewrite relative links, so a relative one 404s on the package page.
+Every link in `README.md` is absolute — `https://github.com/modern-python/<repo>/blob/main/<path>`,
+or `.../tree/main/<path>` for a directory. `README.md` is also the PyPI long description, and PyPI
+does not rewrite relative links, so a relative one 404s on the package page.
 
 An invariant is a test whose name is the claim, with a docstring opening `INVARIANT:` and a second
 paragraph naming **what breaks it** — design rationale, not a report of what this one test catches.
 
-## Agent skills
+## Agent docs
 
-### Issue tracker
-
-GitHub issues on `modern-python/lite-bootstrap`, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-The five canonical roles, each label string equal to its name. See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+- Issue tracker: GitHub issues on `modern-python/lite-bootstrap` via `gh`. `docs/agents/issue-tracker.md`.
+- Triage labels: five canonical roles, each label string equal to its name. `docs/agents/triage-labels.md`.
+- Domain docs: single-context, `CONTEXT.md` and `docs/adr/` at the repo root. `docs/agents/domain.md`.
 
 ## Code style
 
@@ -52,32 +41,24 @@ Four rules that are not visible in the code that follows them:
 
 - **No `# noqa: PLR2004`.** Extract the magic value to a named local instead:
   `expected_max_age = 600; assert config.cors_max_age == expected_max_age`.
-- **A public rename ships a silent alias.** Add `OldName = NewName` at the end of the module and
-  re-export both from `__init__.py` if the old name was exported. It is a class assignment, not a
-  subclass, so `isinstance` still holds. `FreeBootstrapperConfig`, `OpentelemetryConfig` and
-  `IGNORED_STRUCTLOG_ATTRIBUTES` exist for this reason.
-- **A warning raised while a config is built or an instrument is bootstrapped goes through
-  `warn_at_caller`.** No literal `stacklevel=` reaches the user on either path: from a
-  `__post_init__` the depth is that config's MRO chain plus the `__init__` `dataclasses` generates,
-  and from an instrument's `bootstrap()` it is one frame deeper whenever that instrument calls
-  `super().bootstrap()` first. `warn_at_caller` walks out to the first frame outside
-  `lite_bootstrap` instead, which on the bootstrap path is the user's `bootstrap()` call. Three
-  literal `stacklevel=` sites survive, all outside those two paths and all deliberate: the
-  dep-missing warning in `BaseBootstrapper._select_instruments` (`stacklevel=4`) and the
-  double-attach warning in `_attach_teardown_once` (`stacklevel=3`, one frame shallower because
-  the subclass `__init__` calls it directly rather than through `BaseBootstrapper.__init__`), both
-  a fixed depth below the user and scoped out by #202; and `helpers/fastapi_helpers.py`, which
-  warns while serving a request, with no user frame anywhere on the stack.
-- **Sentinels on a user's app get a `_lite_bootstrap_` prefix.** Set a direct attribute on the app
-  object; never squat in a framework namespace like Starlette's `application.state`. Read it with
+- **A public rename ships a silent alias.** `OldName = NewName` at the end of the module, re-exported
+  from `__init__.py` if the old name was. A class assignment, not a subclass, so `isinstance` still
+  holds; `OpentelemetryConfig` is the worked example.
+- **A warning reached from config construction or an instrument's `bootstrap()` goes through
+  `warn_at_caller`.** Neither depth is constant — a `__post_init__` cascade runs as deep as that
+  config's MRO, and `bootstrap()` sits a frame deeper whenever it calls `super().bootstrap()` — so
+  the helper walks out to the first frame outside `lite_bootstrap`. The three surviving literal
+  `stacklevel=` sites lie outside both paths and stay literal; #202 measured them.
+- **Sentinels on a user's app get a `_lite_bootstrap_` prefix.** A direct attribute on the app
+  object, never a framework namespace like Starlette's `application.state`. Read it with
   `getattr(target, name, default)` (no SLF violation); write it with `# noqa: SLF001`.
 
 ### Type checking
 
-`ty` is the only supported type checker. The codebase leans on patterns a checker has to model
-correctly — conditional imports for optional dependencies, covariant `bootstrap_config` narrowing on
-instrument subclasses, `TypedDict` optional-key access guarded by `.get()` — and Pyright reports all
-three as errors. Do not add it, and do not act on its diagnostics.
+`ty` is the only supported type checker; act on its diagnostics alone. The codebase leans on patterns
+Pyright reports as errors — conditional imports for optional dependencies, covariant
+`bootstrap_config` narrowing on instrument subclasses, `TypedDict` optional-key access guarded by
+`.get()` — so adding it yields noise, not findings.
 
 Two suppression spellings recur and are both correct as written: `# ty: ignore[invalid-method-override]`
 on a framework subclass's `is_configured` classmethod, which narrows its parameter type where `ty`
