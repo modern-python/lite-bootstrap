@@ -24,7 +24,9 @@ dependencies = [
     # Runtime use: `typing_extensions.Self` (base.py) and `typing_extensions.TypedDict`
     # (healthchecks) — the latter is required by pydantic/FastAPI on Python < 3.12
     # (`typing.TypedDict` is rejected there). Pure Python, so ft-friendly.
-    "typing-extensions",
+    # >=4.0 for `Self`; >=4.6 because 4.4 and 4.5 raise on import under Python >=3.12
+    # (they subclass `typing.TypeVar`). The higher floor wins.
+    "typing-extensions>=4.6",
 ]
 
 [project.urls]
