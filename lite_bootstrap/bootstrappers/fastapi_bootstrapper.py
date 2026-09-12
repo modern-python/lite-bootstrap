@@ -1,7 +1,6 @@
 import contextlib
 import dataclasses
 import typing
-import warnings
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
@@ -158,10 +157,7 @@ class FastAPISwaggerInstrument(SwaggerInstrument):
         config = self.bootstrap_config
         application = config.app
         if config.swagger_path != application.docs_url:
-            warnings.warn(
-                f"swagger_path differs from docs_url, {application.docs_url} will be used for docs path",
-                stacklevel=2,
-            )
+            warn_at_caller(f"swagger_path differs from docs_url, {application.docs_url} will be used for docs path")
         if config.swagger_offline_docs:
             enable_offline_docs(application, static_path=config.swagger_static_path)
 

@@ -60,6 +60,15 @@ def logging_mock() -> LoggingMock:
     return LoggingMock()
 
 
+def warning_source_files(caught: typing.Iterable[warnings.WarningMessage], category: type[Warning]) -> list[str]:
+    """Return the file each recorded warning of ``category`` was attributed to, in the order raised.
+
+    Attribution is what the stacklevel rules decide, so a test that pins it compares whole lists:
+    a warning raised from the wrong frame and one raised twice are different bugs.
+    """
+    return [one_warning.filename for one_warning in caught if issubclass(one_warning.category, category)]
+
+
 @contextlib.contextmanager
 def emulate_package_missing(package_name: str) -> typing.Iterator[None]:
     old_module = sys.modules[package_name]

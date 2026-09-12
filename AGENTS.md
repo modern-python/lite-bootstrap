@@ -56,10 +56,18 @@ Four rules that are not visible in the code that follows them:
   re-export both from `__init__.py` if the old name was exported. It is a class assignment, not a
   subclass, so `isinstance` still holds. `FreeBootstrapperConfig`, `OpentelemetryConfig` and
   `IGNORED_STRUCTLOG_ATTRIBUTES` exist for this reason.
-- **A warning raised while a config is being built goes through `warn_at_caller`.** No literal
-  `stacklevel=` reaches the user from a `__post_init__`: the depth is that config's MRO chain plus
-  the `__init__` `dataclasses` generates. Warnings raised outside config construction keep their
-  literal `stacklevel`: their target is the bootstrapper's caller, not the user.
+- **A warning raised while a config is built or an instrument is bootstrapped goes through
+  `warn_at_caller`.** No literal `stacklevel=` reaches the user on either path: from a
+  `__post_init__` the depth is that config's MRO chain plus the `__init__` `dataclasses` generates,
+  and from an instrument's `bootstrap()` it is one frame deeper whenever that instrument calls
+  `super().bootstrap()` first. `warn_at_caller` walks out to the first frame outside
+  `lite_bootstrap` instead, which on the bootstrap path is the user's `bootstrap()` call. Three
+  literal `stacklevel=` sites survive, all outside those two paths and all deliberate: the
+  dep-missing warning in `BaseBootstrapper._select_instruments` (`stacklevel=4`) and the
+  double-attach warning in `_attach_teardown_once` (`stacklevel=3`, one frame shallower because
+  the subclass `__init__` calls it directly rather than through `BaseBootstrapper.__init__`), both
+  a fixed depth below the user and scoped out by #202; and `helpers/fastapi_helpers.py`, which
+  warns while serving a request, with no user frame anywhere on the stack.
 - **Sentinels on a user's app get a `_lite_bootstrap_` prefix.** Set a direct attribute on the app
   object; never squat in a framework namespace like Starlette's `application.state`. Read it with
   `getattr(target, name, default)` (no SLF violation); write it with `# noqa: SLF001`.
