@@ -292,3 +292,37 @@ def test_http_protocol_does_not_emit_insecure_warning() -> None:
             opentelemetry_endpoint="http://remote-collector:4318/v1/traces",
             opentelemetry_exporter_protocol="http",
         )
+
+
+@pytest.mark.parametrize(
+    ("protocol", "endpoint", "flag_name"),
+    [
+        ("grpc", "localhost:4317", "is_otlp_grpc_exporter_installed"),
+        ("http", "http://collector:4318/v1/traces", "is_otlp_http_exporter_installed"),
+    ],
+)
+def test_missing_exporter_warning_points_at_the_caller_of_bootstrap(
+    protocol: typing.Literal["grpc", "http"], endpoint: str, flag_name: str
+) -> None:
+    """INVARIANT: the missing-exporter warning is attributed to the frame that called bootstrap().
+
+    The stacklevel is a literal, so it counts frames that only exist by convention: any helper
+    extracted out of bootstrap() moves the warning one frame deeper, onto lite_bootstrap's own
+    source, and nothing but this test notices. Both transports are pinned because each warns
+    from its own branch and a refactor can reshape one without the other.
+    """
+    instrument = OpenTelemetryInstrument(
+        bootstrap_config=OpenTelemetryConfig(opentelemetry_endpoint=endpoint, opentelemetry_exporter_protocol=protocol)
+    )
+    try:
+        with (
+            patch.object(import_checker, flag_name, False),
+            warnings.catch_warnings(record=True) as caught,
+        ):
+            warnings.simplefilter("always")
+            instrument.bootstrap()
+    finally:
+        instrument.teardown()
+
+    matching = [w for w in caught if issubclass(w.category, InstrumentDependencyMissingWarning)]
+    assert [w.filename for w in matching] == [__file__]
