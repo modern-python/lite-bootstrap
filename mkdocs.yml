@@ -52,9 +52,11 @@ theme:
         icon: material/brightness-4
         name: Switch to system preference
 
-# docs/adr/ is an internal decision record, not user documentation; it is not published.
+# docs/adr/ is an internal decision record and docs/agents/ is agent configuration; neither is user
+# documentation, so neither is published.
 exclude_docs: |
   /adr/
+  /agents/
 
 validation:
   omitted_files: warn
