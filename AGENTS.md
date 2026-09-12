@@ -32,6 +32,20 @@ description, and PyPI does not rewrite relative links, so a relative one 404s on
 An invariant is a test whose name is the claim, with a docstring opening `INVARIANT:` and a second
 paragraph naming **what breaks it** — design rationale, not a report of what this one test catches.
 
+## Agent skills
+
+### Issue tracker
+
+GitHub issues on `modern-python/lite-bootstrap`, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical roles, each label string equal to its name. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
 ## Code style
 
 Four rules that are not visible in the code that follows them:
