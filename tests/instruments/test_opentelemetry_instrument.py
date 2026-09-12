@@ -15,7 +15,7 @@ from lite_bootstrap.instruments.opentelemetry_instrument import (
     OpenTelemetryConfig,
     OpenTelemetryInstrument,
 )
-from tests.conftest import CustomInstrumentor, emulate_package_missing_with_module_reload
+from tests.conftest import CustomInstrumentor, emulate_package_missing_with_module_reload, warning_source_files
 
 
 def test_opentelemetry_instrument() -> None:
@@ -306,10 +306,12 @@ def test_missing_exporter_warning_points_at_the_caller_of_bootstrap(
 ) -> None:
     """INVARIANT: the missing-exporter warning is attributed to the frame that called bootstrap().
 
-    The stacklevel is a literal, so it counts frames that only exist by convention: any helper
-    extracted out of bootstrap() moves the warning one frame deeper, onto lite_bootstrap's own
-    source, and nothing but this test notices. Both transports are pinned because each warns
-    from its own branch and a refactor can reshape one without the other.
+    Replacing warn_at_caller with a literal stacklevel breaks it: the literal counts frames that
+    only exist by convention, so any helper extracted out of bootstrap() moves the warning one
+    frame deeper, onto lite_bootstrap's own source, and nothing but this test notices. Both
+    transports are pinned because each warns from its own branch and a refactor can reshape one
+    without the other. This covers the instrument called on its own; the bootstrapper path, where
+    the frame to skip past is lite_bootstrap's own, is pinned in tests/test_fastapi_bootstrap.py.
     """
     instrument = OpenTelemetryInstrument(
         bootstrap_config=OpenTelemetryConfig(opentelemetry_endpoint=endpoint, opentelemetry_exporter_protocol=protocol)
@@ -324,5 +326,4 @@ def test_missing_exporter_warning_points_at_the_caller_of_bootstrap(
     finally:
         instrument.teardown()
 
-    matching = [w for w in caught if issubclass(w.category, InstrumentDependencyMissingWarning)]
-    assert [w.filename for w in matching] == [__file__]
+    assert warning_source_files(caught, InstrumentDependencyMissingWarning) == [__file__]

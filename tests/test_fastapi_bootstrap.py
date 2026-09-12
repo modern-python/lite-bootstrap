@@ -1,6 +1,7 @@
 import dataclasses
 import logging
 import warnings
+from unittest.mock import patch
 
 import fastapi
 import pytest
@@ -8,10 +9,10 @@ import structlog
 from starlette import status
 from starlette.testclient import TestClient
 
-from lite_bootstrap import FastAPIBootstrapper, FastAPIConfig
-from lite_bootstrap.exceptions import ConfigurationError
+from lite_bootstrap import FastAPIBootstrapper, FastAPIConfig, import_checker
+from lite_bootstrap.exceptions import ConfigurationError, InstrumentDependencyMissingWarning
 from lite_bootstrap.types import UNSET
-from tests.conftest import CustomInstrumentor, SentryTestTransport, emulate_package_missing
+from tests.conftest import CustomInstrumentor, SentryTestTransport, emulate_package_missing, warning_source_files
 
 
 logger = structlog.getLogger(__name__)
@@ -189,3 +190,45 @@ def test_second_fastapi_bootstrapper_bootstrap_raises(fastapi_config: FastAPICon
         )
     finally:
         first.teardown()
+
+
+def test_swagger_warning_points_at_the_bootstrap_call_site(fastapi_config: FastAPIConfig) -> None:
+    """INVARIANT: a warning raised while an instrument bootstraps names the user's bootstrap() line.
+
+    FastAPISwaggerInstrument.bootstrap() is called straight from the loop in
+    BaseBootstrapper.bootstrap(), one frame shallower than an instrument that calls
+    super().bootstrap() first. A literal stacklevel pins one of those two depths and misses the
+    other, naming lite_bootstrap's own source instead. This test and the OpenTelemetry one below
+    are a pair: each covers one depth, and either passing alone proves nothing.
+    """
+    new_config = dataclasses.replace(fastapi_config, application=fastapi.FastAPI(docs_url="/custom-docs/"))
+    bootstrapper = FastAPIBootstrapper(bootstrap_config=new_config)
+    try:
+        with pytest.warns(UserWarning, match="swagger_path differs from docs_url") as caught:
+            bootstrapper.bootstrap()
+    finally:
+        bootstrapper.teardown()
+
+    assert warning_source_files(caught, UserWarning) == [__file__]
+
+
+def test_missing_exporter_warning_points_at_the_bootstrap_call_site(fastapi_config: FastAPIConfig) -> None:
+    """INVARIANT: the deeper super().bootstrap() shape names the user's bootstrap() line as well.
+
+    FastAPIOpenTelemetryInstrument.bootstrap() calls super().bootstrap() before the warning is
+    raised, so the user's frame sits one deeper than for the swagger instrument above. Any
+    instrument that grows or loses a super() call shifts that depth again; only a rule that finds
+    the first frame outside lite_bootstrap survives it.
+    """
+    new_config = dataclasses.replace(fastapi_config, opentelemetry_endpoint="localhost:4317")
+    bootstrapper = FastAPIBootstrapper(bootstrap_config=new_config)
+    try:
+        with (
+            patch.object(import_checker, "is_otlp_grpc_exporter_installed", False),
+            pytest.warns(InstrumentDependencyMissingWarning) as caught,
+        ):
+            bootstrapper.bootstrap()
+    finally:
+        bootstrapper.teardown()
+
+    assert warning_source_files(caught, InstrumentDependencyMissingWarning) == [__file__]

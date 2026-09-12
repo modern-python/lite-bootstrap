@@ -3,7 +3,6 @@ import logging
 import os
 import typing
 import urllib.parse
-import warnings
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.exceptions import InstrumentDependencyMissingWarning, collect_teardown_errors
@@ -195,14 +194,12 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
         Only call this once opentelemetry_endpoint is set: both warnings claim that it is.
         """
         config = self.bootstrap_config
-        # stacklevel counts this frame as well as bootstrap()'s, to land on bootstrap()'s caller.
         if config.opentelemetry_exporter_protocol == "grpc":
             if not import_checker.is_otlp_grpc_exporter_installed:
-                warnings.warn(
+                warn_at_caller(
                     "opentelemetry_endpoint is set but the gRPC OTLP exporter is not installed; "
                     "spans will not be exported. Install lite-bootstrap[otl].",
                     category=InstrumentDependencyMissingWarning,
-                    stacklevel=3,
                 )
                 return None
             return OTLPGrpcSpanExporter(
@@ -210,11 +207,10 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
                 insecure=config.opentelemetry_insecure,
             )
         if not import_checker.is_otlp_http_exporter_installed:
-            warnings.warn(
+            warn_at_caller(
                 "opentelemetry_endpoint is set but the HTTP OTLP exporter is not installed; "
                 "spans will not be exported. Install lite-bootstrap[otl-http].",
                 category=InstrumentDependencyMissingWarning,
-                stacklevel=3,
             )
             return None
         return OTLPHttpSpanExporter(endpoint=config.opentelemetry_endpoint)
