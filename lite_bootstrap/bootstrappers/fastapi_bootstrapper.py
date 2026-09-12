@@ -137,15 +137,16 @@ class FastAPIPrometheusInstrument(PrometheusInstrument):
         return import_checker.is_prometheus_fastapi_instrumentator_installed
 
     def bootstrap(self) -> None:
-        application = self.bootstrap_config.app
-        Instrumentator(**self.bootstrap_config.prometheus_instrumentator_params).instrument(
+        config = self.bootstrap_config
+        application = config.app
+        Instrumentator(**config.prometheus_instrumentator_params).instrument(
             application,
-            **self.bootstrap_config.prometheus_instrument_params,
+            **config.prometheus_instrument_params,
         ).expose(
             application,
-            endpoint=self.bootstrap_config.prometheus_metrics_path,
-            include_in_schema=self.bootstrap_config.prometheus_metrics_include_in_schema,
-            **self.bootstrap_config.prometheus_expose_params,
+            endpoint=config.prometheus_metrics_path,
+            include_in_schema=config.prometheus_metrics_include_in_schema,
+            **config.prometheus_expose_params,
         )
 
 
@@ -154,14 +155,15 @@ class FastAPISwaggerInstrument(SwaggerInstrument):
     bootstrap_config: FastAPIConfig
 
     def bootstrap(self) -> None:
-        application = self.bootstrap_config.app
-        if self.bootstrap_config.swagger_path != application.docs_url:
+        config = self.bootstrap_config
+        application = config.app
+        if config.swagger_path != application.docs_url:
             warnings.warn(
                 f"swagger_path differs from docs_url, {application.docs_url} will be used for docs path",
                 stacklevel=2,
             )
-        if self.bootstrap_config.swagger_offline_docs:
-            enable_offline_docs(application, static_path=self.bootstrap_config.swagger_static_path)
+        if config.swagger_offline_docs:
+            enable_offline_docs(application, static_path=config.swagger_static_path)
 
 
 class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI"]):

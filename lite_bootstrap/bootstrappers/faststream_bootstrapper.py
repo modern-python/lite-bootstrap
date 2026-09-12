@@ -85,6 +85,8 @@ class FastStreamHealthChecksInstrument(HealthChecksInstrument):
     bootstrap_config: FastStreamConfig
 
     def bootstrap(self) -> None:
+        config = self.bootstrap_config
+
         @handle_get
         async def check_health(_: object) -> "AsgiResponse":
             return (
@@ -97,23 +99,17 @@ class FastStreamHealthChecksInstrument(HealthChecksInstrument):
                 else AsgiResponse(b"Service is unhealthy", 500, headers={"content-type": "text/plain"})
             )
 
-        if (
-            self.bootstrap_config.opentelemetry_generate_health_check_spans
-            and import_checker.is_opentelemetry_installed
-        ):
-            check_health = tracer.start_as_current_span(f"GET {self.bootstrap_config.health_checks_path}")(
-                check_health,
-            )
+        if config.opentelemetry_generate_health_check_spans and import_checker.is_opentelemetry_installed:
+            check_health = tracer.start_as_current_span(f"GET {config.health_checks_path}")(check_health)
 
-        self.bootstrap_config.application.mount(self.bootstrap_config.health_checks_path, check_health)
+        config.application.mount(config.health_checks_path, check_health)
 
     async def _define_health_status(self) -> bool:
-        if not self.bootstrap_config.application or not self.bootstrap_config.application.broker:
+        config = self.bootstrap_config
+        if not config.application or not config.application.broker:
             return False
 
-        return await self.bootstrap_config.application.broker.ping(
-            timeout=self.bootstrap_config.faststream_health_check_broker_timeout,
-        )
+        return await config.application.broker.ping(timeout=config.faststream_health_check_broker_timeout)
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -154,9 +150,10 @@ class FastStreamOpenTelemetryInstrument(OpenTelemetryInstrument):
         return super().is_configured(bootstrap_config) and bool(bootstrap_config.opentelemetry_middleware_cls)
 
     def bootstrap(self) -> None:
-        if self.bootstrap_config.opentelemetry_middleware_cls and self.bootstrap_config.application.broker:
-            self.bootstrap_config.application.broker.add_middleware(
-                self.bootstrap_config.opentelemetry_middleware_cls(tracer_provider=get_tracer_provider())
+        config = self.bootstrap_config
+        if config.opentelemetry_middleware_cls and config.application.broker:
+            config.application.broker.add_middleware(
+                config.opentelemetry_middleware_cls(tracer_provider=get_tracer_provider())
             )
 
 
@@ -184,13 +181,12 @@ class FastStreamPrometheusInstrument(PrometheusInstrument):
         return import_checker.is_prometheus_client_installed
 
     def bootstrap(self) -> None:
-        self.bootstrap_config.application.mount(
-            self.bootstrap_config.prometheus_metrics_path, prometheus_client.make_asgi_app(self.collector_registry)
+        config = self.bootstrap_config
+        config.application.mount(
+            config.prometheus_metrics_path, prometheus_client.make_asgi_app(self.collector_registry)
         )
-        if self.bootstrap_config.prometheus_middleware_cls and self.bootstrap_config.application.broker:
-            self.bootstrap_config.application.broker.add_middleware(
-                self.bootstrap_config.prometheus_middleware_cls(registry=self.collector_registry)
-            )
+        if config.prometheus_middleware_cls and config.application.broker:
+            config.application.broker.add_middleware(config.prometheus_middleware_cls(registry=self.collector_registry))
 
 
 class FastStreamBootstrapper(BaseBootstrapper["AsgiFastStream"]):

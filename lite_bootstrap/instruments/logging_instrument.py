@@ -4,7 +4,7 @@ import sys
 import typing
 
 from lite_bootstrap import import_checker
-from lite_bootstrap.exceptions import TeardownError
+from lite_bootstrap.exceptions import collect_teardown_errors
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 from lite_bootstrap.instruments.logging_factory import (
     AddressProtocol,
@@ -128,11 +128,12 @@ class LoggingInstrument(BaseInstrument[LoggingConfig]):
     def memory_logger_factory(self) -> "MemoryLoggerFactory":
         cached: MemoryLoggerFactory | None = self._logger_factory
         if cached is None:
+            config = self.bootstrap_config
             cached = MemoryLoggerFactory(
                 config=_MemoryLoggerFactoryConfig(
-                    logging_buffer_capacity=self.bootstrap_config.logging_buffer_capacity,
-                    logging_flush_level=self.bootstrap_config.logging_flush_level,
-                    logging_log_level=self.bootstrap_config.logging_log_level,
+                    logging_buffer_capacity=config.logging_buffer_capacity,
+                    logging_flush_level=config.logging_flush_level,
+                    logging_log_level=config.logging_log_level,
                 ),
             )
             self._logger_factory = cached
@@ -199,23 +200,18 @@ class LoggingInstrument(BaseInstrument[LoggingConfig]):
         """
         structlog.reset_defaults()
         root_logger = logging.getLogger()
-        errors: list[tuple[str, BaseException]] = []
-        try:
-            for h in root_logger.handlers[:]:
-                root_logger.removeHandler(h)
-                try:
-                    h.close()
-                except Exception as e:  # noqa: BLE001
-                    errors.append((type(h).__name__, e))
-            root_logger.setLevel(logging.WARNING)
-        finally:
-            self._detach_record_filters()
-            if self._logger_factory is not None:
-                try:
-                    self._logger_factory.close_handlers()
-                except Exception as e:  # noqa: BLE001
-                    errors.append(("MemoryLoggerFactory", e))
-                finally:
-                    self._logger_factory = None
-        if errors:
-            raise TeardownError(errors) from errors[0][1]
+        with collect_teardown_errors() as teardown_errors:
+            try:
+                for h in root_logger.handlers[:]:
+                    root_logger.removeHandler(h)
+                    with teardown_errors.capture(type(h).__name__):
+                        h.close()
+                root_logger.setLevel(logging.WARNING)
+            finally:
+                self._detach_record_filters()
+                if self._logger_factory is not None:
+                    try:
+                        with teardown_errors.capture("MemoryLoggerFactory"):
+                            self._logger_factory.close_handlers()
+                    finally:
+                        self._logger_factory = None

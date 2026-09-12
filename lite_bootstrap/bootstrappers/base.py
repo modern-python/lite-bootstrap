@@ -7,7 +7,7 @@ from lite_bootstrap.exceptions import (
     BootstrapperNotReadyError,
     ConfigurationError,
     InstrumentDependencyMissingWarning,
-    TeardownError,
+    collect_teardown_errors,
 )
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 from lite_bootstrap.types import ApplicationT
@@ -30,6 +30,52 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
     # attached its teardown to the framework's shutdown lifecycle. Prevents a second
     # bootstrapper on the same app from re-attaching. Its accepted limits: ADR-0003.
     _TEARDOWN_MARKER: typing.ClassVar[str] = "_lite_bootstrap_teardown_attached"
+
+    def __init__(self, bootstrap_config: BaseConfig) -> None:
+        self.is_bootstrapped = False
+        # Set when another bootstrapper already owns this application; bootstrap() then refuses.
+        self._attach_skipped = False
+        if not self.is_ready():
+            msg = f"{type(self).__name__} is not ready: {self.not_ready_message}"
+            raise BootstrapperNotReadyError(msg)
+
+        self.bootstrap_config = bootstrap_config
+        self.instruments = []
+        self.skipped_instruments = []
+        self._select_instruments()
+
+        if logger.isEnabledFor(logging.INFO):
+            logger.info(self.build_summary())
+
+    def _select_instruments(self) -> None:
+        """Instantiate every configured instrument type, recording the two kinds of skip.
+
+        Called by ``__init__`` once ``instruments`` and ``skipped_instruments`` exist; it fills
+        both. The signals differ on purpose — see "Skipped" in CONTEXT.md.
+        """
+        for instrument_type in self.instruments_types:
+            # Config-level skip first: silent (no warning). Runs before instantiation so a
+            # missing-optional-dep doesn't fail in a dataclass default_factory before we
+            # can decide the user opted out.
+            if not instrument_type.is_configured(self.bootstrap_config):
+                self.skipped_instruments.append((instrument_type, instrument_type.not_configured_reason))
+                continue
+            # Dep-missing for a CONFIGURED instrument is a genuine deployment surprise.
+            if not instrument_type.dependencies_installed():
+                # stacklevel counts this frame, __init__'s and the subclass __init__'s, to land
+                # on the line that constructed the bootstrapper.
+                warnings.warn(
+                    instrument_type.missing_dependency_message,
+                    category=InstrumentDependencyMissingWarning,
+                    stacklevel=4,
+                )
+                logger.warning(
+                    "instrument %s skipped: %s",
+                    instrument_type.__name__,
+                    instrument_type.missing_dependency_message,
+                )
+                continue
+            self.instruments.append(instrument_type(bootstrap_config=self.bootstrap_config))
 
     def _attach_teardown_once(self, target: object, attach: typing.Callable[[], object]) -> None:
         """Run ``attach`` (which wires ``teardown`` into the framework's shutdown) once per target.
@@ -70,42 +116,6 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
             lines.append("    (none)")
         return "\n".join(lines)
 
-    def __init__(self, bootstrap_config: BaseConfig) -> None:
-        self.is_bootstrapped = False
-        # Set when another bootstrapper already owns this application; bootstrap() then refuses.
-        self._attach_skipped = False
-        if not self.is_ready():
-            msg = f"{type(self).__name__} is not ready: {self.not_ready_message}"
-            raise BootstrapperNotReadyError(msg)
-
-        self.bootstrap_config = bootstrap_config
-        self.instruments = []
-        self.skipped_instruments = []
-        for instrument_type in self.instruments_types:
-            # Config-level skip first: silent (no warning). Runs before instantiation so a
-            # missing-optional-dep doesn't fail in a dataclass default_factory before we
-            # can decide the user opted out.
-            if not instrument_type.is_configured(self.bootstrap_config):
-                self.skipped_instruments.append((instrument_type, instrument_type.not_configured_reason))
-                continue
-            # Dep-missing for a CONFIGURED instrument is a genuine deployment surprise.
-            if not instrument_type.dependencies_installed():
-                warnings.warn(
-                    instrument_type.missing_dependency_message,
-                    category=InstrumentDependencyMissingWarning,
-                    stacklevel=3,
-                )
-                logger.warning(
-                    "instrument %s skipped: %s",
-                    instrument_type.__name__,
-                    instrument_type.missing_dependency_message,
-                )
-                continue
-            self.instruments.append(instrument_type(bootstrap_config=self.bootstrap_config))
-
-        if logger.isEnabledFor(logging.INFO):
-            logger.info(self.build_summary())
-
     @abc.abstractmethod
     def _prepare_application(self) -> ApplicationT: ...
 
@@ -131,13 +141,7 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
         if not self.is_bootstrapped:
             return
         self.is_bootstrapped = False
-        errors: list[tuple[str, BaseException]] = []
-        for one_instrument in reversed(self.instruments):
-            try:
-                one_instrument.teardown()
-            except Exception as e:  # noqa: BLE001, PERF203
-                name = type(one_instrument).__name__
-                logger.warning("Error tearing down %s: %s", name, e)
-                errors.append((name, e))
-        if errors:
-            raise TeardownError(errors) from errors[0][1]
+        with collect_teardown_errors(logger) as teardown_errors:
+            for one_instrument in reversed(self.instruments):
+                with teardown_errors.capture(type(one_instrument).__name__):
+                    one_instrument.teardown()

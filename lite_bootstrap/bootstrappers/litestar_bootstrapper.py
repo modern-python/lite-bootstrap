@@ -190,11 +190,12 @@ class LitestarLoggingInstrument(LoggingInstrument):
 
     def _build_logging_middleware_excluded_paths(self) -> list[str]:
         """Regex-escaped path prefixes for infrastructure routes not worth an access log line."""
+        config = self.bootstrap_config
         candidate_paths: typing.Final = (
-            self.bootstrap_config.swagger_path,
-            self.bootstrap_config.swagger_static_path if self.bootstrap_config.swagger_offline_docs else "",
-            self.bootstrap_config.health_checks_path,
-            self.bootstrap_config.prometheus_metrics_path,
+            config.swagger_path,
+            config.swagger_static_path if config.swagger_offline_docs else "",
+            config.health_checks_path,
+            config.prometheus_metrics_path,
         )
         excluded_paths: list[str] = []
         for candidate_path in candidate_paths:
@@ -262,23 +263,22 @@ class LitestarPrometheusInstrument(PrometheusInstrument):
         return import_checker.is_prometheus_client_installed
 
     def bootstrap(self) -> None:
+        config = self.bootstrap_config
+
         class LitestarPrometheusController(PrometheusController):
-            path = self.bootstrap_config.prometheus_metrics_path
-            include_in_schema = self.bootstrap_config.prometheus_metrics_include_in_schema
+            path = config.prometheus_metrics_path
+            include_in_schema = config.prometheus_metrics_include_in_schema
             openmetrics_format = True
 
         # Merged so prometheus_additional_params can override group_path without a kwarg collision.
         prometheus_params: dict[str, typing.Any] = {
-            "group_path": self.bootstrap_config.prometheus_group_path,
-            **self.bootstrap_config.prometheus_additional_params,
+            "group_path": config.prometheus_group_path,
+            **config.prometheus_additional_params,
         }
-        litestar_prometheus_config = PrometheusConfig(
-            app_name=self.bootstrap_config.service_name,
-            **prometheus_params,
-        )
+        litestar_prometheus_config = PrometheusConfig(app_name=config.service_name, **prometheus_params)
 
-        self.bootstrap_config.application_config.route_handlers.append(LitestarPrometheusController)
-        self.bootstrap_config.application_config.middleware.append(litestar_prometheus_config.middleware)
+        config.application_config.route_handlers.append(LitestarPrometheusController)
+        config.application_config.middleware.append(litestar_prometheus_config.middleware)
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -291,33 +291,30 @@ class LitestarSwaggerInstrument(SwaggerInstrument):
         return bool(bootstrap_config.swagger_path) and is_valid_path(bootstrap_config.swagger_path)
 
     def bootstrap(self) -> None:
+        config = self.bootstrap_config
         render_plugins: typing.Final = (
             (
                 SwaggerRenderPlugin(
-                    js_url=f"{self.bootstrap_config.swagger_static_path}/swagger-ui-bundle.js",
-                    css_url=f"{self.bootstrap_config.swagger_static_path}/swagger-ui.css",
-                    standalone_preset_js_url=(
-                        f"{self.bootstrap_config.swagger_static_path}/swagger-ui-standalone-preset.js"
-                    ),
+                    js_url=f"{config.swagger_static_path}/swagger-ui-bundle.js",
+                    css_url=f"{config.swagger_static_path}/swagger-ui.css",
+                    standalone_preset_js_url=f"{config.swagger_static_path}/swagger-ui-standalone-preset.js",
                 ),
             )
-            if self.bootstrap_config.swagger_offline_docs
+            if config.swagger_offline_docs
             else (SwaggerRenderPlugin(),)
         )
-        self.bootstrap_config.application_config.openapi_config = OpenAPIConfig(
-            path=self.bootstrap_config.swagger_path,
-            title=self.bootstrap_config.service_name,
-            version=self.bootstrap_config.service_version,
-            description=self.bootstrap_config.service_description,
+        config.application_config.openapi_config = OpenAPIConfig(
+            path=config.swagger_path,
+            title=config.service_name,
+            version=config.service_version,
+            description=config.service_description,
             render_plugins=render_plugins,
-            **self.bootstrap_config.swagger_extra_params,
+            **config.swagger_extra_params,
         )
-        if self.bootstrap_config.swagger_offline_docs:
+        if config.swagger_offline_docs:
             static_dir_path = pathlib.Path(__file__).parent.parent / "static/litestar_docs"
-            self.bootstrap_config.application_config.route_handlers.append(
-                create_static_files_router(
-                    path=self.bootstrap_config.swagger_static_path, directories=[static_dir_path]
-                )
+            config.application_config.route_handlers.append(
+                create_static_files_router(path=config.swagger_static_path, directories=[static_dir_path])
             )
 
 
