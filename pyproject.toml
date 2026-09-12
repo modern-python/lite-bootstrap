@@ -108,7 +108,9 @@ litestar-all = [
     "lite-bootstrap[litestar-sentry,litestar-otl,litestar-logging,litestar-metrics,pyroscope]",
 ]
 faststream = [
-    "faststream",
+    # >=0.6 for faststream._internal.logger.params_storage.ManualLoggerStorage and for
+    # broker.config.logger.params_storage (FastStreamLoggingInstrument swaps and restores it).
+    "faststream>=0.6",
 ]
 faststream-sentry = [
     "lite-bootstrap[faststream,sentry]",
@@ -128,7 +130,10 @@ faststream-all = [
     "lite-bootstrap[sentry,otl,logging,faststream,faststream-metrics,pyroscope]"
 ]
 fastmcp = [
-    "fastmcp",
+    # >=3.0 for fastmcp.server.providers.Provider and FastMCP.add_provider()
+    # (FastMcpBootstrapper registers its teardown through them --
+    # docs/adr/0001-fastmcp-teardown-via-provider-lifespan.md).
+    "fastmcp>=3.0",
 ]
 fastmcp-metrics = [
     "lite-bootstrap[fastmcp]",
