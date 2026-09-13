@@ -47,16 +47,21 @@ pyroscope = [
     "pyroscope-io",
 ]
 otl = [
-    "opentelemetry-api",
-    "opentelemetry-sdk",
-    "opentelemetry-exporter-otlp-proto-grpc",
-    "opentelemetry-instrumentation",
+    # One release train: api/sdk/exporters 1.28 pair with every instrumentation package at
+    # 0.49b0. 0.49b0 is the first that does not import `pkg_resources`, which setuptools no
+    # longer ships, so anything older fails at import on a fresh install. The exporters carry
+    # the floor separately: nothing else constrains them, and left bare they resolve 23 minors
+    # behind the api they must match.
+    "opentelemetry-api>=1.28",
+    "opentelemetry-sdk>=1.28",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.28",
+    "opentelemetry-instrumentation>=0.49b0",
 ]
 otl-http = [
-    "opentelemetry-api",
-    "opentelemetry-sdk",
-    "opentelemetry-exporter-otlp-proto-http",
-    "opentelemetry-instrumentation",
+    "opentelemetry-api>=1.28",
+    "opentelemetry-sdk>=1.28",
+    "opentelemetry-exporter-otlp-proto-http>=1.28",
+    "opentelemetry-instrumentation>=0.49b0",
 ]
 logging = [
     "structlog",
@@ -72,7 +77,7 @@ fastapi-sentry = [
 ]
 fastapi-otl = [
     "lite-bootstrap[fastapi,otl]",
-    "opentelemetry-instrumentation-fastapi",
+    "opentelemetry-instrumentation-fastapi>=0.49b0",
 ]
 fastapi-logging = [
     "lite-bootstrap[fastapi,logging]",
@@ -97,7 +102,9 @@ litestar-sentry = [
 ]
 litestar-otl = [
     "lite-bootstrap[litestar,otl]",
-    "opentelemetry-instrumentation-asgi>=0.46b0",
+    # Raised from 0.46b0 with the rest of the train: every instrumentation package pins
+    # `opentelemetry-instrumentation` to its own exact version, so they move together.
+    "opentelemetry-instrumentation-asgi>=0.49b0",
 ]
 litestar-logging = [
     "lite-bootstrap[litestar,logging]",
