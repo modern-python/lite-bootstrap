@@ -9,8 +9,8 @@ kinds of **skip**, are defined there and are load-bearing throughout.
 
 ## Commands
 
-`just` (task runner) and `uv` (package manager). The [`justfile`](justfile) is the source of truth;
-every non-obvious recipe carries its intent as a comment.
+`just` (task runner) and `uv` (package manager). The [`justfile`](justfile) is the source of truth —
+`just --list`, or read it. Every non-obvious recipe carries its intent as a comment.
 
 ## Architecture
 
@@ -20,14 +20,9 @@ concern, `bootstrappers/<framework>_bootstrapper.py` owns one framework's bindin
 
 ## Workflow
 
-Real work **not scheduled** becomes a GitHub issue.
-
-Every link in `README.md` is absolute — `https://github.com/modern-python/<repo>/blob/main/<path>`,
-or `.../tree/main/<path>` for a directory. `README.md` is also the PyPI long description, and PyPI
-does not rewrite relative links, so a relative one 404s on the package page.
-
-An invariant is a test whose name is the claim, with a docstring opening `INVARIANT:` and a second
-paragraph naming **what breaks it** — design rationale, not a report of what this one test catches.
+Every link in `README.md` must be absolute: `https://github.com/modern-python/<repo>/blob/main/<path>`,
+or `.../tree/main/<path>` for a directory. Never a relative path: `README.md` is also the PyPI long
+description, and PyPI does not rewrite relative links, so a relative one 404s on the package page.
 
 ## Agent docs
 
@@ -60,7 +55,6 @@ Pyright reports as errors — conditional imports for optional dependencies, cov
 `bootstrap_config` narrowing on instrument subclasses, `TypedDict` optional-key access guarded by
 `.get()` — so adding it yields noise, not findings.
 
-Two suppression spellings recur and are both correct as written: `# ty: ignore[invalid-method-override]`
-on a framework subclass's `is_configured` classmethod, which narrows its parameter type where `ty`
-enforces invariance, and `# ty: ignore[unresolved-attribute]` on the optional OTel/pyroscope symbols
-whose guard `ty` does not follow.
+Two suppressions recur and are both correct: `invalid-method-override` on a framework subclass's
+`is_configured` classmethod, which narrows its parameter type where `ty` enforces invariance, and
+`unresolved-attribute` on the optional OTel/pyroscope symbols whose guard `ty` does not follow.
