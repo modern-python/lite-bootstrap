@@ -106,8 +106,13 @@ fastapi-all = [
 litestar = [
     # >=2.13 for AppConfig.request_max_body_size (LitestarBootstrapper._apply_config reads it);
     # >=2.15 for litestar.middleware.ASGIMiddleware (LitestarOpenTelemetryInstrumentationMiddleware
-    # subclasses it) -- the higher floor wins.
-    "litestar>=2.15",
+    # subclasses it); >=2.19 because litestar/concurrency.py imports sniffio and only 2.19 declares
+    # it -- until then it arrived via anyio, which dropped the dependency in 4.14. The highest wins.
+    "litestar>=2.19",
+    # litestar declares `typing-extensions` bare while importing typing_extensions.ReadOnly (4.9),
+    # so the floor has to come from here. >=4.12 rather than 4.9: 4.9 and 4.11 assign
+    # `typing.ParamSpec.__default__`, which Python 3.13 made read-only.
+    "typing-extensions>=4.12",
 ]
 litestar-sentry = [
     "lite-bootstrap[litestar,sentry]",
@@ -132,6 +137,15 @@ faststream = [
     # >=0.6 for faststream._internal.logger.params_storage.ManualLoggerStorage and for
     # broker.config.logger.params_storage (FastStreamLoggingInstrument swaps and restores it).
     "faststream>=0.6",
+    # Not imported here: faststream pulls pydantic through fast-depends[pydantic], which allows it
+    # back to 1.7.4, and pydantic-core ships no cp314 wheel before pydantic 2.12. Without this the
+    # lowest declared combination has no installable pydantic on 3.14. Marked, because 2.7.4 is fine
+    # everywhere else and there is no reason to raise the floor for older interpreters.
+    "pydantic>=2.12; python_version >= '3.14'",
+    # pydantic requires typing-extensions>=4.12.2 on 3.13+; without this the lowest declared
+    # combination pins typing-extensions at 4.8 and drags pydantic back to a build that has no
+    # cp313 wheel either.
+    "typing-extensions>=4.12.2",
 ]
 faststream-sentry = [
     "lite-bootstrap[faststream,sentry]",
