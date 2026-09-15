@@ -38,13 +38,20 @@ Changelog = "https://github.com/modern-python/lite-bootstrap/releases"
 
 [project.optional-dependencies]
 orjson = [
-    "orjson",
+    # No API forces this floor: only `orjson.dumps(...).decode()` and `orjson.loads`, both original.
+    # >=3.11 is the first release with cp314 wheels, and orjson builds from source only with a Rust
+    # toolchain, so anything older is uninstallable on the newest supported interpreter.
+    "orjson>=3.11",
 ]
 sentry = [
-    "sentry-sdk",
+    # >=1.31 for the `max_value_length` init option; >=2.1 for sentry_sdk.set_tags (plural,
+    # SentryInstrument.bootstrap) -- the higher floor wins.
+    "sentry-sdk>=2.1",
 ]
 pyroscope = [
-    "pyroscope-io",
+    # >=0.7.2 for pyroscope.shutdown() (PyroscopeInstrument.teardown); 0.7.1 and below carry
+    # configure() without it, so teardown raises rather than failing at import.
+    "pyroscope-io>=0.7.2",
 ]
 otl = [
     # One release train: api/sdk/exporters 1.28 pair with every instrumentation package at
@@ -64,7 +71,10 @@ otl-http = [
     "opentelemetry-instrumentation>=0.49b0",
 ]
 logging = [
-    "structlog",
+    # >=21.3 for structlog.stdlib.ProcessorFormatter.remove_processors_meta (LoggingInstrument's
+    # renderer chain). The library reads structlog.typing only under TYPE_CHECKING; the test suite
+    # imports it for real and needs 22.2, which is declared in [dependency-groups] dev instead.
+    "structlog>=21.3",
 ]
 free-all = [
     "lite-bootstrap[sentry,otl,logging,pyroscope]",
@@ -161,6 +171,9 @@ dev = [
     "pytest-asyncio",
     "httpx2",  # for test client
     "redis>=5.2.1",
+    # conftest imports structlog.typing at runtime, which the library does not. The suite's
+    # floor is higher than the one the `logging` extra publishes; this is where it belongs.
+    "structlog>=22.2",
 ]
 lint = [
     "ty",
