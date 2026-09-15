@@ -16,10 +16,11 @@ gh label create "$LABEL" \
 existing=$(gh issue list --label "$LABEL" --state open --json number --jq '.[0].number // empty')
 
 if [ -z "$existing" ]; then
-  body=$(printf '%s\n\n%s\n\n%s\n\n%s' \
+  body=$(printf '%s\n\n%s\n\n%s\n\n%s\n\n%s' \
     "The weekly scheduled dependency check failed." \
     "First failing run: ${RUN_URL}" \
-    "Likely cause: a transitive dev or lint dependency (ruff, ty, eof-fixer, pytest, typing-extensions) released a breaking change. Reproduce locally with \`just install\` then \`just lint\` and \`just test\`." \
+    "Likely cause, if a lint or pytest job failed: a dev or lint dependency (ruff, ty, eof-fixer, pytest, typing-extensions) released a breaking change. Reproduce locally with \`just install\` then \`just lint\` and \`just test\`." \
+    "Likely cause, if a lowest-direct job failed: a declared floor in \`pyproject.toml\` no longer installs or bootstraps, usually because an upstream package changed metadata under it. Reproduce with \`uv pip install --resolution lowest-direct '.[<extras>]'\` then \`python scripts/floor_smoke.py <target>\`, reading both off the failing job's matrix." \
     "Close this issue once fixed. The next scheduled failure will open a fresh issue.")
   gh issue create --title "$TITLE" --label "$LABEL" --body "$body"
 else

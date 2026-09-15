@@ -11,6 +11,8 @@ concurrency:
 jobs:
   checks:
     uses: ./.github/workflows/_checks.yml
+    with:
+      lowest-direct: true
 
   report-failure:
     needs: checks

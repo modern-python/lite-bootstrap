@@ -1,6 +1,15 @@
 name: checks
 on:
-  workflow_call: {}
+  workflow_call:
+    inputs:
+      lowest-direct:
+        description: >-
+          Run the declared dependency floors. Off for PRs: the job resolves direct dependencies at
+          their floor and transitives at their newest, so a release published upstream today can
+          turn it red for reasons no PR here caused. scheduled.yml turns it on, where that failure
+          opens a tracking issue instead of blocking a merge.
+        type: boolean
+        default: false
 
 jobs:
   lint:
@@ -121,3 +130,38 @@ jobs:
           done
           if [ -n "$failed" ]; then echo "::error::extras failed isolated install+import:$failed"; exit 1; fi
           echo "all extras install and import in isolation"
+
+  lowest-direct:
+    # Every other job resolves newest, so a declared floor is a claim nothing checks. This one
+    # pins each direct dependency to the floor pyproject.toml declares and bootstraps against it.
+    # Per framework rather than all-extras at once: a floor declared in one extra pulls the shared
+    # stack up for the others, so a combined resolution tests a set no user installs.
+    if: inputs.lowest-direct
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        target: [free, fastapi, litestar, faststream, fastmcp]
+        # These `include` entries name an existing `target`, so each adds `extras` to that
+        # target's five combinations rather than creating a job of its own. `free` carries
+        # orjson because it belongs to no *-all extra and its floor is a wheel-availability
+        # one, which only an interpreter matrix can check.
+        include:
+          - {target: free, extras: "free-all,orjson"}
+          - {target: fastapi, extras: "fastapi-all"}
+          - {target: litestar, extras: "litestar-all"}
+          - {target: faststream, extras: "faststream-all"}
+          - {target: fastmcp, extras: "fastmcp-all"}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: "**/pyproject.toml"
+      - run: uv python install ${{ matrix.python-version }}
+      - run: uv venv --python ${{ matrix.python-version }}
+      - name: Install at the declared floors
+        run: uv pip install --resolution lowest-direct ".[${{ matrix.extras }}]"
+      - name: Bootstrap at the floors
+        run: .venv/bin/python scripts/floor_smoke.py ${{ matrix.target }}
