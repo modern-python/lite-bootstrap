@@ -50,8 +50,10 @@ sentry = [
 ]
 pyroscope = [
     # >=0.7.2 for pyroscope.shutdown() (PyroscopeInstrument.teardown); 0.7.1 and below carry
-    # configure() without it, so teardown raises rather than failing at import.
-    "pyroscope-io>=0.7.2",
+    # configure() without it, so teardown raises rather than failing at import. >=1.0.1 because
+    # add_thread_tag took (thread_id, key, value) until then and PyroscopeSpanProcessor calls it
+    # with (key, value) -- reached only when a span starts, so import and bootstrap both look fine.
+    "pyroscope-io>=1.0.1",
 ]
 otl = [
     # One release train: api/sdk/exporters 1.28 pair with every instrumentation package at
@@ -125,6 +127,10 @@ litestar-otl = [
 ]
 litestar-logging = [
     "lite-bootstrap[litestar,logging]",
+    # litestar's StructlogPlugin builds a stdlib logging config whose 'standard' formatter
+    # structlog cannot supply before 23.2, so LitestarBootstrapper raises ValueError during
+    # bootstrap. Higher than the 21.3 the `logging` extra needs on its own.
+    "structlog>=23.2",
 ]
 litestar-metrics = [
     "lite-bootstrap[litestar]",
