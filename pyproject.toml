@@ -39,9 +39,11 @@ Changelog = "https://github.com/modern-python/lite-bootstrap/releases"
 [project.optional-dependencies]
 orjson = [
     # No API forces this floor: only `orjson.dumps(...).decode()` and `orjson.loads`, both original.
-    # >=3.11 is the first release with cp314 wheels, and orjson builds from source only with a Rust
-    # toolchain, so anything older is uninstallable on the newest supported interpreter.
-    "orjson>=3.11",
+    # >=3.11.1 is the first release with cp314 wheels, and orjson builds from source only with a
+    # Rust toolchain (a nightly one, on 3.14), so anything older is uninstallable on the newest
+    # supported interpreter. 3.11.0 ships none: a machine with cargo installed can still build it,
+    # which is how #218 came to declare >=3.11.
+    "orjson>=3.11.1",
 ]
 sentry = [
     # >=1.31 for the `max_value_length` init option; >=2.1 for sentry_sdk.set_tags (plural,
