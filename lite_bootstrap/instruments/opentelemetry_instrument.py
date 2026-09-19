@@ -12,6 +12,7 @@ from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 
 if typing.TYPE_CHECKING:
     from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
+    from opentelemetry.sdk.trace.sampling import Sampler
 
 if import_checker.is_opentelemetry_sdk_installed:
     from opentelemetry.context import Context
@@ -69,6 +70,9 @@ class OpenTelemetryConfig(OpenTelemetryServiceFieldsConfig):
         default_factory=list
     )
     opentelemetry_log_traces: bool = False
+    # Left None, the SDK picks its own default, which reads OTEL_TRACES_SAMPLER; see ADR-0010
+    # (docs/adr/0010-otel-sampling-is-a-sampler-object.md).
+    opentelemetry_sampler: "Sampler | None" = None
     opentelemetry_generate_health_check_spans: bool = True
     opentelemetry_excluded_urls: list[str] = dataclasses.field(default_factory=list)
 
@@ -228,7 +232,7 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
     def bootstrap(self) -> None:
         config = self.bootstrap_config
         self._silence_otel_loggers()
-        tracer_provider = TracerProvider(resource=self._build_resource())
+        tracer_provider = TracerProvider(resource=self._build_resource(), sampler=config.opentelemetry_sampler)
         set_tracer_provider(tracer_provider)
         self._tracer_provider = tracer_provider
         if import_checker.is_pyroscope_installed and getattr(config, "pyroscope_endpoint", None):

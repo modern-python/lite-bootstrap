@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 import structlog
+from opentelemetry.sdk.trace import sampling
 
 from lite_bootstrap import (
     FreeBootstrapper,
@@ -14,6 +15,7 @@ from lite_bootstrap import (
 )
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
 from lite_bootstrap.instruments.logging_instrument import LoggingInstrument
+from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryInstrument
 from lite_bootstrap.instruments.pyroscope_instrument import PyroscopeInstrument
 from lite_bootstrap.instruments.sentry_instrument import SentryInstrument
 from tests.conftest import CustomInstrumentor, SentryTestTransport, emulate_package_missing
@@ -38,6 +40,25 @@ def test_free_bootstrap(free_bootstrapper_config: FreeConfig) -> None:
     bootstrapper.bootstrap()
     try:
         logger.info("testing logging", key="value")
+    finally:
+        bootstrapper.teardown()
+
+
+def test_free_bootstrap_passes_sampler_to_tracer_provider() -> None:
+    sampler = sampling.ParentBased(sampling.TraceIdRatioBased(0.01))
+    bootstrapper = FreeBootstrapper(
+        bootstrap_config=FreeConfig(
+            opentelemetry_log_traces=True,
+            opentelemetry_sampler=sampler,
+            logging_buffer_capacity=0,
+        ),
+    )
+    bootstrapper.bootstrap()
+    try:
+        instruments = [one for one in bootstrapper.instruments if isinstance(one, OpenTelemetryInstrument)]
+        assert len(instruments) == 1
+        assert instruments[0]._tracer_provider is not None  # noqa: SLF001
+        assert instruments[0]._tracer_provider.sampler is sampler  # noqa: SLF001
     finally:
         bootstrapper.teardown()
 
