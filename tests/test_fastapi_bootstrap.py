@@ -1,5 +1,6 @@
 import dataclasses
 import logging
+import typing
 import warnings
 from unittest.mock import patch
 
@@ -10,6 +11,7 @@ from starlette import status
 from starlette.testclient import TestClient
 
 from lite_bootstrap import FastAPIBootstrapper, FastAPIConfig, import_checker
+from lite_bootstrap.bootstrappers import fastapi_bootstrapper
 from lite_bootstrap.exceptions import ConfigurationError, InstrumentDependencyMissingWarning
 from lite_bootstrap.types import UNSET
 from tests.conftest import CustomInstrumentor, SentryTestTransport, emulate_package_missing, warning_source_files
@@ -37,6 +39,28 @@ def fastapi_config() -> FastAPIConfig:
         sentry_additional_params={"transport": SentryTestTransport()},
         swagger_offline_docs=True,
     )
+
+
+def _instrument_app_kwargs(config: FastAPIConfig) -> dict[str, typing.Any]:
+    """Bootstrap with FastAPIInstrumentor stubbed, and return what it was handed."""
+    with patch.object(fastapi_bootstrapper, "FastAPIInstrumentor") as mock_instrumentor:
+        bootstrapper = FastAPIBootstrapper(bootstrap_config=config)
+        bootstrapper.bootstrap()
+        try:
+            return mock_instrumentor.instrument_app.call_args.kwargs
+        finally:
+            bootstrapper.teardown()
+
+
+def test_fastapi_opentelemetry_exclude_spans_defaults_to_recording_them(fastapi_config: FastAPIConfig) -> None:
+    """The default keeps every span a trace view shows today; dropping two of three is opt-in."""
+    assert _instrument_app_kwargs(fastapi_config)["exclude_spans"] == []
+
+
+def test_fastapi_opentelemetry_exclude_spans_reaches_the_instrumentor(fastapi_config: FastAPIConfig) -> None:
+    config = dataclasses.replace(fastapi_config, opentelemetry_exclude_spans=["receive", "send"])
+
+    assert _instrument_app_kwargs(config)["exclude_spans"] == ["receive", "send"]
 
 
 def test_fastapi_bootstrap(fastapi_config: FastAPIConfig) -> None:

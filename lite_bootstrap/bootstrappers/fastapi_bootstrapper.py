@@ -50,6 +50,8 @@ class FastAPIConfig(
 ):
     application: "fastapi.FastAPI | UnsetType" = UNSET
     application_kwargs: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
+    # Not on OpenTelemetryConfig: `exclude_spans` is this instrumentor's parameter, and Litestar's has none.
+    opentelemetry_exclude_spans: list[typing.Literal["receive", "send"]] = dataclasses.field(default_factory=list)
     prometheus_instrumentator_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     prometheus_instrument_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     prometheus_expose_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
@@ -119,6 +121,7 @@ class FastAPIOpenTelemetryInstrument(OpenTelemetryInstrument):
             app=self.bootstrap_config.app,
             tracer_provider=get_tracer_provider(),
             excluded_urls=",".join(self._build_excluded_urls()),
+            exclude_spans=self.bootstrap_config.opentelemetry_exclude_spans,
         )
 
     def teardown(self) -> None:
