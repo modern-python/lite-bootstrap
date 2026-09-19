@@ -7,7 +7,7 @@ import typing
 
 _REPO_ROOT: typing.Final = pathlib.Path(__file__).resolve().parent.parent
 _ADR_DIR: typing.Final = "docs/adr/"
-_CITATION: typing.Final = re.compile(r"docs/adr/\d{4}-[a-z0-9-]+\.md")
+_CITATION: typing.Final = re.compile(r"docs/adr/\d{4}(?:-[a-z0-9-]+\.md)?")
 _NUMBER_PREFIX: typing.Final = "ADR-"
 _NUMBER_CITATION: typing.Final = re.compile(_NUMBER_PREFIX + r"\d{4}")
 _UNWALKED_DIR: typing.Final = "node_modules"
@@ -65,6 +65,8 @@ def test_every_adr_citation_in_the_repo_resolves() -> None:
 
     The number form is checked for existence only: a citation renumbered onto a *different* live
     ADR still resolves, and nothing here can know it now names the wrong decision.
+    A bare `docs/adr/NNNN` path is reported outright: it names no file, so it would survive a
+    rename or a drop unnoticed and point at whatever record holds that number next.
     """
     unresolved = unresolved_citations(_REPO_ROOT)
 
@@ -110,6 +112,18 @@ def test_a_bare_adr_number_naming_no_file_is_reported(tmp_path: pathlib.Path) ->
     )
 
     assert unresolved_citations(tmp_path) == [("smoke.py", f"{_NUMBER_PREFIX}9999")]
+
+
+def test_a_bare_adr_path_is_reported_even_when_the_adr_exists(tmp_path: pathlib.Path) -> None:
+    """`docs/adr/NNNN` with no slug names nothing on disk, so a rename or a drop never breaks it."""
+    (tmp_path / _ADR_DIR).mkdir(parents=True)
+    (tmp_path / _ADR_DIR / "0002-kept.md").write_text("# kept\n", encoding="utf-8")
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "mod.py").write_text(
+        f'"""Argued in {_ADR_DIR}0002 and {_ADR_DIR}0002-kept.md."""\n', encoding="utf-8"
+    )
+
+    assert unresolved_citations(tmp_path) == [("pkg/mod.py", f"{_ADR_DIR}0002")]
 
 
 def test_a_citation_outside_python_is_found(tmp_path: pathlib.Path) -> None:
