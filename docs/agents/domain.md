@@ -25,9 +25,7 @@ either, the answer is that this repo does not have them.
   split and the two kinds of **skip** are defined there and are load-bearing throughout.
 - **`docs/adr/`**: read the ADRs that touch the area you are about to work in. They are an internal
   decision record, excluded from the published docs site, so an ADR is written for contributors
-  rather than users. They follow the `/domain-modeling` format — a title and a short body, with
-  sections only where they earn their place, and no `Decision:` / `Context` / `Revisit trigger`
-  scaffolding. A new one takes the next free number; retired numbers are never reused.
+  rather than users. They follow the ADR format the `/domain-modeling` skill defines.
 
 ## Use the glossary's vocabulary
 
