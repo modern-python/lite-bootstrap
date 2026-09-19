@@ -36,7 +36,7 @@ def test_importing_lite_bootstrap_needs_only_the_stdlib_and_typing_extensions() 
     The rule is also what makes the free-threaded story work: nothing native is reachable from a
     bare import, so core installs and imports on any interpreter and each unavailable extra degrades
     to a skipped instrument rather than an ImportError. Adding a genuinely mandatory dependency is
-    allowed — declare it in `[project.dependencies]` and add it here; ADR-0007 records why
+    allowed — declare it in `[project.dependencies]` and add it here; ADR-0005 records why
     `typing-extensions` is the only one.
     """
     offenders = {

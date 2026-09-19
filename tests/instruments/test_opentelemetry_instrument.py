@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
+from opentelemetry.sdk.trace import sampling
 
 import lite_bootstrap.instruments.opentelemetry_instrument as otel_module
 from lite_bootstrap import import_checker
@@ -44,6 +45,73 @@ def test_opentelemetry_instrument_empty_instruments() -> None:
         opentelemetry_instrument.bootstrap()
     finally:
         opentelemetry_instrument.teardown()
+
+
+_SAMPLER_ENV_VARS: typing.Final = ("OTEL_TRACES_SAMPLER", "OTEL_TRACES_SAMPLER_ARG")
+
+
+@pytest.fixture
+def without_sampler_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    for env_var in _SAMPLER_ENV_VARS:
+        monkeypatch.delenv(env_var, raising=False)
+
+
+@pytest.mark.usefixtures("without_sampler_env")
+def test_opentelemetry_sampler_reaches_tracer_provider() -> None:
+    sample_rate = 0.01
+    sampler = sampling.ParentBased(sampling.TraceIdRatioBased(sample_rate))
+    instrument = OpenTelemetryInstrument(
+        bootstrap_config=OpenTelemetryConfig(opentelemetry_log_traces=True, opentelemetry_sampler=sampler),
+    )
+    try:
+        instrument.bootstrap()
+        assert instrument._tracer_provider is not None  # noqa: SLF001
+        assert instrument._tracer_provider.sampler is sampler  # noqa: SLF001
+    finally:
+        instrument.teardown()
+
+
+@pytest.mark.usefixtures("without_sampler_env")
+def test_opentelemetry_sampler_unset_keeps_sdk_default() -> None:
+    instrument = OpenTelemetryInstrument(bootstrap_config=OpenTelemetryConfig(opentelemetry_log_traces=True))
+    try:
+        instrument.bootstrap()
+        assert instrument._tracer_provider is not None  # noqa: SLF001
+        assert instrument._tracer_provider.sampler is sampling.DEFAULT_ON  # noqa: SLF001
+    finally:
+        instrument.teardown()
+
+
+def test_opentelemetry_sampler_unset_honours_sampler_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OTEL_TRACES_SAMPLER", "traceidratio")
+    monkeypatch.setenv("OTEL_TRACES_SAMPLER_ARG", "0.25")
+    instrument = OpenTelemetryInstrument(bootstrap_config=OpenTelemetryConfig(opentelemetry_log_traces=True))
+    try:
+        instrument.bootstrap()
+        assert instrument._tracer_provider is not None  # noqa: SLF001
+        sampler = instrument._tracer_provider.sampler  # noqa: SLF001
+        assert isinstance(sampler, sampling.TraceIdRatioBased)
+        env_rate = 0.25
+        assert sampler.rate == env_rate
+    finally:
+        instrument.teardown()
+
+
+def test_opentelemetry_sampler_wins_over_sampler_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OTEL_TRACES_SAMPLER", "traceidratio")
+    monkeypatch.setenv("OTEL_TRACES_SAMPLER_ARG", "0.25")
+    instrument = OpenTelemetryInstrument(
+        bootstrap_config=OpenTelemetryConfig(
+            opentelemetry_log_traces=True,
+            opentelemetry_sampler=sampling.ALWAYS_OFF,
+        ),
+    )
+    try:
+        instrument.bootstrap()
+        assert instrument._tracer_provider is not None  # noqa: SLF001
+        assert instrument._tracer_provider.sampler is sampling.ALWAYS_OFF  # noqa: SLF001
+    finally:
+        instrument.teardown()
 
 
 def test_opentelemetry_instrument_teardown_shuts_down_tracer_provider() -> None:
