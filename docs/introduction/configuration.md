@@ -95,6 +95,13 @@ config = FastAPIConfig(
 )
 ```
 
+For FastAPI there is additionally:
+
+- `opentelemetry_exclude_spans` - drops the ASGI `receive` and/or `send` spans, leaving only the
+  server span. Empty by default, which records all three. `["receive", "send"]` is worth ~33 µs per
+  request on the benchmark endpoint, at the cost of two thirds of the spans disappearing from your
+  trace view.
+
 For FastStream you must provide additionally:
 
 - `opentelemetry_middleware_cls`
