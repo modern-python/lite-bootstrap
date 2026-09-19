@@ -132,7 +132,7 @@ def _fastapi() -> None:
     )
     application = bootstrapper.bootstrap()
     # Generating the schema puts HealthCheckTypedDict through pydantic as a response model,
-    # which is the typing-extensions use ADR-0007 records.
+    # which is the typing-extensions use ADR-0005 records.
     assert application.openapi()["paths"]
     assert application.url_path_for("health_check_handler") == HEALTH_PATH
     _emit_span()

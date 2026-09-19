@@ -46,7 +46,7 @@ def _dumps_stdlib(value: typing.Any, **kwargs: typing.Any) -> str:  # noqa: ANN4
 
 
 # orjson has no free-threaded wheels and refuses to build on ft; fall back to the
-# stdlib json accelerator (always ft-native) when it is absent. See ADR-0005.
+# stdlib json accelerator (always ft-native) when it is absent. See ADR-0004.
 _serialize_log_to_string = _dumps_orjson if import_checker.is_orjson_installed else _dumps_stdlib
 _json_loads = orjson.loads if import_checker.is_orjson_installed else json.loads
 

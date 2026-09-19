@@ -25,7 +25,9 @@ either, the answer is that this repo does not have them.
   split and the two kinds of **skip** are defined there and are load-bearing throughout.
 - **`docs/adr/`**: read the ADRs that touch the area you are about to work in. They are an internal
   decision record, excluded from the published docs site, so an ADR is written for contributors
-  rather than users.
+  rather than users. They follow the `/domain-modeling` format — a title and a short body, with
+  sections only where they earn their place, and no `Decision:` / `Context` / `Revisit trigger`
+  scaffolding. A new one takes the next free number; retired numbers are never reused.
 
 ## Use the glossary's vocabulary
 
@@ -37,4 +39,4 @@ If the concept you need isn't in the glossary yet, that's a signal: either you'r
 
 If your output contradicts an existing ADR, surface it explicitly rather than silently overriding:
 
-> _Contradicts ADR-0002 (keep the per-instrument axis), but worth reopening because…_
+> _Contradicts ADR-0002 (cross-cutting logic stays put), but worth reopening because…_
