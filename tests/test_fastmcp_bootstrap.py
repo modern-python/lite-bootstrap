@@ -13,7 +13,10 @@ from starlette.testclient import TestClient
 from lite_bootstrap import BootstrapperNotReadyError, FastMcpBootstrapper, FastMcpConfig
 from lite_bootstrap.bootstrappers.fastmcp_bootstrapper import FastMcpLoggingMiddleware
 from lite_bootstrap.exceptions import ConfigurationError
-from tests.conftest import emulate_package_missing, emulate_package_missing_with_module_reload
+from tests.conftest import (
+    emulate_package_missing,
+    emulate_package_missing_with_module_reload,
+)
 
 
 def test_fastmcp_config_default_application() -> None:
@@ -221,24 +224,41 @@ def _find_mcp_logging_middleware(application: "FastMCP") -> list[FastMcpLoggingM
     return [m for m in application.middleware if isinstance(m, FastMcpLoggingMiddleware)]
 
 
-def test_fastmcp_logging_middleware_is_mounted_by_default() -> None:
-    config = _make_test_config()
+def _mounted_logging_middleware(config: FastMcpConfig) -> list[FastMcpLoggingMiddleware]:
     bootstrapper = FastMcpBootstrapper(bootstrap_config=config)
     application = bootstrapper.bootstrap()
     try:
-        assert len(_find_mcp_logging_middleware(application)) == 1
+        return _find_mcp_logging_middleware(application)
     finally:
         bootstrapper.teardown()
 
 
-def test_fastmcp_logging_middleware_disabled_via_flag() -> None:
-    config = _make_test_config(logging_turn_off_middleware=True)
-    bootstrapper = FastMcpBootstrapper(bootstrap_config=config)
-    application = bootstrapper.bootstrap()
-    try:
-        assert _find_mcp_logging_middleware(application) == []
-    finally:
-        bootstrapper.teardown()
+def test_fastmcp_logging_middleware_is_not_mounted_by_default() -> None:
+    assert _mounted_logging_middleware(_make_test_config()) == []
+
+
+def test_fastmcp_logging_middleware_is_mounted_when_enabled() -> None:
+    config = _make_test_config(fastmcp_logging_middleware_enabled=True)
+    assert len(_mounted_logging_middleware(config)) == 1
+
+
+def test_fastmcp_config_rejects_the_removed_turn_off_field() -> None:
+    """The superseded name is gone: setting it fails at construction rather than silently.
+
+    The default flipped, so a shim could not have been silent anyway, and a service that set the old
+    field has to re-decide rather than upgrade past the change without noticing.
+    """
+    with pytest.raises(TypeError, match="logging_turn_off_middleware"):
+        _make_test_config(logging_turn_off_middleware=True)
+
+
+@pytest.mark.parametrize("overrides", [{}, {"fastmcp_logging_middleware_enabled": True}], ids=["default", "enabled"])
+def test_fastmcp_logging_config_warns_nothing(overrides: dict[str, bool]) -> None:
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        _make_test_config(**overrides)
+
+    assert [str(one.message) for one in caught] == []
 
 
 @pytest.mark.parametrize(

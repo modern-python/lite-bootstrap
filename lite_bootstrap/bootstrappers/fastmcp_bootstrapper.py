@@ -81,7 +81,7 @@ if import_checker.is_fastmcp_installed:
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class FastMcpConfig(HealthChecksConfig, LoggingConfig, PrometheusConfig, PyroscopeConfig, SentryConfig):
     application: "FastMCP[typing.Any]" = dataclasses.field(default_factory=_make_fastmcp)
-    logging_turn_off_middleware: bool = False
+    fastmcp_logging_middleware_enabled: bool = False
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -132,7 +132,7 @@ class FastMcpLoggingInstrument(LoggingInstrument):
 
     def bootstrap(self) -> None:
         super().bootstrap()
-        if self.bootstrap_config.logging_turn_off_middleware:
+        if not self.bootstrap_config.fastmcp_logging_middleware_enabled:
             return
         self.bootstrap_config.application.add_middleware(FastMcpLoggingMiddleware())
 
