@@ -163,17 +163,21 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
         # the sdk (opentelemetry.sdk.*), so it needs both distributions present.
         return import_checker.is_opentelemetry_installed and import_checker.is_opentelemetry_sdk_installed
 
-    def _build_excluded_urls(self) -> set[str]:
+    def _build_infrastructure_excluded_paths(self) -> set[str]:
+        """Paths this policy derives itself, without the caller-supplied entries."""
         config = self.bootstrap_config
-        excluded_urls: set[str] = set(config.opentelemetry_excluded_urls)
+        excluded_paths: set[str] = set()
         prometheus_path = getattr(config, "prometheus_metrics_path", None)
         if prometheus_path:
-            excluded_urls.add(prometheus_path)
+            excluded_paths.add(prometheus_path)
         if not config.opentelemetry_generate_health_check_spans:
             health_path = getattr(config, "health_checks_path", None)
             if health_path:
-                excluded_urls.add(health_path)
-        return excluded_urls
+                excluded_paths.add(health_path)
+        return excluded_paths
+
+    def _build_excluded_urls(self) -> set[str]:
+        return set(self.bootstrap_config.opentelemetry_excluded_urls) | self._build_infrastructure_excluded_paths()
 
     def _silence_otel_loggers(self) -> None:
         for logger_name in ("opentelemetry.instrumentation.instrumentor", "opentelemetry.trace"):

@@ -73,6 +73,9 @@ def build_span_name(method: str, route: str) -> str:
 _LOGGING_MIDDLEWARE_REQUEST_LOG_FIELDS: typing.Final = ("path", "method", "content_type", "path_params")
 _LOGGING_MIDDLEWARE_RESPONSE_LOG_FIELDS: typing.Final = ("status_code",)
 
+# OpenTelemetryMiddleware matches its patterns against a full URL, not a bare path.
+_EXCLUDED_URL_SCHEME_AND_HOST: typing.Final = r"^\w+://[^/]*"
+
 # Litestar.from_config() passes every AppConfig field explicitly, so the default that
 # Litestar.__init__ applies never reaches an app built from a config. Pinned to Litestar's
 # own default by a guard test. See https://github.com/litestar-org/litestar/issues/4296.
@@ -232,12 +235,28 @@ class LitestarLoggingInstrument(LoggingInstrument):
 class LitestarOpenTelemetryInstrument(OpenTelemetryInstrument):
     bootstrap_config: LitestarConfig
 
+    def _build_excluded_url_patterns(self) -> set[str]:
+        """Anchored patterns for the derived paths, plus the caller's own entries verbatim.
+
+        Litestar normalizes the trailing slash out of ``scope["path"]``, so a derived path
+        carrying one never matches. Stripping it alone is not enough: ``ExcludeList`` searches
+        unanchored, so a bare ``/custom-health`` would also silence ``/custom-healthy``.
+        Caller-supplied entries stay untouched because OpenTelemetry documents them as regexes.
+        """
+        anchored_patterns: typing.Final = {
+            rf"{_EXCLUDED_URL_SCHEME_AND_HOST}{re.escape(normalized_path)}(?:/|$)"
+            for excluded_path in self._build_infrastructure_excluded_paths()
+            # A bare "/" would anchor to every URL, so it is dropped along with empty values.
+            if (normalized_path := excluded_path.rstrip("/"))
+        }
+        return anchored_patterns | set(self.bootstrap_config.opentelemetry_excluded_urls)
+
     def bootstrap(self) -> None:
         super().bootstrap()
         self.bootstrap_config.application_config.middleware.append(
             LitestarOpenTelemetryInstrumentationMiddleware(
                 tracer_provider=get_tracer_provider(),
-                excluded_urls=self._build_excluded_urls(),
+                excluded_urls=self._build_excluded_url_patterns(),
             )
         )
 
