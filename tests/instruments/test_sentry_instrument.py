@@ -223,3 +223,53 @@ def test_sentry_auto_session_tracking_reaches_the_client(
         assert sentry_sdk.get_client().options["auto_session_tracking"] is auto_session_tracking
     finally:
         instrument.teardown()
+
+
+def test_sentry_additional_params_override_the_explicit_init_params(minimal_sentry_config: SentryConfig) -> None:
+    bootstrap_config = dataclasses.replace(
+        minimal_sentry_config,
+        sentry_auto_session_tracking=True,
+        sentry_additional_params={
+            **minimal_sentry_config.sentry_additional_params,
+            "auto_session_tracking": False,
+        },
+    )
+    instrument = SentryInstrument(bootstrap_config=bootstrap_config)
+    instrument.bootstrap()
+
+    try:
+        assert sentry_sdk.get_client().options["auto_session_tracking"] is False
+    finally:
+        instrument.teardown()
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected_reason"),
+    [
+        ({"sentry_integrations": [LoggingIntegration()]}, "already supplies a LoggingIntegration"),
+        ({"sentry_default_integrations": False}, "sentry_default_integrations is False"),
+    ],
+    ids=["user_integration", "no_default_integrations"],
+)
+def test_sentry_warns_when_the_breadcrumb_level_is_ignored(
+    minimal_sentry_config: SentryConfig, overrides: dict[str, typing.Any], expected_reason: str
+) -> None:
+    bootstrap_config = dataclasses.replace(minimal_sentry_config, sentry_logging_breadcrumb_level=None, **overrides)
+    instrument = SentryInstrument(bootstrap_config=bootstrap_config)
+
+    with pytest.warns(UserWarning, match=expected_reason):
+        instrument.bootstrap()
+    instrument.teardown()
+
+
+def test_sentry_does_not_warn_when_the_breadcrumb_level_is_left_at_its_default(
+    minimal_sentry_config: SentryConfig, recwarn: pytest.WarningsRecorder
+) -> None:
+    bootstrap_config = dataclasses.replace(minimal_sentry_config, sentry_integrations=[LoggingIntegration()])
+    instrument = SentryInstrument(bootstrap_config=bootstrap_config)
+    instrument.bootstrap()
+
+    try:
+        assert [one for one in recwarn if "sentry_logging_breadcrumb_level" in str(one.message)] == []
+    finally:
+        instrument.teardown()

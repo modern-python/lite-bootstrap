@@ -201,9 +201,9 @@ FastAPIConfig(
     sentry_integrations=[
         StarletteIntegration(http_methods_to_capture=()),
         FastApiIntegration(http_methods_to_capture=()),
-        LoggingIntegration(level=None, sentry_logs_level=None),
     ],
-    sentry_additional_params={"auto_session_tracking": False},
+    sentry_logging_breadcrumb_level=None,
+    sentry_auto_session_tracking=False,
     # OpenTelemetry: not expressible today, see issues
     #   exclude_spans=["receive", "send"] on FastAPIInstrumentor.instrument_app
     #   sampler=ParentBased(TraceIdRatioBased(0.01)) on TracerProvider
@@ -215,14 +215,16 @@ Sentry-side trace correlation, 99% of OTel traces, ASGI event spans.
 
 ## 7. Filed issues
 
-lite-bootstrap (all "possible improvement", nothing implemented):
+lite-bootstrap (all "possible improvement"):
 
 - [#184](https://github.com/modern-python/lite-bootstrap/issues/184) OpenTelemetry sampler is not
   configurable (55 µs/req)
 - [#185](https://github.com/modern-python/lite-bootstrap/issues/185) `exclude_spans` is never passed
   to `FastAPIInstrumentor` (33 µs/req)
 - [#186](https://github.com/modern-python/lite-bootstrap/issues/186) Sentry `sentry_logs_level`,
-  breadcrumb level and `auto_session_tracking` are not exposed (~9 µs/req plus ~2 µs/log record)
+  breadcrumb level and `auto_session_tracking` are not exposed (~9 µs/req plus ~2 µs/log record) -
+  **implemented**: `sentry_logs_level=None` is now the default, and the other two are
+  `sentry_logging_breadcrumb_level` and `sentry_auto_session_tracking`
 - [#187](https://github.com/modern-python/lite-bootstrap/issues/187) Document what the stack costs
 
 sentry-python:
