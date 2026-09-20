@@ -1,4 +1,5 @@
 import dataclasses
+import inspect
 import logging
 import typing
 
@@ -16,6 +17,12 @@ if typing.TYPE_CHECKING:
 if import_checker.is_sentry_installed:
     import sentry_sdk
     from sentry_sdk.integrations.logging import LoggingIntegration
+
+    # sentry-sdk 2.25 added the parameter along with Sentry Logs; the declared floor is 2.1,
+    # where passing it raises TypeError and there is no logs handler to disable anyway.
+    SENTRY_LOGS_LEVEL_SUPPORTED: typing.Final = (
+        "sentry_logs_level" in inspect.signature(LoggingIntegration.__init__).parameters
+    )
 
 
 # Back-compat alias: this vocabulary moved to logging_factory and was renamed
@@ -110,10 +117,10 @@ class SentryInstrument(BaseInstrument[SentryConfig]):
         if not config.sentry_default_integrations:
             self._warn_breadcrumb_level_ignored("sentry_default_integrations is False")
             return config.sentry_integrations
-        return [
-            *config.sentry_integrations,
-            LoggingIntegration(level=config.sentry_logging_breadcrumb_level, sentry_logs_level=None),
-        ]
+        logging_integration_kwargs: dict[str, typing.Any] = {"level": config.sentry_logging_breadcrumb_level}
+        if SENTRY_LOGS_LEVEL_SUPPORTED:
+            logging_integration_kwargs["sentry_logs_level"] = None
+        return [*config.sentry_integrations, LoggingIntegration(**logging_integration_kwargs)]
 
     def bootstrap(self) -> None:
         config = self.bootstrap_config

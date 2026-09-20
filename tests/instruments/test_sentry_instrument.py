@@ -9,6 +9,7 @@ import sentry_sdk
 import structlog
 from sentry_sdk.integrations.logging import LoggingIntegration
 
+from lite_bootstrap.instruments import sentry_instrument
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument
 from tests.conftest import LoggingMock, SentryTestTransport
 
@@ -273,3 +274,20 @@ def test_sentry_does_not_warn_when_the_breadcrumb_level_is_left_at_its_default(
         assert [one for one in recwarn if "sentry_logging_breadcrumb_level" in str(one.message)] == []
     finally:
         instrument.teardown()
+
+
+@pytest.mark.parametrize("supported", [True, False], ids=["sdk_has_it", "sdk_lacks_it"])
+def test_sentry_passes_sentry_logs_level_only_when_the_sdk_accepts_it(
+    minimal_sentry_config: SentryConfig, monkeypatch: pytest.MonkeyPatch, supported: bool
+) -> None:
+    """INVARIANT: `sentry_logs_level` reaches only the sentry-sdk versions that accept it.
+
+    It arrived in sentry-sdk 2.25 while the declared floor is 2.1, where passing it raises
+    `TypeError: LoggingIntegration.__init__() got an unexpected keyword argument` at bootstrap.
+    Below 2.25 there is no Sentry Logs feature, so there is no handler to disable either.
+    """
+    monkeypatch.setattr(sentry_instrument, "SENTRY_LOGS_LEVEL_SUPPORTED", supported)
+    integrations = SentryInstrument(bootstrap_config=minimal_sentry_config)._build_integrations()  # noqa: SLF001
+
+    logging_integration = next(one for one in integrations if isinstance(one, LoggingIntegration))
+    assert (logging_integration._sentry_logs_handler is None) is supported  # noqa: SLF001
