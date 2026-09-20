@@ -25,9 +25,10 @@ Four things here are worth knowing before you tune anything:
 
 - **OpenTelemetry costs about twice what Sentry does**, and is the dominant cost of the stack. Most
   people assume Sentry is the expensive one.
-- **Structlog is free until you actually log.** `LoggingInstrument` adds ~0.1 µs per request when
-  configured. The cost is per record, not per request, and it lands mostly in Sentry's two log
-  handlers.
+- **Structlog costs nothing until you actually log.** `LoggingInstrument` adds ~0.1 µs per request
+  when configured. The cost arrives per record, not per request, and most of it is Sentry's two
+  log handlers: on a three-record endpoint Sentry costs 12.3 µs per record, of which those
+  handlers are 9.6.
 - **`sentry_traces_sample_rate=1.0` costs a further +353 µs per request.** If you set it, set it
   next to a sample rate you actually want.
 - **The Sentry knobs people reach for do nothing.** This is the useful negative result:
@@ -42,14 +43,16 @@ built and discarded because `sentry_traces_sample_rate` is unset.
 
 In rough order of what they return:
 
-| field | saves | documented at |
+| setting | saves | what you give up |
 |---|---|---|
-| [`opentelemetry_sampler`](configuration.md#opentelemetry) | ~55 µs/req at a 1% ratio | Opentelemetry |
-| [`opentelemetry_exclude_spans`](configuration.md#opentelemetry) | ~34 µs/req, FastAPI only | Opentelemetry |
-| [`sentry_auto_session_tracking`](configuration.md#sentry) | ~7.7 µs/req | Sentry |
-| [`sentry_logging_breadcrumb_level`](configuration.md#sentry-logging-integration) | ~7 µs per log record | Sentry |
+| [`opentelemetry_sampler`](configuration.md#opentelemetry), 1% ratio | ~55 µs/req | 99% of your traces |
+| `http_methods_to_capture=()` on the Sentry ASGI integrations | ~35 µs/req | Sentry-side trace correlation |
+| [`opentelemetry_exclude_spans`](configuration.md#opentelemetry), FastAPI only | ~34 µs/req | the two ASGI event spans |
+| [`sentry_auto_session_tracking=False`](configuration.md#sentry) | ~7.7 µs/req | Sentry release health |
+| [`sentry_logging_breadcrumb_level=None`](configuration.md#sentry-logging-integration) | ~7 µs per log record | log breadcrumbs on errors |
 
-Put together, that is the configuration the "tuned" row above measures:
+Together those are worth ~132 µs per request against the ~136 µs the tuned row actually recovers,
+so there is nothing else material hiding in it. That configuration is:
 
 --8<-- "benchmarks/README.md:tuned"
 
@@ -64,12 +67,10 @@ event with an incoming `sentry-trace` header and inspecting the envelope:
 
 --8<-- "benchmarks/README.md:tradeoffs"
 
-In words: `http_methods_to_capture=()` gives the error event a fresh `trace_id` and no
-`parent_span_id`, which breaks cross-service correlation of errors in Sentry. That is acceptable
-when OpenTelemetry owns distributed tracing, as it does in any service that also runs
-`OpenTelemetryInstrument`, and Sentry is only an error sink. It is not acceptable otherwise.
-Dropping breadcrumbs costs you the log lines attached to error events. Sampling costs you the
-traces that were sampled away.
+The row that needs a decision is `http_methods_to_capture=()`: the error event gets a fresh
+`trace_id` and no `parent_span_id`, so errors stop correlating across services in Sentry. Take it
+when OpenTelemetry owns distributed tracing and Sentry is only an error sink, which is the case in
+any service running `OpenTelemetryInstrument`. Do not take it otherwise.
 
 ## The caveat that matters most
 

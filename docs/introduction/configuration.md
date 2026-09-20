@@ -15,7 +15,7 @@ Additional parameters can also be supplied through the settings object:
 - `sentry_max_breadcrumbs` - the total amount of breadcrumbs
 - `sentry_max_value_length` - the max event payload length
 - `sentry_attach_stacktrace` - if True, stack traces are automatically attached to all messages logged
-- `sentry_auto_session_tracking` - whether every request opens and closes a Sentry release-health `Session` (default: `True`), measured at ~7 µs per request. Set it to `False` if you do not use Sentry release health.
+- `sentry_auto_session_tracking` - whether every request opens and closes a Sentry release-health `Session` (default: `True`), measured at ~7.7 µs per request. Set it to `False` if you do not use Sentry release health.
 - `sentry_integrations` - list of integrations to enable
 - `sentry_logging_breadcrumb_level` - the minimum standard-library log level recorded as a breadcrumb (default: `logging.INFO`). Passed as `LoggingIntegration(level=...)`; see below.
 - `sentry_tags` - key/value string pairs that are both indexed and searchable
@@ -50,7 +50,7 @@ Under either, `sentry_logging_breadcrumb_level` is ignored and lite-bootstrap wa
 
 ## Prometheus
 
-Prometheus costs ~17.7 µs per request; see [Performance](performance.md).
+Prometheus is the cheapest of the three non-logging instruments; see [Performance](performance.md).
 
 To bootstrap Prometheus, you must provide at least:
 
@@ -125,7 +125,7 @@ config = FastAPIConfig(
 For FastAPI there is additionally:
 
 - `opentelemetry_exclude_spans` - drops the ASGI `receive` and/or `send` spans, leaving only the
-  server span. Empty by default, which records all three. `["receive", "send"]` is worth ~33 µs per
+  server span. Empty by default, which records all three. `["receive", "send"]` is worth ~34 µs per
   request on the benchmark endpoint, at the cost of two thirds of the spans disappearing from your
   trace view.
 
@@ -157,6 +157,9 @@ When OpenTelemetry is also enabled, a `PyroscopeSpanProcessor` is automatically 
 ## Structlog
 
 Structlog is bootstrapped by default. To opt out, set `logging_enabled=False`.
+
+Configuring it costs almost nothing; the cost arrives per log record, and most of it is Sentry's.
+See [Performance](performance.md).
 
 Additional parameters:
 

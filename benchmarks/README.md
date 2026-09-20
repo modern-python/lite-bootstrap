@@ -3,7 +3,7 @@
 ## 1. The short answer
 
 On a do-nothing endpoint through uvicorn, the full stack costs **70% of throughput**
-(7698 → 2313 RPS). Roughly half of that is recoverable without giving up observability, and
+(7698 → 2313 RPS). Roughly a third of that is recoverable without giving up observability, and
 **OpenTelemetry costs twice what Sentry does** - not the ordering most people expect.
 
 Two published figures about the Sentry half look contradictory and are both correct.
@@ -86,7 +86,8 @@ In-process, each instrument alone, baseline 16.2 µs/req:
 | all four | 4056 | +230.3 | |
 <!-- --8<-- [end:perinstrument] -->
 
-Costs are close to additive (0.1 + 17.7 + 57.6 + 121.1 = 196 vs 230 measured). **OpenTelemetry is
+Costs are roughly additive, with the combination 17% dearer than the parts
+(0.1 + 17.7 + 57.6 + 121.1 = 196 vs 230 measured). **OpenTelemetry is
 twice Sentry**, which was not the expected ordering, and structlog's instrument costs nothing
 until you actually log.
 
@@ -151,7 +152,9 @@ the cost is the MT init, not the string hashing; deriving the same value arithme
 (`int(trace_id, 16) / 2**128`) takes **0.25 µs, 27x cheaper**. This runs on every request even
 when `traces_sample_rate is None`.
 
-With `traces_sample_rate=1.0` the SDK costs +353 µs/req on the real server (1948 RPS, −69%).
+With `traces_sample_rate=1.0` the SDK costs +353 µs/req on the real server: 1948 RPS against
+this suite's own baseline of 6241, −69%. That baseline is Sentry-off on the same app, not §3's
+bare FastAPI, so the two tables are not directly comparable.
 
 ### 4c. Logging: cost per record, not per request
 

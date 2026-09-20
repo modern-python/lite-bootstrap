@@ -76,8 +76,7 @@ markdown_extensions:
       alternate_style: true
   - pymdownx.inlinehilite
   # Reaches benchmarks/README.md, outside docs_dir: the performance page shares its tables
-  # rather than keeping a second copy of the numbers. check_paths makes a moved file fail
-  # the build instead of silently rendering nothing.
+  # rather than keeping a second copy of the numbers, and check_paths makes a move fail loudly.
   - pymdownx.snippets:
       base_path: ["."]
       check_paths: true
