@@ -544,10 +544,12 @@ def test_litestar_otel_middleware_hands_the_instrumentor_a_parsed_exclude_list()
     """
     middleware = LitestarOpenTelemetryInstrumentationMiddleware(
         tracer_provider=TracerProvider(),
-        excluded_urls={"/custom-health/", "/custom-metrics/"},
+        excluded_urls={"/custom-metrics"},
     )
 
     excluded_urls = middleware._excluded_urls  # noqa: SLF001
     assert not isinstance(excluded_urls, str)
-    assert excluded_urls.url_disabled("http://test/custom-health/")
+    # Matched against the URL the middleware builds from `scope["path"]`, which Litestar has
+    # already normalized; see #248 for the trailing-slash entries that therefore never match.
+    assert excluded_urls.url_disabled("http://test/custom-metrics")
     assert not excluded_urls.url_disabled("http://test/items/1")
