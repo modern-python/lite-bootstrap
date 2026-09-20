@@ -249,14 +249,14 @@ def test_fastmcp_logging_middleware_is_mounted_when_enabled() -> None:
     ids=["turn_off_false_still_mounts", "turn_off_true_does_not_mount"],
 )
 def test_fastmcp_logging_turn_off_middleware_still_works(turn_off: bool, expected_count: int) -> None:
-    """The superseded flag keeps the behaviour its setter asked for, and says it is superseded."""
-    config = _make_test_config(logging_turn_off_middleware=turn_off)
+    """The superseded flag keeps the behaviour it was set for, and says that it is superseded."""
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        mounted = _mounted_logging_middleware(config)
+        config = _make_test_config(logging_turn_off_middleware=turn_off)
 
     assert [str(one.message) for one in caught if "logging_turn_off_middleware" in str(one.message)]
-    assert len(mounted) == expected_count
+    assert config.fastmcp_logging_middleware_enabled is (not turn_off)
+    assert len(_mounted_logging_middleware(config)) == expected_count
 
 
 def test_fastmcp_logging_turn_off_middleware_warning_names_the_caller() -> None:
@@ -265,12 +265,31 @@ def test_fastmcp_logging_turn_off_middleware_warning_names_the_caller() -> None:
     Same reason as the config-validation warnings in test_config_cascade.py: every frame between
     the warn call and the user is lite-bootstrap's, and the distance is not a constant.
     """
-    config = _make_test_config(logging_turn_off_middleware=True)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        _mounted_logging_middleware(config)
+        _make_test_config(logging_turn_off_middleware=True)
 
     assert warning_source_files(caught, UserWarning) == [__file__]
+
+
+@pytest.mark.parametrize("overrides", [{}, {"fastmcp_logging_middleware_enabled": True}], ids=["default", "enabled"])
+def test_fastmcp_logging_warns_nothing_without_the_superseded_flag(overrides: dict[str, bool]) -> None:
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        _make_test_config(**overrides)
+
+    assert [str(one.message) for one in caught] == []
+
+
+def test_fastmcp_logging_explicit_flag_wins_over_the_superseded_one() -> None:
+    """Setting both keeps the current field and says the superseded one is ignored."""
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        config = _make_test_config(fastmcp_logging_middleware_enabled=True, logging_turn_off_middleware=True)
+
+    assert [one for one in caught if "is ignored because" in str(one.message)]
+    assert config.fastmcp_logging_middleware_enabled is True
+    assert len(_mounted_logging_middleware(config)) == 1
 
 
 @pytest.mark.parametrize(
