@@ -1,5 +1,6 @@
 import contextlib
 import dataclasses
+import time
 import typing
 
 from lite_bootstrap import import_checker
@@ -22,10 +23,18 @@ from lite_bootstrap.instruments.swagger_instrument import SwaggerConfig, Swagger
 from lite_bootstrap.types import UNSET, UnsetType
 
 
+if typing.TYPE_CHECKING:
+    from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
 if import_checker.is_fastapi_installed:
     import fastapi
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.routing import _merge_lifespan_context
+
+if import_checker.is_structlog_installed:
+    import structlog
+
+    fastapi_access_logger: typing.Final = structlog.get_logger("http.access")
 
 if import_checker.is_opentelemetry_installed:
     from opentelemetry.trace import get_tracer_provider
@@ -55,6 +64,7 @@ class FastAPIConfig(
     prometheus_instrumentator_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     prometheus_instrument_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     prometheus_expose_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
+    fastapi_logging_middleware_enabled: bool = False
 
     def __post_init__(self) -> None:
         # @dataclass(slots=True) replaces the class object, breaking bare super().
@@ -81,6 +91,97 @@ class FastAPIConfig(
             msg = "FastAPIConfig.application is UNSET; __post_init__ did not run"
             raise TypeError(msg)
         return self.application
+
+
+class _AccessLogMiddleware:
+    """One structured line per request, pure ASGI.
+
+    Not `BaseHTTPMiddleware`: that one buffers the response, which breaks streaming
+    responses and background tasks.
+    """
+
+    def __init__(self, app: "ASGIApp", *, excluded_paths: tuple[str, ...]) -> None:
+        self.app = app
+        self.excluded_paths = excluded_paths
+
+    def _is_excluded(self, path: str) -> bool:
+        normalized_path = path.rstrip("/")
+        return any(
+            normalized_path == excluded_path or normalized_path.startswith(f"{excluded_path}/")
+            for excluded_path in self.excluded_paths
+        )
+
+    @staticmethod
+    def _http_fields(scope: "Scope", status_code: int) -> dict[str, typing.Any]:
+        content_type = ""
+        for header_name, header_value in scope.get("headers", ()):
+            if header_name == b"content-type":
+                content_type = header_value.decode("latin-1")
+                break
+        return {
+            "method": scope.get("method", ""),
+            "path": scope.get("path", ""),
+            "content_type": content_type,
+            "path_params": scope.get("path_params", {}),
+            "status_code": status_code,
+        }
+
+    async def __call__(self, scope: "Scope", receive: "Receive", send: "Send") -> None:
+        if scope["type"] != "http" or self._is_excluded(scope["path"]):
+            await self.app(scope, receive, send)
+            return
+
+        status_code = 0
+
+        async def send_wrapper(message: "Message") -> None:
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = message["status"]
+            await send(message)
+
+        started_at = time.perf_counter_ns()
+        try:
+            await self.app(scope, receive, send_wrapper)
+        except Exception:
+            fastapi_access_logger.exception(
+                "http_request",
+                http=self._http_fields(scope, status_code),
+                duration=time.perf_counter_ns() - started_at,
+            )
+            raise
+        fastapi_access_logger.info(
+            "http_request",
+            http=self._http_fields(scope, status_code),
+            duration=time.perf_counter_ns() - started_at,
+        )
+
+
+@dataclasses.dataclass(kw_only=True)
+class FastAPILoggingInstrument(LoggingInstrument):
+    bootstrap_config: FastAPIConfig
+
+    def _build_excluded_paths(self) -> tuple[str, ...]:
+        """Infrastructure routes not worth an access log line, normalized and deduplicated."""
+        config = self.bootstrap_config
+        candidate_paths: typing.Final = (
+            config.swagger_path,
+            config.swagger_static_path if config.swagger_offline_docs else "",
+            config.health_checks_path,
+            config.prometheus_metrics_path,
+        )
+        excluded_paths: list[str] = []
+        for candidate_path in candidate_paths:
+            # A bare "/" would exclude every route, so it is dropped along with empty values.
+            normalized_path = candidate_path.rstrip("/")
+            if normalized_path and normalized_path not in excluded_paths:
+                excluded_paths.append(normalized_path)
+        return tuple(excluded_paths)
+
+    def bootstrap(self) -> None:
+        super().bootstrap()
+        if not self.bootstrap_config.fastapi_logging_middleware_enabled:
+            return
+        self.bootstrap_config.app.add_middleware(_AccessLogMiddleware, excluded_paths=self._build_excluded_paths())
 
 
 @dataclasses.dataclass(kw_only=True, slots=True)
@@ -174,7 +275,7 @@ class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI"]):
         PyroscopeInstrument,
         SentryInstrument,
         FastAPIHealthChecksInstrument,
-        LoggingInstrument,
+        FastAPILoggingInstrument,
         FastAPIPrometheusInstrument,
         FastAPISwaggerInstrument,
     ]

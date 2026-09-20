@@ -1,6 +1,8 @@
 import dataclasses
+import json
 import logging
 import typing
+import uuid
 import warnings
 from unittest.mock import patch
 
@@ -256,3 +258,86 @@ def test_missing_exporter_warning_points_at_the_bootstrap_call_site(fastapi_conf
         bootstrapper.teardown()
 
     assert warning_source_files(caught, InstrumentDependencyMissingWarning) == [__file__]
+
+
+def _access_log_lines(stdout: str) -> list[dict[str, typing.Any]]:
+    """Every structlog line emitted by the access logger, parsed."""
+    lines: list[dict[str, typing.Any]] = []
+    for raw_line in stdout.splitlines():
+        if '"logger":"http.access"' not in raw_line.replace(", ", ","):
+            continue
+        lines.append(json.loads(raw_line))
+    return lines
+
+
+def _bootstrap_with_route(config: FastAPIConfig) -> "fastapi.FastAPI":
+    bootstrapper = FastAPIBootstrapper(bootstrap_config=config)
+    application = bootstrapper.bootstrap()
+
+    @application.post("/items/{item_id}")
+    async def create_item(item_id: str, payload: dict[str, typing.Any]) -> dict[str, typing.Any]:
+        return {"item_id": item_id, "echo": payload}
+
+    return application
+
+
+def test_fastapi_access_log_is_off_by_default(
+    fastapi_config: FastAPIConfig, capsys: pytest.CaptureFixture[str]
+) -> None:
+    application = _bootstrap_with_route(fastapi_config)
+    with TestClient(application) as test_client:
+        test_client.post("/items/abc", json={"a": 1})
+
+    assert _access_log_lines(capsys.readouterr().out) == []
+
+
+def test_fastapi_access_log_records_the_request_when_enabled(
+    fastapi_config: FastAPIConfig, capsys: pytest.CaptureFixture[str]
+) -> None:
+    config = dataclasses.replace(fastapi_config, fastapi_logging_middleware_enabled=True)
+    application = _bootstrap_with_route(config)
+    with TestClient(application) as test_client:
+        test_client.post("/items/abc", json={"a": 1})
+
+    lines = _access_log_lines(capsys.readouterr().out)
+    assert len(lines) == 1
+    http_fields = lines[0]["http"]
+    assert http_fields["method"] == "POST"
+    assert http_fields["path"] == "/items/abc"
+    assert http_fields["status_code"] == status.HTTP_200_OK
+    assert http_fields["path_params"] == {"item_id": "abc"}
+    assert lines[0]["duration"] > 0
+
+
+def test_fastapi_access_log_never_records_bodies(
+    fastapi_config: FastAPIConfig, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """INVARIANT: the access log records request metadata only, never request or response bodies.
+
+    Litestar's middleware shipped this defect (54c8ad9): its defaults logged full bodies, putting
+    credentials into the log. A new framework cell must not reintroduce it.
+    """
+    config = dataclasses.replace(fastapi_config, fastapi_logging_middleware_enabled=True)
+    application = _bootstrap_with_route(config)
+    secret = f"secret-{uuid.uuid4().hex}"
+    with TestClient(application) as test_client:
+        response = test_client.post("/items/abc", json={"password": secret})
+    assert secret in response.text  # the body really did carry it, both ways
+
+    stdout = capsys.readouterr().out
+    assert secret not in stdout
+
+
+@pytest.mark.parametrize(
+    "path_attribute",
+    ["health_checks_path", "prometheus_metrics_path", "swagger_path"],
+)
+def test_fastapi_access_log_excludes_infrastructure_paths(
+    fastapi_config: FastAPIConfig, capsys: pytest.CaptureFixture[str], path_attribute: str
+) -> None:
+    config = dataclasses.replace(fastapi_config, fastapi_logging_middleware_enabled=True)
+    application = _bootstrap_with_route(config)
+    with TestClient(application) as test_client:
+        test_client.get(getattr(config, path_attribute))
+
+    assert _access_log_lines(capsys.readouterr().out) == []

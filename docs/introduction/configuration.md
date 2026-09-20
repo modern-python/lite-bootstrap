@@ -246,6 +246,15 @@ Additional parameters for Litestar's access-log middleware:
 
 See [the Litestar integration guide](../integrations/litestar.md#logging) for what gets logged and why access logging defaults to off.
 
+### Structlog FastAPI
+
+FastAPI ships no access log of its own, so lite-bootstrap provides one. It is **off by default**:
+
+- `fastapi_logging_middleware_enabled` - turn on the structured access log (default: `False`).
+
+See [the FastAPI integration guide](../integrations/fastapi.md#logging) for what gets logged and why
+it defaults to off.
+
 ### Structlog FastStream
 
 When using FastStream, the structlog logger is automatically injected into the broker so that all broker
