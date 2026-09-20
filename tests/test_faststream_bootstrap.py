@@ -14,6 +14,8 @@ from faststream._internal.logger.params_storage import ManualLoggerStorage
 from faststream.redis import RedisBroker, TestRedisBroker
 from faststream.redis.opentelemetry import RedisTelemetryMiddleware
 from faststream.redis.prometheus import RedisPrometheusMiddleware
+from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
+from opentelemetry.sdk import resources
 from starlette import status
 from starlette.testclient import TestClient
 
@@ -315,3 +317,42 @@ def test_second_faststream_bootstrapper_bootstrap_raises(broker: RedisBroker) ->
             second.bootstrap()
     finally:
         first.teardown()
+
+
+def test_faststream_bootstrap_builds_its_own_tracer_provider(broker: RedisBroker) -> None:
+    bootstrapper = FastStreamBootstrapper(bootstrap_config=build_faststream_config(broker=broker))
+    bootstrapper.bootstrap()
+    try:
+        instruments = [one for one in bootstrapper.instruments if isinstance(one, FastStreamOpenTelemetryInstrument)]
+        assert len(instruments) == 1
+        tracer_provider = instruments[0]._tracer_provider  # noqa: SLF001
+        assert tracer_provider is not None
+        assert tracer_provider.resource.attributes[resources.SERVICE_NAME] == "microservice"
+    finally:
+        bootstrapper.teardown()
+
+
+def test_faststream_bootstrap_applies_opentelemetry_instrumentors(broker: RedisBroker) -> None:
+    recorded_tracer_providers: list[object] = []
+
+    class RecordingInstrumentor(BaseInstrumentor):
+        def instrumentation_dependencies(self) -> typing.Collection[str]:
+            return []
+
+        def _instrument(self, **kwargs: object) -> None:
+            recorded_tracer_providers.append(kwargs["tracer_provider"])
+
+        def _uninstrument(self, **_kwargs: object) -> None: ...
+
+    bootstrap_config = dataclasses.replace(
+        build_faststream_config(broker=broker),
+        opentelemetry_instrumentors=[RecordingInstrumentor()],
+    )
+    bootstrapper = FastStreamBootstrapper(bootstrap_config=bootstrap_config)
+    bootstrapper.bootstrap()
+    try:
+        instruments = [one for one in bootstrapper.instruments if isinstance(one, FastStreamOpenTelemetryInstrument)]
+        assert len(instruments) == 1
+        assert recorded_tracer_providers == [instruments[0]._tracer_provider]  # noqa: SLF001
+    finally:
+        bootstrapper.teardown()

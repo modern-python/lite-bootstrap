@@ -150,6 +150,7 @@ class FastStreamOpenTelemetryInstrument(OpenTelemetryInstrument):
         return super().is_configured(bootstrap_config) and bool(bootstrap_config.opentelemetry_middleware_cls)
 
     def bootstrap(self) -> None:
+        super().bootstrap()
         config = self.bootstrap_config
         if config.opentelemetry_middleware_cls and config.application.broker:
             config.application.broker.add_middleware(
