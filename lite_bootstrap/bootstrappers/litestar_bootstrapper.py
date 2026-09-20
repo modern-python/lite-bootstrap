@@ -190,22 +190,9 @@ class LitestarLoggingInstrument(LoggingInstrument):
 
     def _build_logging_middleware_excluded_paths(self) -> list[str]:
         """Regex-escaped path prefixes for infrastructure routes not worth an access log line."""
-        config = self.bootstrap_config
-        candidate_paths: typing.Final = (
-            config.swagger_path,
-            config.swagger_static_path if config.swagger_offline_docs else "",
-            config.health_checks_path,
-            config.prometheus_metrics_path,
-        )
-        excluded_paths: list[str] = []
-        for candidate_path in candidate_paths:
-            # A bare "/" would exclude every route, so it is dropped along with empty values.
-            normalized_path = candidate_path.rstrip("/")
-            if normalized_path and normalized_path not in excluded_paths:
-                excluded_paths.append(normalized_path)
         # Litestar matches exclude patterns with an unanchored search, so anchor each one to the
         # path itself or a sub-path; a bare prefix would also suppress an unrelated /custom-healthy.
-        return [rf"^{re.escape(excluded_path)}(?:/|$)" for excluded_path in excluded_paths]
+        return [rf"^{re.escape(excluded_path)}(?:/|$)" for excluded_path in self._build_excluded_paths()]
 
     def _build_logging_middleware_config(self) -> "LoggingMiddlewareConfig":
         # A caller-supplied config replaces the hardened defaults wholesale, no merging.

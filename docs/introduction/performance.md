@@ -56,6 +56,11 @@ so there is nothing else material hiding in it. That configuration is:
 
 --8<-- "benchmarks/README.md:tuned"
 
+One thing to leave off rather than turn on: the FastAPI access log
+([`fastapi_logging_middleware_enabled`](../integrations/fastapi.md#logging)) is off by default, and
+turning it on makes every request emit a log record. On a service that otherwise logs nothing per
+request, that is the difference between the first row of the logging table above and the rest of it.
+
 lite-bootstrap already applies one saving for you: it passes `sentry_logs_level=None` by default,
 because it never enables Sentry Logs and the handler formats every record before checking whether
 they are enabled. That one costs nothing, which is why it is a default rather than a knob.
