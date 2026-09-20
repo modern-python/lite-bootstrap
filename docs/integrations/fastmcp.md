@@ -62,9 +62,9 @@ FastMcpConfig(
 Enabled, each message is logged with its `method`, `source` and `type`, plus `duration` in
 nanoseconds. A message that raises is logged at exception level and the exception is re-raised.
 
-`logging_turn_off_middleware` still works but is superseded and warns:
-`logging_turn_off_middleware=False` turns the middleware on, `True` leaves it off. If you set both
-fields, `fastmcp_logging_middleware_enabled` wins and the superseded one is reported as ignored.
+This replaces `logging_turn_off_middleware`, which has been removed. Setting it now raises
+`TypeError`: the default flipped from on to off, so a service that configured the old field has to
+decide again rather than upgrade past the change unnoticed.
 
 Set `health_checks_enabled=False` to omit the health route.
 

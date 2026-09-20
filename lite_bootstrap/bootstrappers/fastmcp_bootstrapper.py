@@ -5,7 +5,6 @@ import typing
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
-from lite_bootstrap.helpers.warn import warn_at_caller
 from lite_bootstrap.instruments.healthchecks_instrument import HealthChecksConfig, HealthChecksInstrument
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument
 from lite_bootstrap.instruments.prometheus_instrument import PrometheusConfig, PrometheusInstrument
@@ -83,31 +82,6 @@ if import_checker.is_fastmcp_installed:
 class FastMcpConfig(HealthChecksConfig, LoggingConfig, PrometheusConfig, PyroscopeConfig, SentryConfig):
     application: "FastMCP[typing.Any]" = dataclasses.field(default_factory=_make_fastmcp)
     fastmcp_logging_middleware_enabled: bool = False
-    logging_turn_off_middleware: bool | None = None
-
-    def __post_init__(self) -> None:
-        # Not super(): the missing-dependency tests reload this module, which rebinds the global
-        # name, so `super(FastMcpConfig, self)` would not match the instance's own class.
-        HealthChecksConfig.__post_init__(self)
-        if self.logging_turn_off_middleware is None:
-            return
-        if self.fastmcp_logging_middleware_enabled:
-            warn_at_caller(
-                "logging_turn_off_middleware is ignored because fastmcp_logging_middleware_enabled "
-                "is set; drop logging_turn_off_middleware."
-            )
-            return
-        if self.logging_turn_off_middleware:
-            warn_at_caller(
-                "logging_turn_off_middleware is superseded by fastmcp_logging_middleware_enabled, "
-                "which is False by default; drop logging_turn_off_middleware."
-            )
-            return
-        warn_at_caller(
-            "logging_turn_off_middleware is superseded by fastmcp_logging_middleware_enabled; "
-            "set fastmcp_logging_middleware_enabled=True instead."
-        )
-        object.__setattr__(self, "fastmcp_logging_middleware_enabled", True)
 
 
 @dataclasses.dataclass(kw_only=True)

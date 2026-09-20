@@ -259,9 +259,8 @@ it defaults to off.
 
 The per-MCP-message access log is **off by default**:
 
-- `fastmcp_logging_middleware_enabled` - turn on the access log (default: `False`).
-- `logging_turn_off_middleware` - superseded by the field above and warns when set. `False` turns the
-  middleware on, `True` leaves it off, and if both are set the field above wins.
+- `fastmcp_logging_middleware_enabled` - turn on the access log (default: `False`). Replaces
+  `logging_turn_off_middleware`, which has been removed.
 
 See [the FastMCP integration guide](../integrations/fastmcp.md#logging) for what gets logged.
 
