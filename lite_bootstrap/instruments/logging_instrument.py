@@ -115,6 +115,28 @@ class LoggingInstrument(BaseInstrument[LoggingConfig]):
         for unset_handlers_logger in self.bootstrap_config.logging_unset_handlers:
             logging.getLogger(unset_handlers_logger).handlers = []
 
+    def _build_excluded_paths(self) -> tuple[str, ...]:
+        """Infrastructure routes not worth an access log line, normalized and deduplicated.
+
+        Sibling paths are read with ``getattr`` because they live on the Swagger, HealthChecks and
+        Prometheus configs, which a given framework's config need not mix in (see ADR-0002).
+        """
+        config = self.bootstrap_config
+        offline_docs: typing.Final = getattr(config, "swagger_offline_docs", False)
+        candidate_paths: typing.Final = (
+            getattr(config, "swagger_path", ""),
+            getattr(config, "swagger_static_path", "") if offline_docs else "",
+            getattr(config, "health_checks_path", ""),
+            getattr(config, "prometheus_metrics_path", ""),
+        )
+        excluded_paths: list[str] = []
+        for candidate_path in candidate_paths:
+            # A bare "/" would exclude every route, so it is dropped along with empty values.
+            normalized_path = candidate_path.rstrip("/")
+            if normalized_path and normalized_path not in excluded_paths:
+                excluded_paths.append(normalized_path)
+        return tuple(excluded_paths)
+
     @property
     def structlog_processors(self) -> list[typing.Any]:
         return [

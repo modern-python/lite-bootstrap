@@ -94,11 +94,7 @@ class FastAPIConfig(
 
 
 class _AccessLogMiddleware:
-    """One structured line per request, pure ASGI.
-
-    Not `BaseHTTPMiddleware`: that one buffers the response, which breaks streaming
-    responses and background tasks.
-    """
+    """One structured line per request, pure ASGI."""
 
     def __init__(self, app: "ASGIApp", *, excluded_paths: tuple[str, ...]) -> None:
         self.app = app
@@ -112,7 +108,7 @@ class _AccessLogMiddleware:
         )
 
     @staticmethod
-    def _http_fields(scope: "Scope", status_code: int) -> dict[str, typing.Any]:
+    def _http_fields(scope: "Scope", status_code: int | None) -> dict[str, typing.Any]:
         content_type = ""
         for header_name, header_value in scope.get("headers", ()):
             if header_name == b"content-type":
@@ -131,7 +127,7 @@ class _AccessLogMiddleware:
             await self.app(scope, receive, send)
             return
 
-        status_code = 0
+        status_code: int | None = None
 
         async def send_wrapper(message: "Message") -> None:
             nonlocal status_code
@@ -159,23 +155,6 @@ class _AccessLogMiddleware:
 @dataclasses.dataclass(kw_only=True)
 class FastAPILoggingInstrument(LoggingInstrument):
     bootstrap_config: FastAPIConfig
-
-    def _build_excluded_paths(self) -> tuple[str, ...]:
-        """Infrastructure routes not worth an access log line, normalized and deduplicated."""
-        config = self.bootstrap_config
-        candidate_paths: typing.Final = (
-            config.swagger_path,
-            config.swagger_static_path if config.swagger_offline_docs else "",
-            config.health_checks_path,
-            config.prometheus_metrics_path,
-        )
-        excluded_paths: list[str] = []
-        for candidate_path in candidate_paths:
-            # A bare "/" would exclude every route, so it is dropped along with empty values.
-            normalized_path = candidate_path.rstrip("/")
-            if normalized_path and normalized_path not in excluded_paths:
-                excluded_paths.append(normalized_path)
-        return tuple(excluded_paths)
 
     def bootstrap(self) -> None:
         super().bootstrap()

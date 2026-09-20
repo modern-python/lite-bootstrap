@@ -15,8 +15,13 @@ Sentry's handlers alone cost ~12 µs per record when Sentry is enabled. A defaul
 multiplies log volume and per-request cost on upgrade is not one a bootstrapper should pick for its
 users.
 
-The middleware is pure ASGI rather than `BaseHTTPMiddleware`, which buffers the response body and so
-breaks streaming responses and background tasks. It wraps `send` to capture the status code, reads
+The middleware is pure ASGI rather than `BaseHTTPMiddleware`, for cost rather than correctness. The
+usual claim that `BaseHTTPMiddleware` breaks streaming responses and background tasks is stale: both
+work on the declared starlette range, checked at the 0.37.2 floor and at 1.6.0. What it still costs is
+a task group and a pair of memory object streams per request, measured in the benchmarks' in-process
+harness at over +150 µs per request against a pure-ASGI wrapper that stays within noise of no
+middleware at all. That is more than the entire OpenTelemetry instrument, for a middleware that needs
+only the status code and the scope. It wraps `send` to capture the status code, reads
 `path_params` from the scope after routing has populated it, and logs metadata only: `method`, `path`,
 `content_type`, `path_params`, `status_code` and `duration`. Bodies are never read, which is the
 defect Litestar's own middleware shipped (`54c8ad9`) and the reason that framework's binding is

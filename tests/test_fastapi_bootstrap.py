@@ -1,3 +1,4 @@
+import contextlib
 import dataclasses
 import json
 import logging
@@ -260,84 +261,165 @@ def test_missing_exporter_warning_points_at_the_bootstrap_call_site(fastapi_conf
     assert warning_source_files(caught, InstrumentDependencyMissingWarning) == [__file__]
 
 
-def _access_log_lines(stdout: str) -> list[dict[str, typing.Any]]:
-    """Every structlog line emitted by the access logger, parsed."""
-    lines: list[dict[str, typing.Any]] = []
-    for raw_line in stdout.splitlines():
-        if '"logger":"http.access"' not in raw_line.replace(", ", ","):
-            continue
-        lines.append(json.loads(raw_line))
-    return lines
+class RecordingAccessLogger:
+    """Stands in for the module-level access logger.
+
+    Asserting through `logging_extra_processors` is not sound here: `_configure_foreign_loggers`
+    registers those processors a second time inside the root handler's ProcessorFormatter, so a
+    capture sees either the event dict or the already-rendered JSON depending on what an earlier
+    bootstrap left in structlog's global configuration.
+    """
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str, dict[str, typing.Any]]] = []
+
+    def info(self, event: str, **kwargs: object) -> None:
+        self.calls.append(("info", event, dict(kwargs)))
+
+    def exception(self, event: str, **kwargs: object) -> None:
+        self.calls.append(("exception", event, dict(kwargs)))
 
 
-def _bootstrap_with_route(config: FastAPIConfig) -> "fastapi.FastAPI":
+@pytest.fixture
+def access_logger() -> typing.Iterator[RecordingAccessLogger]:
+    recorder = RecordingAccessLogger()
+    with patch.object(fastapi_bootstrapper, "fastapi_access_logger", recorder):
+        yield recorder
+
+
+@contextlib.contextmanager
+def _bootstrapped(config: FastAPIConfig) -> typing.Iterator["fastapi.FastAPI"]:
     bootstrapper = FastAPIBootstrapper(bootstrap_config=config)
-    application = bootstrapper.bootstrap()
+    try:
+        yield bootstrapper.bootstrap()
+    finally:
+        bootstrapper.teardown()
 
-    @application.post("/items/{item_id}")
-    async def create_item(item_id: str, payload: dict[str, typing.Any]) -> dict[str, typing.Any]:
-        return {"item_id": item_id, "echo": payload}
 
-    return application
+@contextlib.contextmanager
+def _bootstrapped_with_route(config: FastAPIConfig) -> typing.Iterator["fastapi.FastAPI"]:
+    with _bootstrapped(config) as application:
+
+        @application.post("/items/{item_id}")
+        async def create_item(item_id: str, payload: dict[str, typing.Any]) -> dict[str, typing.Any]:
+            return {"item_id": item_id, "echo": payload}
+
+        yield application
 
 
 def test_fastapi_access_log_is_off_by_default(
-    fastapi_config: FastAPIConfig, capsys: pytest.CaptureFixture[str]
+    fastapi_config: FastAPIConfig, access_logger: RecordingAccessLogger
 ) -> None:
-    application = _bootstrap_with_route(fastapi_config)
-    with TestClient(application) as test_client:
+    with _bootstrapped_with_route(fastapi_config) as application, TestClient(application) as test_client:
         test_client.post("/items/abc", json={"a": 1})
 
-    assert _access_log_lines(capsys.readouterr().out) == []
+    assert access_logger.calls == []
 
 
 def test_fastapi_access_log_records_the_request_when_enabled(
-    fastapi_config: FastAPIConfig, capsys: pytest.CaptureFixture[str]
+    fastapi_config: FastAPIConfig, access_logger: RecordingAccessLogger
 ) -> None:
     config = dataclasses.replace(fastapi_config, fastapi_logging_middleware_enabled=True)
-    application = _bootstrap_with_route(config)
-    with TestClient(application) as test_client:
+    with _bootstrapped_with_route(config) as application, TestClient(application) as test_client:
         test_client.post("/items/abc", json={"a": 1})
 
-    lines = _access_log_lines(capsys.readouterr().out)
-    assert len(lines) == 1
-    http_fields = lines[0]["http"]
-    assert http_fields["method"] == "POST"
-    assert http_fields["path"] == "/items/abc"
-    assert http_fields["status_code"] == status.HTTP_200_OK
-    assert http_fields["path_params"] == {"item_id": "abc"}
-    assert lines[0]["duration"] > 0
+    assert len(access_logger.calls) == 1
+    level, event, fields = access_logger.calls[0]
+    assert (level, event) == ("info", "http_request")
+    assert fields["http"] == {
+        "method": "POST",
+        "path": "/items/abc",
+        "content_type": "application/json",
+        "path_params": {"item_id": "abc"},
+        "status_code": status.HTTP_200_OK,
+    }
+    assert fields["duration"] > 0
 
 
 def test_fastapi_access_log_never_records_bodies(
-    fastapi_config: FastAPIConfig, capsys: pytest.CaptureFixture[str]
+    fastapi_config: FastAPIConfig, access_logger: RecordingAccessLogger
 ) -> None:
-    """INVARIANT: the access log records request metadata only, never request or response bodies.
+    """INVARIANT: the access log records a fixed set of metadata fields, never bodies.
 
     Litestar's middleware shipped this defect (54c8ad9): its defaults logged full bodies, putting
-    credentials into the log. A new framework cell must not reintroduce it.
+    credentials into the log. Pinning the field set, not just one secret, is what stops a later
+    change quietly adding headers, cookies or a body back.
     """
     config = dataclasses.replace(fastapi_config, fastapi_logging_middleware_enabled=True)
-    application = _bootstrap_with_route(config)
     secret = f"secret-{uuid.uuid4().hex}"
-    with TestClient(application) as test_client:
+    with _bootstrapped_with_route(config) as application, TestClient(application) as test_client:
         response = test_client.post("/items/abc", json={"password": secret})
     assert secret in response.text  # the body really did carry it, both ways
 
-    stdout = capsys.readouterr().out
-    assert secret not in stdout
+    assert len(access_logger.calls) == 1
+    fields = access_logger.calls[0][2]
+    assert set(fields) == {"http", "duration"}
+    assert set(fields["http"]) == {"method", "path", "content_type", "path_params", "status_code"}
+    assert secret not in json.dumps(access_logger.calls, default=str)
 
 
 @pytest.mark.parametrize(
     "path_attribute",
-    ["health_checks_path", "prometheus_metrics_path", "swagger_path"],
+    ["health_checks_path", "prometheus_metrics_path", "swagger_path", "swagger_static_path"],
 )
 def test_fastapi_access_log_excludes_infrastructure_paths(
-    fastapi_config: FastAPIConfig, capsys: pytest.CaptureFixture[str], path_attribute: str
+    fastapi_config: FastAPIConfig, access_logger: RecordingAccessLogger, path_attribute: str
 ) -> None:
     config = dataclasses.replace(fastapi_config, fastapi_logging_middleware_enabled=True)
-    application = _bootstrap_with_route(config)
-    with TestClient(application) as test_client:
+    with _bootstrapped_with_route(config) as application, TestClient(application) as test_client:
         test_client.get(getattr(config, path_attribute))
 
-    assert _access_log_lines(capsys.readouterr().out) == []
+    assert access_logger.calls == []
+
+
+def test_fastapi_access_log_excluded_paths_cover_every_sibling(fastapi_config: FastAPIConfig) -> None:
+    """INVARIANT: every sibling path the policy names reaches the built exclusion set.
+
+    ADR-0002 keeps this policy in one method and answers the rename risk with exactly this test:
+    renaming a sibling field would otherwise stop the exclusion silently.
+    """
+    instrument = fastapi_bootstrapper.FastAPILoggingInstrument(bootstrap_config=fastapi_config)
+    excluded = instrument._build_excluded_paths()  # noqa: SLF001
+
+    for path_attribute in ("swagger_path", "swagger_static_path", "health_checks_path", "prometheus_metrics_path"):
+        assert getattr(fastapi_config, path_attribute).rstrip("/") in excluded, path_attribute
+
+
+def test_fastapi_access_log_keeps_lookalike_paths(
+    fastapi_config: FastAPIConfig, access_logger: RecordingAccessLogger
+) -> None:
+    """A route merely sharing a prefix with an excluded path is still logged."""
+    config = dataclasses.replace(fastapi_config, fastapi_logging_middleware_enabled=True)
+    lookalike_path = f"{config.health_checks_path.rstrip('/')}y"
+    with _bootstrapped(config) as application:
+
+        @application.get(lookalike_path)
+        async def lookalike() -> str:
+            return "not a health check"
+
+        with TestClient(application) as test_client:
+            assert test_client.get(lookalike_path).status_code == status.HTTP_200_OK
+
+    assert len(access_logger.calls) == 1
+    assert access_logger.calls[0][2]["http"]["path"] == lookalike_path
+
+
+def test_fastapi_access_log_records_a_raising_request(
+    fastapi_config: FastAPIConfig, access_logger: RecordingAccessLogger
+) -> None:
+    config = dataclasses.replace(fastapi_config, fastapi_logging_middleware_enabled=True)
+    with _bootstrapped(config) as application:
+
+        @application.get("/boom")
+        async def boom() -> str:
+            msg = "boom"
+            raise RuntimeError(msg)
+
+        with TestClient(application) as test_client, pytest.raises(RuntimeError, match="boom"):
+            test_client.get("/boom")
+
+    assert len(access_logger.calls) == 1
+    level, _, fields = access_logger.calls[0]
+    assert level == "exception"
+    # No response ever started, so there is no status to report.
+    assert fields["http"]["status_code"] is None
