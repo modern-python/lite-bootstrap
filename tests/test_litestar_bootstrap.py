@@ -532,3 +532,24 @@ def test_second_litestar_bootstrapper_bootstrap_raises(litestar_config: Litestar
             assert client.get(litestar_config.health_checks_path).status_code == status_codes.HTTP_200_OK
     finally:
         first.teardown()
+
+
+def test_litestar_otel_middleware_hands_the_instrumentor_a_parsed_exclude_list() -> None:
+    """INVARIANT: `excluded_urls` reaches OpenTelemetryMiddleware parsed, never as a raw string.
+
+    `OpenTelemetryMiddleware` only learned to parse a string itself in
+    opentelemetry-instrumentation 0.56b0. The declared floor is 0.49b0, where a string reaches
+    `self.excluded_urls.url_disabled(url)` and raises `AttributeError` on every request, so a
+    Litestar service with OpenTelemetry returns 500 for everything.
+    """
+    middleware = LitestarOpenTelemetryInstrumentationMiddleware(
+        tracer_provider=TracerProvider(),
+        excluded_urls={"/custom-metrics"},
+    )
+
+    excluded_urls = middleware._excluded_urls  # noqa: SLF001
+    assert not isinstance(excluded_urls, str)
+    # Matched against the URL the middleware builds from `scope["path"]`, which Litestar has
+    # already normalized; see #248 for the trailing-slash entries that therefore never match.
+    assert excluded_urls.url_disabled("http://test/custom-metrics")
+    assert not excluded_urls.url_disabled("http://test/items/1")

@@ -52,6 +52,7 @@ if import_checker.is_litestar_opentelemetry_installed:
     from litestar.types.asgi_types import ASGIApp, Receive, Scope, Send
     from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
     from opentelemetry.trace import TracerProvider
+    from opentelemetry.util.http import parse_excluded_urls
 
 if import_checker.is_opentelemetry_installed:
     from opentelemetry.trace import get_tracer_provider
@@ -99,7 +100,8 @@ if import_checker.is_litestar_opentelemetry_installed:
     class LitestarOpenTelemetryInstrumentationMiddleware(ASGIMiddleware):
         def __init__(self, tracer_provider: "TracerProvider", excluded_urls: set[str]) -> None:
             self._tracer_provider = tracer_provider
-            self._excluded_urls = ",".join(excluded_urls)
+            # OpenTelemetryMiddleware only parses a raw string from 0.56b0; the floor is 0.49b0.
+            self._excluded_urls = parse_excluded_urls(",".join(excluded_urls))
             # WeakKeyDictionary so wrapper apps are evicted when Litestar drops the
             # next_app reference (hot reload, plugin add/remove, AppConfig rebuild).
             # Apps that don't support weak references are simply not cached.
