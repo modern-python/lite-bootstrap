@@ -332,7 +332,13 @@ def test_faststream_bootstrap_builds_its_own_tracer_provider(broker: RedisBroker
         bootstrapper.teardown()
 
 
-def test_faststream_bootstrap_applies_opentelemetry_instrumentors(broker: RedisBroker) -> None:
+@pytest.mark.parametrize(
+    "middleware_cls", [RedisTelemetryMiddleware, None], ids=["with_middleware", "without_middleware"]
+)
+def test_faststream_bootstrap_applies_opentelemetry_instrumentors(
+    broker: RedisBroker,
+    middleware_cls: type | None,
+) -> None:
     recorded_tracer_providers: list[object] = []
 
     class RecordingInstrumentor(BaseInstrumentor):
@@ -346,6 +352,7 @@ def test_faststream_bootstrap_applies_opentelemetry_instrumentors(broker: RedisB
 
     bootstrap_config = dataclasses.replace(
         build_faststream_config(broker=broker),
+        opentelemetry_middleware_cls=middleware_cls,
         opentelemetry_instrumentors=[RecordingInstrumentor()],
     )
     bootstrapper = FastStreamBootstrapper(bootstrap_config=bootstrap_config)
@@ -353,6 +360,7 @@ def test_faststream_bootstrap_applies_opentelemetry_instrumentors(broker: RedisB
     try:
         instruments = [one for one in bootstrapper.instruments if isinstance(one, FastStreamOpenTelemetryInstrument)]
         assert len(instruments) == 1
+        assert instruments[0]._tracer_provider is not None  # noqa: SLF001
         assert recorded_tracer_providers == [instruments[0]._tracer_provider]  # noqa: SLF001
     finally:
         bootstrapper.teardown()

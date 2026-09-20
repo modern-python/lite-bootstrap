@@ -102,9 +102,13 @@ For FastAPI there is additionally:
   request on the benchmark endpoint, at the cost of two thirds of the spans disappearing from your
   trace view.
 
-For FastStream you must provide additionally:
+For FastStream there is additionally:
 
-- `opentelemetry_middleware_cls`
+- `opentelemetry_middleware_cls` - the broker telemetry middleware, e.g.
+  `faststream.redis.opentelemetry.RedisTelemetryMiddleware`. You must provide it to trace broker
+  messages. Without it the rest of the configuration above still applies: the exporter is built, the
+  health-check span is recorded unless `opentelemetry_generate_health_check_spans` is False, and any
+  `opentelemetry_instrumentors` are applied.
 
 
 ## Pyroscope

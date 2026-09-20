@@ -143,11 +143,6 @@ class FastStreamLoggingInstrument(LoggingInstrument):
 @dataclasses.dataclass(kw_only=True)
 class FastStreamOpenTelemetryInstrument(OpenTelemetryInstrument):
     bootstrap_config: FastStreamConfig
-    not_configured_reason = OpenTelemetryInstrument.not_configured_reason + " or opentelemetry_middleware_cls is empty"
-
-    @classmethod
-    def is_configured(cls, bootstrap_config: "FastStreamConfig") -> bool:  # ty: ignore[invalid-method-override]
-        return super().is_configured(bootstrap_config) and bool(bootstrap_config.opentelemetry_middleware_cls)
 
     def bootstrap(self) -> None:
         super().bootstrap()
