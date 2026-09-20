@@ -42,7 +42,7 @@ def broker() -> RedisBroker:
 
 
 def build_faststream_config(
-    broker: BrokerUsecase[typing.Any, typing.Any] | None = None,
+    broker: BrokerUsecase[typing.Any, typing.Any, typing.Any] | None = None,
 ) -> FastStreamConfig:
     asgi_kwargs: dict[str, typing.Any] = {
         "asyncapi_path": faststream.asgi.AsyncAPIRoute("/docs/"),
