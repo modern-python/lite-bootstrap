@@ -73,9 +73,18 @@ Additional parameters for Litestar integration:
 
 Prometheus's integration for FastStream requires `prometheus_client` package.
 
-To bootstrap Prometheus for FastStream, you must provide additionally:
+To bootstrap Prometheus for FastStream, you must provide at least one of:
 
-- `prometheus_middleware_cls`.
+- `prometheus_middleware_cls` - the broker metrics middleware, e.g.
+  `faststream.redis.prometheus.RedisPrometheusMiddleware`. It is constructed with the instrument's
+  registry and added to the broker.
+- `prometheus_collector_registry` - a `prometheus_client.CollectorRegistry` of your own, used in
+  place of the fresh one the instrument would otherwise build.
+
+With neither, nothing would populate the registry, so the metrics endpoint is not mounted and the
+instrument is skipped. Unlike the other frameworks, FastStream serves a private registry rather than
+`prometheus_client.REGISTRY`, so an endpoint with no middleware and no injected registry would have
+nothing to report.
 
 ### Prometheus FastAPI
 
