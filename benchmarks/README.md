@@ -3,7 +3,7 @@
 ## 1. The short answer
 
 On a do-nothing endpoint through uvicorn, the full stack costs **70% of throughput**
-(7978 → 2389 RPS). Roughly half of that is recoverable without giving up observability, and
+(7698 → 2313 RPS). Roughly half of that is recoverable without giving up observability, and
 **OpenTelemetry costs twice what Sentry does** - not the ordering most people expect.
 
 Two published figures about the Sentry half look contradictory and are both correct.
@@ -11,7 +11,7 @@ Two published figures about the Sentry half look contradictory and are both corr
 since 2023, reports a Starlette app dropping from ~2000 to ~1000 RPS after adding the SDK;
 Sentry's own docs claim
 [under 1 ms of instrumentation overhead per request](https://docs.sentry.io/product/insights/performance-overhead/).
-Both hold at once, because the added cost is a fixed ~80 µs: small in absolute terms, and
+Both hold at once, because the added cost is a fixed ~70 µs: small in absolute terms, and
 enormous next to a handler that does nothing.
 
 That is also the caveat on everything below. These ratios are an upper bound. A service that
@@ -28,7 +28,7 @@ instruments, configured through `FastAPIBootstrapper`) - measured three ways:
   baseline is unrealistically fast.
 - **Real server** (`run_http.py`) - uvicorn, single worker, access log off, loaded with
   `ab -k -c 16 -n 20000`. Verified the load generator is not the ceiling (baseline plateaus at
-  ~8.7k RPS by c=64, vs 7.9k measured at c=16).
+  ~8.4k RPS by c=64, vs 7.7k measured at c=16).
 - **Micro** (`micro.py`, `verify.py`, `profile_one.py`) - per-operation costs, what each
   configuration actually gives up, and cProfile.
 
@@ -47,41 +47,46 @@ structlog 26.1.0. Endpoint: `async def` returning `{"ok": True}`. Median of 5 ro
 
 ## 3. Headline numbers
 
+<!-- --8<-- [start:headline] -->
 Real server, uvicorn + `ab -k`, trivial async endpoint:
 
 | config | RPS | µs/req | vs bare |
 |---|---:|---:|---|
-| bare FastAPI | 7978 | 125.3 | - |
-| full lite-bootstrap stack (otel + prometheus + structlog + sentry) | 2389 | 418.6 | **−70%** |
-| same stack, tuned (§6) | 4187 | 238.8 | −48% |
+| bare FastAPI | 7698 | 129.9 | - |
+| full lite-bootstrap stack (otel + prometheus + structlog + sentry) | 2313 | 432.3 | **−70%** |
+| same stack, tuned (§6) | 4164 | 240.2 | −46% |
 
 Same endpoint plus three structlog records per request:
 
 | config | RPS | µs/req | vs bare |
 |---|---:|---:|---|
-| bare | 5716 | 175.0 | - |
-| full stack | 2013 | 496.7 | **−65%** |
-| tuned | 3476 | 287.7 | −39% |
+| bare | 5548 | 180.3 | - |
+| full stack | 1944 | 514.5 | **−65%** |
+| tuned | 3418 | 292.5 | −38% |
 
-In-process (SDK cost isolated, baseline 16.2 µs/req): full stack 61628 → 4268 RPS, **14.5x**.
-Tuned recovers it to 9150, **2.14x** over the untuned stack.
+<!-- --8<-- [end:headline] -->
 
-The tuning is worth **+75% RPS** on the real server, and in-process the untuned stack costs an
+In-process (SDK cost isolated, baseline 16.2 µs/req): full stack 61667 → 4056 RPS, **15.2x**.
+Tuned recovers it to 9061, **2.23x** over the untuned stack.
+
+The tuning is worth **+80% RPS** on the real server, and in-process the untuned stack costs an
 order of magnitude of a do-nothing handler's throughput.
 
 ## 4. Per-instrument breakdown
 
-In-process, each instrument alone, baseline 15.8 µs/req:
+In-process, each instrument alone, baseline 16.2 µs/req:
 
+<!-- --8<-- [start:perinstrument] -->
 | instrument | RPS | +µs/req | share of full stack |
 |---|---:|---:|---|
-| `LoggingInstrument` (configured, no logs emitted) | 62680 | +0.1 | ~0% |
-| `PrometheusInstrument` | 29983 | +17.5 | 8% |
-| `SentryInstrument` (tracing off) | 13449 | +58.5 | 27% |
-| `OpenTelemetryInstrument` | 7356 | **+120.1** | 55% |
-| all four | 4293 | +217.1 | |
+| `LoggingInstrument` (configured, no logs emitted) | 61133 | +0.1 | ~0% |
+| `PrometheusInstrument` | 29470 | +17.7 | 8% |
+| `SentryInstrument` (tracing off) | 13541 | +57.6 | 25% |
+| `OpenTelemetryInstrument` | 7280 | **+121.1** | 53% |
+| all four | 4056 | +230.3 | |
+<!-- --8<-- [end:perinstrument] -->
 
-Costs are close to additive (0.1 + 17.5 + 58.5 + 120.1 = 196 vs 217 measured). **OpenTelemetry is
+Costs are close to additive (0.1 + 17.7 + 57.6 + 121.1 = 196 vs 230 measured). **OpenTelemetry is
 twice Sentry**, which was not the expected ordering, and structlog's instrument costs nothing
 until you actually log.
 
@@ -89,10 +94,10 @@ until you actually log.
 
 | scenario | RPS | µs/req | gain |
 |---|---:|---:|---|
-| `otel` as lite-bootstrap configures it | 7375 | 135.6 | - |
-| `+ exclude_spans=["receive", "send"]` | 9755 | 102.5 | −33.1 µs |
-| `+ ParentBased(TraceIdRatioBased(0.01))` sampler | 12484 | 80.1 | −55.5 µs |
-| both | 15922 | 62.8 | **2.16x** |
+| `otel` as lite-bootstrap configures it | 7267 | 137.6 | - |
+| `+ opentelemetry_exclude_spans=["receive", "send"]` | 9651 | 103.6 | −34.0 µs |
+| `+ opentelemetry_sampler=ParentBased(TraceIdRatioBased(0.01))` | 12154 | 82.3 | −55.3 µs |
+| both | 15518 | 64.4 | **2.14x** |
 
 1. `FastAPIInstrumentor.instrument_app` accepts `exclude_spans: list[Literal["receive","send"]]`,
    which `FastAPIConfig.opentelemetry_exclude_spans` passes through. It is empty by default, so
@@ -106,19 +111,21 @@ until you actually log.
 
 ### 4b. Sentry: the cost is one thing, and it is not the one people tune
 
-In-process ablation, Sentry only, baseline 15.6 µs/req:
+In-process ablation, Sentry only, baseline 16.5 µs/req:
 
+<!-- --8<-- [start:sentryablation] -->
 | scenario | +µs | reading |
 |---|---:|---|
-| defaults (tracing off) | +61.3 | the number to beat |
-| `attach_stacktrace=False` | +61.5 | no effect on the happy path |
-| `max_breadcrumbs=0` | +62.0 | no effect - the crumb is still built |
-| `disabled_integrations=[Stdlib, Modules, Dedupe, Excepthook, Threading]` | +61.4 | no effect |
-| `default_integrations=False` (Starlette+FastAPI kept) | +61.9 | no effect |
-| **`integrations=[]`, no framework integration** | **+0.4** | **all of it is the ASGI integration** |
-| `auto_session_tracking=False` | +54.4 | sessions cost ~7 µs |
-| `http_methods_to_capture=()` (no Transaction) | +27.2 | the Transaction costs ~34 µs |
-| both of the above | +19.2 | |
+| defaults (tracing off) | +64.2 | the number to beat |
+| `attach_stacktrace=False` | +63.2 | no effect on the happy path |
+| `max_breadcrumbs=0` | +63.4 | no effect - the crumb is still built |
+| `disabled_integrations=[Stdlib, Modules, Dedupe, Excepthook, Threading]` | +63.8 | no effect |
+| `default_integrations=False` (Starlette+FastAPI kept) | +63.8 | no effect |
+| **`integrations=[]`, no framework integration** | **−0.1** | **all of it is the ASGI integration** |
+| `auto_session_tracking=False` | +56.5 | sessions cost ~7.7 µs |
+| `http_methods_to_capture=()` (no Transaction) | +29.2 | the Transaction costs ~35 µs |
+| both of the above | +19.9 | |
+<!-- --8<-- [end:sentryablation] -->
 
 The first block is the useful negative result: **every knob people reach for first buys nothing.**
 All the cost is in `SentryAsgiMiddleware._run_app`, and most of it is a `Transaction` built and
@@ -128,23 +135,23 @@ Micro-benchmarks (`micro.py`):
 
 | operation | µs |
 |---|---:|
-| `Random(trace_id)` - seeding Mersenne Twister | 6.42 |
-| `_generate_sample_rand(trace_id)` | 6.99 |
-| `Transaction(op, name, source)` | 9.63 |
-| `scope.continue_trace(headers)` | 11.02 |
-| `start_transaction(txn)` + exit, tracing **off** | 18.54 |
-| `scope.generate_propagation_context(headers)` | 0.61 |
-| `isolation_scope()` enter/exit | 2.25 |
+| `Random(trace_id)` - seeding Mersenne Twister | 6.60 |
+| `_generate_sample_rand(trace_id)` | 7.18 |
+| `Transaction(op, name, source)` | 10.10 |
+| `scope.continue_trace(headers)` | 11.28 |
+| `start_transaction(txn)` + exit, tracing **off** | 19.25 |
+| `scope.generate_propagation_context(headers)` | 0.64 |
+| `isolation_scope()` enter/exit | 2.31 |
 | `scope.fork()` | 0.62 |
 | `get_client()` | 0.14 (×17 per request) |
 
 `Transaction.__init__` unconditionally calls `_generate_sample_rand(self.trace_id)`, which does
-`Random(trace_id)` - a full Mersenne Twister seed, 6.4 µs. It is 5.9 µs even for `Random(1)`, so
+`Random(trace_id)` - a full Mersenne Twister seed, 6.6 µs. It is 6.1 µs even for `Random(1)`, so
 the cost is the MT init, not the string hashing; deriving the same value arithmetically
-(`int(trace_id, 16) / 2**128`) takes **0.23 µs, 27x cheaper**. This runs on every request even
+(`int(trace_id, 16) / 2**128`) takes **0.25 µs, 27x cheaper**. This runs on every request even
 when `traces_sample_rate is None`.
 
-With `traces_sample_rate=1.0` the SDK costs +274 µs/req on the real server (2486 RPS, −68%).
+With `traces_sample_rate=1.0` the SDK costs +353 µs/req on the real server (1948 RPS, −69%).
 
 ### 4c. Logging: cost per record, not per request
 
@@ -152,13 +159,15 @@ Three records per request, in-process:
 
 | scenario | +µs/req | delta |
 |---|---:|---:|
-| Sentry defaults | +99.7 | |
-| `LoggingIntegration(sentry_logs_level=None)` | +92.9 | −1.9 µs/record |
-| `LoggingIntegration(level=None, sentry_logs_level=None)` | +73.3 | −8.4 µs/record total |
+| sentry-sdk defaults | +101.1 | |
+| `sentry_logs_level=None` (lite-bootstrap's default since #186) | +93.8 | −2.4 µs/record |
+| also `sentry_logging_breadcrumb_level=None` | +72.4 | −9.6 µs/record total |
 
 Two handlers run per log record. `SentryLogsHandler.emit` calls `self.format(record)` *before* it
 checks `has_logs_enabled(client.options)`, so with Sentry Logs disabled (the default, and
 lite-bootstrap never sets `enable_logs`) every record is formatted an extra time for nothing.
+lite-bootstrap passes `sentry_logs_level=None` by default, so a service gets the second row
+without configuring anything.
 `BreadcrumbHandler` then formats it again and builds a breadcrumb dict. `max_breadcrumbs=0` does
 not help: the crumb is constructed before the deque drops it.
 
@@ -171,12 +180,14 @@ This hits lite-bootstrap directly because `LoggingInstrument` wires structlog th
 Measured by capturing a real error event with an incoming `sentry-trace` header and inspecting the
 envelope (`verify.py`):
 
+<!-- --8<-- [start:tradeoffs] -->
 | config | txn name | continues incoming trace | breadcrumbs |
 |---|---|---|---|
 | defaults | `/ping` | yes | yes |
 | `http_methods_to_capture=()` | `/ping` | **no** | yes |
-| `LoggingIntegration(level=None)` | `/ping` | yes | **no** |
+| `sentry_logging_breadcrumb_level=None` | `/ping` | yes | **no** |
 | propagation kept, Transaction skipped (patched SDK) | `/ping` | yes | yes |
+<!-- --8<-- [end:tradeoffs] -->
 
 `http_methods_to_capture=()` is not free: the error event gets a fresh `trace_id` and no
 `parent_span_id`, which breaks cross-service correlation of errors in Sentry. Acceptable when
@@ -185,7 +196,7 @@ distributed tracing is OpenTelemetry's job - as it is in any lite-bootstrap serv
 
 The last row is the interesting one: replacing `Scope.continue_trace` with a version that keeps
 `generate_propagation_context(headers)` and returns no Transaction loses **nothing** on the error
-event and still saves ~30 µs/req. That is a pure upstream bug, not a trade-off.
+event and still saves ~32 µs/req. That is a pure upstream bug, not a trade-off.
 
 Similarly, `opentelemetry_exclude_spans=["receive","send"]` costs you the ASGI event spans and
 nothing else, and `sentry_logs_level=None` costs nothing at all while Sentry Logs is disabled -
@@ -195,6 +206,7 @@ which is why lite-bootstrap now applies it by default.
 
 What "tuned" means in §3, all reachable through today's public API:
 
+<!-- --8<-- [start:tuned] -->
 ```python
 FastAPIConfig(
     # Sentry: OTel owns distributed tracing, Sentry is an error sink
@@ -209,6 +221,7 @@ FastAPIConfig(
     opentelemetry_sampler=ParentBased(TraceIdRatioBased(0.01)),
 )
 ```
+<!-- --8<-- [end:tuned] -->
 
 Trade-offs, in order of what you give up: log breadcrumbs on Sentry errors, Sentry release health,
 Sentry-side trace correlation, 99% of OTel traces, ASGI event spans.
@@ -230,12 +243,12 @@ lite-bootstrap (all "possible improvement"):
 sentry-python:
 
 - [#7400](https://github.com/getsentry/sentry-python/issues/7400) A full `Transaction` is built and
-  discarded per request when tracing is disabled (~34 µs)
+  discarded per request when tracing is disabled (~35 µs)
 - [#7401](https://github.com/getsentry/sentry-python/issues/7401) `_generate_sample_rand` seeds a
-  Mersenne Twister per `Transaction`, eagerly, even when unsampled (6.4 µs; 27x cheaper
+  Mersenne Twister per `Transaction`, eagerly, even when unsampled (6.6 µs; 27x cheaper
   arithmetically)
 - [#7402](https://github.com/getsentry/sentry-python/issues/7402) `SentryLogsHandler.emit` formats
-  the record before checking `has_logs_enabled` (~1.9 µs/record)
+  the record before checking `has_logs_enabled` (~2.4 µs/record)
 - Measurements added as a [comment on #2116](https://github.com/getsentry/sentry-python/issues/2116#issuecomment-5565265173),
   the long-open "SDK causes significant performance issue" report, rather than filing a duplicate.
 
@@ -278,8 +291,9 @@ cd benchmarks
 `run.py <suite> --list` prints the scenario names; they are defined in `sentry_scenarios.py`
 and `stack_scenarios.py`.
 Scenarios whose name implies a fix that does not exist yet (`errors_only_skip_txn`,
-`otel_sampler`, `full_all_tuned`) monkeypatch the library to simulate it, so the value of a
-proposed change can be measured before anyone writes it.
+`errors_only_lazy_sample_rand`) monkeypatch sentry-sdk to simulate it, so the value of a proposed
+change can be measured before anyone writes it. The stack suite no longer patches anything: every
+scenario there, `full_all_tuned` included, is reachable through `FastAPIConfig`.
 
 `repro_sentry_txn.py` is deliberately standalone - it is the repro pasted into
 [sentry-python#7400](https://github.com/getsentry/sentry-python/issues/7400) and imports nothing
