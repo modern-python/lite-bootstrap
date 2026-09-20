@@ -47,8 +47,26 @@ def greet_person(person_name: str) -> str:
     return f"Hello, {person_name}!"
 ```
 
-Set `logging_turn_off_middleware=True` on the config to disable the per-MCP-message
-access log middleware. Set `health_checks_enabled=False` to omit the health route.
+## Logging
+
+The per-MCP-message access log is **off by default**, matching FastAPI and Litestar. Turn it on
+explicitly:
+
+```python
+FastMcpConfig(
+    service_name="microservice",
+    fastmcp_logging_middleware_enabled=True,
+)
+```
+
+Enabled, each message is logged with its `method`, `source` and `type`, plus `duration` in
+nanoseconds. A message that raises is logged at exception level and the exception is re-raised.
+
+`logging_turn_off_middleware` still works and keeps the behaviour its setter asked for, but it is
+superseded and warns: `logging_turn_off_middleware=False` turns the middleware on, `True` leaves it
+off.
+
+Set `health_checks_enabled=False` to omit the health route.
 
 Teardown is wired through FastMCP's provider lifecycle — `bootstrapper.teardown()`
 runs automatically when the FastMCP server's ASGI lifespan shuts down (i.e. when

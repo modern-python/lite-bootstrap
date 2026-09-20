@@ -13,7 +13,11 @@ from starlette.testclient import TestClient
 from lite_bootstrap import BootstrapperNotReadyError, FastMcpBootstrapper, FastMcpConfig
 from lite_bootstrap.bootstrappers.fastmcp_bootstrapper import FastMcpLoggingMiddleware
 from lite_bootstrap.exceptions import ConfigurationError
-from tests.conftest import emulate_package_missing, emulate_package_missing_with_module_reload
+from tests.conftest import (
+    emulate_package_missing,
+    emulate_package_missing_with_module_reload,
+    warning_source_files,
+)
 
 
 def test_fastmcp_config_default_application() -> None:
@@ -221,24 +225,52 @@ def _find_mcp_logging_middleware(application: "FastMCP") -> list[FastMcpLoggingM
     return [m for m in application.middleware if isinstance(m, FastMcpLoggingMiddleware)]
 
 
-def test_fastmcp_logging_middleware_is_mounted_by_default() -> None:
-    config = _make_test_config()
+def _mounted_logging_middleware(config: FastMcpConfig) -> list[FastMcpLoggingMiddleware]:
     bootstrapper = FastMcpBootstrapper(bootstrap_config=config)
     application = bootstrapper.bootstrap()
     try:
-        assert len(_find_mcp_logging_middleware(application)) == 1
+        return _find_mcp_logging_middleware(application)
     finally:
         bootstrapper.teardown()
 
 
-def test_fastmcp_logging_middleware_disabled_via_flag() -> None:
+def test_fastmcp_logging_middleware_is_not_mounted_by_default() -> None:
+    assert _mounted_logging_middleware(_make_test_config()) == []
+
+
+def test_fastmcp_logging_middleware_is_mounted_when_enabled() -> None:
+    config = _make_test_config(fastmcp_logging_middleware_enabled=True)
+    assert len(_mounted_logging_middleware(config)) == 1
+
+
+@pytest.mark.parametrize(
+    ("turn_off", "expected_count"),
+    [(False, 1), (True, 0)],
+    ids=["turn_off_false_still_mounts", "turn_off_true_does_not_mount"],
+)
+def test_fastmcp_logging_turn_off_middleware_still_works(turn_off: bool, expected_count: int) -> None:
+    """The superseded flag keeps the behaviour its setter asked for, and says it is superseded."""
+    config = _make_test_config(logging_turn_off_middleware=turn_off)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        mounted = _mounted_logging_middleware(config)
+
+    assert [str(one.message) for one in caught if "logging_turn_off_middleware" in str(one.message)]
+    assert len(mounted) == expected_count
+
+
+def test_fastmcp_logging_turn_off_middleware_warning_names_the_caller() -> None:
+    """INVARIANT: the superseded-flag warning is attributed to the user's own frame.
+
+    Same reason as the config-validation warnings in test_config_cascade.py: every frame between
+    the warn call and the user is lite-bootstrap's, and the distance is not a constant.
+    """
     config = _make_test_config(logging_turn_off_middleware=True)
-    bootstrapper = FastMcpBootstrapper(bootstrap_config=config)
-    application = bootstrapper.bootstrap()
-    try:
-        assert _find_mcp_logging_middleware(application) == []
-    finally:
-        bootstrapper.teardown()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        _mounted_logging_middleware(config)
+
+    assert warning_source_files(caught, UserWarning) == [__file__]
 
 
 @pytest.mark.parametrize(

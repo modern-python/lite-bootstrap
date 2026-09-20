@@ -255,6 +255,16 @@ FastAPI ships no access log of its own, so lite-bootstrap provides one. It is **
 See [the FastAPI integration guide](../integrations/fastapi.md#logging) for what gets logged and why
 it defaults to off.
 
+### Structlog FastMCP
+
+The per-MCP-message access log is **off by default**:
+
+- `fastmcp_logging_middleware_enabled` - turn on the access log (default: `False`).
+- `logging_turn_off_middleware` - superseded by the field above and warns when set. `False` turns the
+  middleware on, `True` leaves it off.
+
+See [the FastMCP integration guide](../integrations/fastmcp.md#logging) for what gets logged.
+
 ### Structlog FastStream
 
 When using FastStream, the structlog logger is automatically injected into the broker so that all broker

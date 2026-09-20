@@ -5,6 +5,7 @@ import typing
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
+from lite_bootstrap.helpers.warn import warn_at_caller
 from lite_bootstrap.instruments.healthchecks_instrument import HealthChecksConfig, HealthChecksInstrument
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument
 from lite_bootstrap.instruments.prometheus_instrument import PrometheusConfig, PrometheusInstrument
@@ -81,7 +82,8 @@ if import_checker.is_fastmcp_installed:
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class FastMcpConfig(HealthChecksConfig, LoggingConfig, PrometheusConfig, PyroscopeConfig, SentryConfig):
     application: "FastMCP[typing.Any]" = dataclasses.field(default_factory=_make_fastmcp)
-    logging_turn_off_middleware: bool = False
+    fastmcp_logging_middleware_enabled: bool = False
+    logging_turn_off_middleware: bool | None = None
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -132,9 +134,19 @@ class FastMcpLoggingInstrument(LoggingInstrument):
 
     def bootstrap(self) -> None:
         super().bootstrap()
-        if self.bootstrap_config.logging_turn_off_middleware:
+        if not self._middleware_enabled():
             return
         self.bootstrap_config.application.add_middleware(FastMcpLoggingMiddleware())
+
+    def _middleware_enabled(self) -> bool:
+        config = self.bootstrap_config
+        if config.logging_turn_off_middleware is None:
+            return config.fastmcp_logging_middleware_enabled
+        warn_at_caller(
+            "logging_turn_off_middleware is superseded by fastmcp_logging_middleware_enabled, "
+            "which is False by default; set fastmcp_logging_middleware_enabled=True to log messages."
+        )
+        return not config.logging_turn_off_middleware
 
 
 class FastMcpBootstrapper(BaseBootstrapper["FastMCP[typing.Any]"]):
