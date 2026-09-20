@@ -25,6 +25,9 @@ Additional parameters can also be supplied through the settings object:
 
 Read more about sentry_sdk params [here](https://docs.sentry.io/platforms/python/configuration/options/).
 
+Sentry is the second most expensive instrument in the stack, and the settings that actually move
+the number are not the ones most people reach for. See [Performance](performance.md).
+
 ### Sentry logging integration
 
 Unless `sentry_integrations` already contains a `LoggingIntegration`, lite-bootstrap appends one built
@@ -37,8 +40,7 @@ off, but `SentryLogsHandler.emit` formats the record *before* it checks whether 
 ([getsentry/sentry-python#7402](https://github.com/getsentry/sentry-python/issues/7402)) - it formats
 every `INFO`+ record and discards the result. Dropping breadcrumbs as well, with
 `sentry_logging_breadcrumb_level=None`, saves more but costs you log breadcrumbs on error events, so
-it stays on by default. Both are measured in
-[the benchmarks](https://github.com/modern-python/lite-bootstrap/blob/main/benchmarks/README.md#4c-logging-cost-per-record-not-per-request).
+it stays on by default. Both are measured on the [performance page](performance.md#where-the-time-goes).
 
 Two ways to opt out of the appended integration: supply your own `LoggingIntegration` in
 `sentry_integrations`, which lite-bootstrap leaves untouched, or set
@@ -47,6 +49,8 @@ Under either, `sentry_logging_breadcrumb_level` is ignored and lite-bootstrap wa
 
 
 ## Prometheus
+
+Prometheus costs ~17.7 µs per request; see [Performance](performance.md).
 
 To bootstrap Prometheus, you must provide at least:
 
@@ -106,6 +110,7 @@ Additional parameters:
 
 Sampling is the cheapest way to cut what tracing costs: on a benchmark endpoint returning a constant,
 `ParentBased(TraceIdRatioBased(0.01))` saved ~55 µs per request against the always-on default.
+OpenTelemetry is the most expensive instrument in the stack; see [Performance](performance.md).
 
 ```python
 from opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased
