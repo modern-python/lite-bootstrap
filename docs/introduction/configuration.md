@@ -15,13 +15,42 @@ Additional parameters can also be supplied through the settings object:
 - `sentry_max_breadcrumbs` - the total amount of breadcrumbs
 - `sentry_max_value_length` - the max event payload length
 - `sentry_attach_stacktrace` - if True, stack traces are automatically attached to all messages logged
+- `sentry_auto_session_tracking` - whether every request opens and closes a Sentry release-health `Session` (default: `True`). Each one costs a `uuid4`, a lock acquisition and an aggregate update, measured at ~7 µs per request. Set it to `False` if you do not use Sentry release health.
 - `sentry_integrations` - list of integrations to enable
+- `sentry_logging_breadcrumb_level` - the minimum standard-library log level recorded as a breadcrumb (default: `logging.INFO`). Passed as `LoggingIntegration(level=...)`; see below.
 - `sentry_tags` - key/value string pairs that are both indexed and searchable
 - `sentry_additional_params` - additional params, which will be passed to `sentry_sdk.init`
 - `sentry_default_integrations` - whether to use sentry's default integrations (default: `True`)
 - `sentry_before_send` - optional callback chained after the built-in structlog enricher, passed to `sentry_sdk.init(before_send=...)`
 
 Read more about sentry_sdk params [here](https://docs.sentry.io/platforms/python/configuration/options/).
+
+### Sentry logging integration
+
+Unless `sentry_integrations` already contains a `LoggingIntegration`, lite-bootstrap appends one built
+as `LoggingIntegration(level=sentry_logging_breadcrumb_level, sentry_logs_level=None)`. Its event
+handler keeps the sentry-sdk default (`ERROR`), so the only departure from sentry-sdk's own default
+integration is `sentry_logs_level`.
+
+Disabling `sentry_logs_level` is free. lite-bootstrap never sets `enable_logs`, so Sentry Logs is off,
+but `SentryLogsHandler.emit` formats the record *before* it checks whether logs are enabled
+([getsentry/sentry-python#7402](https://github.com/getsentry/sentry-python/issues/7402)) - it formats
+every `INFO`+ record and discards the result. `LoggingInstrument` amplifies this: structlog is wired
+through `structlog.stdlib.BoundLogger`, so every structlog call reaches the handler.
+
+The breadcrumb handler is a real trade-off, which is why it stays on by default. Measured on an
+endpoint emitting three structlog records per request:
+
+| config | +µs/req |
+|---|---:|
+| sentry-sdk defaults | +99.7 |
+| `sentry_logs_level=None` (lite-bootstrap's default) | +92.9 |
+| also `sentry_logging_breadcrumb_level=None` | +73.3 |
+
+Two ways to opt out of the appended integration: supply your own `LoggingIntegration` in
+`sentry_integrations`, which lite-bootstrap leaves untouched, or set
+`sentry_default_integrations=False`, which suppresses it along with every other default integration.
+Under either, `sentry_logging_breadcrumb_level` has no effect.
 
 
 ## Prometheus

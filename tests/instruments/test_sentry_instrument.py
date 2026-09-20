@@ -1,4 +1,5 @@
 import copy
+import dataclasses
 import logging
 import typing
 from unittest.mock import patch
@@ -6,6 +7,7 @@ from unittest.mock import patch
 import pytest
 import sentry_sdk
 import structlog
+from sentry_sdk.integrations.logging import LoggingIntegration
 
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument
 from tests.conftest import LoggingMock, SentryTestTransport
@@ -147,3 +149,77 @@ def test_sentry_teardown_runs_init_when_flush_raises(minimal_sentry_config: Sent
 
     # init() still ran (in the finally), so SDK is now disabled.
     assert sentry_sdk.get_client().dsn is None
+
+
+def installed_logging_integration() -> LoggingIntegration:
+    integration = sentry_sdk.get_client().integrations[LoggingIntegration.identifier]
+    assert isinstance(integration, LoggingIntegration)
+    return integration
+
+
+def test_sentry_bootstrap_disables_the_sentry_logs_handler(minimal_sentry_config: SentryConfig) -> None:
+    instrument = SentryInstrument(bootstrap_config=minimal_sentry_config)
+    instrument.bootstrap()
+
+    try:
+        integration = installed_logging_integration()
+        assert integration._sentry_logs_handler is None  # noqa: SLF001
+        assert integration._breadcrumb_handler is not None  # noqa: SLF001
+        assert integration._handler is not None  # noqa: SLF001
+        assert minimal_sentry_config.sentry_integrations == []
+    finally:
+        instrument.teardown()
+
+
+def test_sentry_bootstrap_keeps_a_user_supplied_logging_integration(minimal_sentry_config: SentryConfig) -> None:
+    supplied = LoggingIntegration(sentry_logs_level=logging.INFO)
+    bootstrap_config = dataclasses.replace(minimal_sentry_config, sentry_integrations=[supplied])
+    instrument = SentryInstrument(bootstrap_config=bootstrap_config)
+    instrument.bootstrap()
+
+    try:
+        assert sentry_sdk.get_client().integrations[LoggingIntegration.identifier] is supplied
+    finally:
+        instrument.teardown()
+
+
+def test_sentry_bootstrap_adds_no_logging_integration_without_default_integrations(
+    minimal_sentry_config: SentryConfig,
+) -> None:
+    bootstrap_config = dataclasses.replace(minimal_sentry_config, sentry_default_integrations=False)
+    instrument = SentryInstrument(bootstrap_config=bootstrap_config)
+    instrument.bootstrap()
+
+    try:
+        assert LoggingIntegration.identifier not in sentry_sdk.get_client().integrations
+    finally:
+        instrument.teardown()
+
+
+@pytest.mark.parametrize("breadcrumb_level", [logging.INFO, None], ids=["info", "disabled"])
+def test_sentry_logging_breadcrumb_level_controls_the_breadcrumb_handler(
+    minimal_sentry_config: SentryConfig, breadcrumb_level: int | None
+) -> None:
+    bootstrap_config = dataclasses.replace(minimal_sentry_config, sentry_logging_breadcrumb_level=breadcrumb_level)
+    instrument = SentryInstrument(bootstrap_config=bootstrap_config)
+    instrument.bootstrap()
+
+    try:
+        integration = installed_logging_integration()
+        assert (integration._breadcrumb_handler is None) is (breadcrumb_level is None)  # noqa: SLF001
+    finally:
+        instrument.teardown()
+
+
+@pytest.mark.parametrize("auto_session_tracking", [True, False], ids=["on", "off"])
+def test_sentry_auto_session_tracking_reaches_the_client(
+    minimal_sentry_config: SentryConfig, auto_session_tracking: bool
+) -> None:
+    bootstrap_config = dataclasses.replace(minimal_sentry_config, sentry_auto_session_tracking=auto_session_tracking)
+    instrument = SentryInstrument(bootstrap_config=bootstrap_config)
+    instrument.bootstrap()
+
+    try:
+        assert sentry_sdk.get_client().options["auto_session_tracking"] is auto_session_tracking
+    finally:
+        instrument.teardown()

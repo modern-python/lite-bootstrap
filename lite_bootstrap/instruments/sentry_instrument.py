@@ -1,4 +1,5 @@
 import dataclasses
+import logging
 import typing
 
 from lite_bootstrap import import_checker
@@ -13,6 +14,7 @@ if typing.TYPE_CHECKING:
 
 if import_checker.is_sentry_installed:
     import sentry_sdk
+    from sentry_sdk.integrations.logging import LoggingIntegration
 
 
 # Back-compat alias: this vocabulary moved to logging_factory and was renamed
@@ -28,7 +30,9 @@ class SentryConfig(BaseConfig):
     sentry_max_breadcrumbs: int = 15
     sentry_max_value_length: int = 16384
     sentry_attach_stacktrace: bool = True
+    sentry_auto_session_tracking: bool = True
     sentry_integrations: list["Integration"] = dataclasses.field(default_factory=list)
+    sentry_logging_breadcrumb_level: int | None = logging.INFO
     sentry_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     sentry_tags: dict[str, str] | None = None
     sentry_default_integrations: bool = True
@@ -93,6 +97,17 @@ class SentryInstrument(BaseInstrument[SentryConfig]):
     def dependencies_installed() -> bool:
         return import_checker.is_sentry_installed
 
+    def _build_integrations(self) -> list["Integration"]:
+        config = self.bootstrap_config
+        if not config.sentry_default_integrations or any(
+            one.identifier == LoggingIntegration.identifier for one in config.sentry_integrations
+        ):
+            return config.sentry_integrations
+        return [
+            *config.sentry_integrations,
+            LoggingIntegration(level=config.sentry_logging_breadcrumb_level, sentry_logs_level=None),
+        ]
+
     def bootstrap(self) -> None:
         config = self.bootstrap_config
         sentry_sdk.init(
@@ -103,7 +118,8 @@ class SentryInstrument(BaseInstrument[SentryConfig]):
             max_breadcrumbs=config.sentry_max_breadcrumbs,
             max_value_length=config.sentry_max_value_length,
             attach_stacktrace=config.sentry_attach_stacktrace,
-            integrations=config.sentry_integrations,
+            auto_session_tracking=config.sentry_auto_session_tracking,
+            integrations=self._build_integrations(),
             default_integrations=config.sentry_default_integrations,
             before_send=wrap_before_send_callbacks(enrich_sentry_event_from_structlog_log, config.sentry_before_send),
             **config.sentry_additional_params,
