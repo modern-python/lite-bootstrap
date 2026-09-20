@@ -161,7 +161,10 @@ def _make_collector_registry() -> "prometheus_client.CollectorRegistry":
 class FastStreamPrometheusInstrument(PrometheusInstrument):
     bootstrap_config: FastStreamConfig
     collector_registry: "prometheus_client.CollectorRegistry" = dataclasses.field(init=False)
-    not_configured_reason = PrometheusInstrument.not_configured_reason + " or prometheus_middleware_cls is missing"
+    not_configured_reason = (
+        PrometheusInstrument.not_configured_reason
+        + ", or neither prometheus_middleware_cls nor prometheus_collector_registry is set"
+    )
     missing_dependency_message = "prometheus_client is not installed"
 
     def __post_init__(self) -> None:
@@ -170,7 +173,10 @@ class FastStreamPrometheusInstrument(PrometheusInstrument):
 
     @classmethod
     def is_configured(cls, bootstrap_config: "FastStreamConfig") -> bool:  # ty: ignore[invalid-method-override]
-        return super().is_configured(bootstrap_config) and bool(bootstrap_config.prometheus_middleware_cls)
+        return super().is_configured(bootstrap_config) and (
+            bootstrap_config.prometheus_middleware_cls is not None
+            or bootstrap_config.prometheus_collector_registry is not None
+        )
 
     @staticmethod
     def dependencies_installed() -> bool:
