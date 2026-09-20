@@ -549,7 +549,65 @@ def test_litestar_otel_middleware_hands_the_instrumentor_a_parsed_exclude_list()
 
     excluded_urls = middleware._excluded_urls  # noqa: SLF001
     assert not isinstance(excluded_urls, str)
-    # Matched against the URL the middleware builds from `scope["path"]`, which Litestar has
-    # already normalized; see #248 for the trailing-slash entries that therefore never match.
     assert excluded_urls.url_disabled("http://test/custom-metrics")
     assert not excluded_urls.url_disabled("http://test/items/1")
+
+
+def test_litestar_otel_excludes_infrastructure_paths_normalized_by_litestar(
+    litestar_config: LitestarConfig,
+) -> None:
+    """REGRESSION #248: Litestar strips the trailing slash before the middleware sees the path.
+
+    `health_checks_path="/custom-health/"` reaches `OpenTelemetryMiddleware` as
+    `http://host/custom-health`, so an exclude entry carrying the slash never matched and the
+    health check was traced anyway. The lookalike route guards the obvious over-correction:
+    `ExcludeList` regex-searches unanchored, so a bare `/custom-health` prefix would also
+    silence `/custom-healthy`.
+    """
+
+    @litestar.get("/custom-healthy")
+    async def lookalike_handler() -> dict[str, str]:
+        return {"status": "ok"}
+
+    config = dataclasses.replace(litestar_config, application_config=AppConfig(route_handlers=[lookalike_handler]))
+    application = LitestarBootstrapper(bootstrap_config=config).bootstrap()
+
+    tracer_provider = get_tracer_provider()
+    assert isinstance(tracer_provider, SDKTracerProvider)
+    exporter = InMemorySpanExporter()
+    tracer_provider.add_span_processor(SimpleSpanProcessor(exporter))
+
+    with TestClient(app=application) as client:
+        assert client.get(config.health_checks_path).status_code == status_codes.HTTP_200_OK
+        assert client.get(config.prometheus_metrics_path).status_code == status_codes.HTTP_200_OK
+        assert client.get("/custom-healthy").status_code == status_codes.HTTP_200_OK
+
+    span_names = [span.name for span in exporter.get_finished_spans()]
+    assert "GET /custom-health" not in span_names
+    assert "GET /custom-metrics" not in span_names
+    assert "GET /custom-healthy" in span_names
+
+
+def test_litestar_otel_keeps_caller_supplied_excluded_urls_as_regexes(litestar_config: LitestarConfig) -> None:
+    """`opentelemetry_excluded_urls` entries are OpenTelemetry regexes, so anchoring must not touch them."""
+
+    @litestar.get("/items/{item_id:int}")
+    async def get_item(item_id: int) -> dict[str, int]:
+        return {"item_id": item_id}
+
+    config = dataclasses.replace(
+        litestar_config,
+        application_config=AppConfig(route_handlers=[get_item]),
+        opentelemetry_excluded_urls=[r"/items/\d+$"],
+    )
+    application = LitestarBootstrapper(bootstrap_config=config).bootstrap()
+
+    tracer_provider = get_tracer_provider()
+    assert isinstance(tracer_provider, SDKTracerProvider)
+    exporter = InMemorySpanExporter()
+    tracer_provider.add_span_processor(SimpleSpanProcessor(exporter))
+
+    with TestClient(app=application) as client:
+        assert client.get("/items/42").status_code == status_codes.HTTP_200_OK
+
+    assert exporter.get_finished_spans() == ()
