@@ -85,7 +85,7 @@ Costs are close to additive (0.1 + 17.5 + 58.5 + 120.1 = 196 vs 217 measured). *
 twice Sentry**, which was not the expected ordering, and structlog's instrument costs nothing
 until you actually log.
 
-### 4a. OpenTelemetry: two knobs lite-bootstrap does not expose
+### 4a. OpenTelemetry: the two knobs that pay
 
 | scenario | RPS | µs/req | gain |
 |---|---:|---:|---|
@@ -94,16 +94,15 @@ until you actually log.
 | `+ ParentBased(TraceIdRatioBased(0.01))` sampler | 12484 | 80.1 | −55.5 µs |
 | both | 15922 | 62.8 | **2.16x** |
 
-1. `FastAPIInstrumentor.instrument_app` accepts `exclude_spans: list[Literal["receive","send"]]`.
-   lite-bootstrap passes only `app`, `tracer_provider` and `excluded_urls`, so **every request
-   produces three spans** - the server span plus one each for the ASGI `receive` and `send`
-   events. Two thirds of the spans, one quarter of the cost, and almost nobody looks at them.
-2. `OpenTelemetryInstrument.bootstrap()` constructs `TracerProvider(resource=resource)` with no
-   sampler, which means the SDK default `parentbased_always_on`. **There is no configuration
-   surface for a sampler anywhere in lite-bootstrap**, so a service cannot head-sample its own
-   traces at all; every request is recorded, serialized and shipped. A 1% ratio sampler is worth
-   55 µs/req here. (Sampling rate is a user decision, not a default to change - the gap is that
-   it cannot be expressed.)
+1. `FastAPIInstrumentor.instrument_app` accepts `exclude_spans: list[Literal["receive","send"]]`,
+   which `FastAPIConfig.opentelemetry_exclude_spans` passes through. It is empty by default, so
+   **every request still produces three spans** - the server span plus one each for the ASGI
+   `receive` and `send` events. Two thirds of the spans, one quarter of the cost, and almost
+   nobody looks at them. Set it to `["receive", "send"]` to drop the two event spans.
+2. `OpenTelemetryConfig.opentelemetry_sampler` is passed to the `TracerProvider`. Left unset, the
+   SDK default `parentbased_always_on` applies and every request is recorded, serialized and
+   shipped. A 1% ratio sampler is worth 55 µs/req here. The default stays always-on deliberately:
+   sampling rate is a user decision, not something to pick on a service's behalf.
 
 ### 4b. Sentry: the cost is one thing, and it is not the one people tune
 
@@ -188,12 +187,13 @@ The last row is the interesting one: replacing `Scope.continue_trace` with a ver
 `generate_propagation_context(headers)` and returns no Transaction loses **nothing** on the error
 event and still saves ~30 µs/req. That is a pure upstream bug, not a trade-off.
 
-Similarly, `exclude_spans=["receive","send"]` costs you the ASGI event spans and nothing else, and
-`sentry_logs_level=None` costs nothing at all while Sentry Logs is disabled.
+Similarly, `opentelemetry_exclude_spans=["receive","send"]` costs you the ASGI event spans and
+nothing else, and `sentry_logs_level=None` costs nothing at all while Sentry Logs is disabled -
+which is why lite-bootstrap now applies it by default.
 
 ## 6. The tuned configuration
 
-What "tuned" means in §3, all reachable through today's public API except the two OTel knobs:
+What "tuned" means in §3, all reachable through today's public API:
 
 ```python
 FastAPIConfig(
@@ -201,12 +201,12 @@ FastAPIConfig(
     sentry_integrations=[
         StarletteIntegration(http_methods_to_capture=()),
         FastApiIntegration(http_methods_to_capture=()),
-        LoggingIntegration(level=None, sentry_logs_level=None),
     ],
-    sentry_additional_params={"auto_session_tracking": False},
-    # OpenTelemetry: not expressible today, see issues
-    #   exclude_spans=["receive", "send"] on FastAPIInstrumentor.instrument_app
-    #   sampler=ParentBased(TraceIdRatioBased(0.01)) on TracerProvider
+    sentry_logging_breadcrumb_level=None,
+    sentry_auto_session_tracking=False,
+    # OpenTelemetry: sampling is the single biggest saving here
+    opentelemetry_exclude_spans=["receive", "send"],
+    opentelemetry_sampler=ParentBased(TraceIdRatioBased(0.01)),
 )
 ```
 
@@ -215,14 +215,16 @@ Sentry-side trace correlation, 99% of OTel traces, ASGI event spans.
 
 ## 7. Filed issues
 
-lite-bootstrap (all "possible improvement", nothing implemented):
+lite-bootstrap (all "possible improvement"):
 
 - [#184](https://github.com/modern-python/lite-bootstrap/issues/184) OpenTelemetry sampler is not
-  configurable (55 µs/req)
+  configurable (55 µs/req) - **implemented** as `opentelemetry_sampler`
 - [#185](https://github.com/modern-python/lite-bootstrap/issues/185) `exclude_spans` is never passed
-  to `FastAPIInstrumentor` (33 µs/req)
+  to `FastAPIInstrumentor` (33 µs/req) - **implemented** as `opentelemetry_exclude_spans`
 - [#186](https://github.com/modern-python/lite-bootstrap/issues/186) Sentry `sentry_logs_level`,
-  breadcrumb level and `auto_session_tracking` are not exposed (~9 µs/req plus ~2 µs/log record)
+  breadcrumb level and `auto_session_tracking` are not exposed (~9 µs/req plus ~2 µs/log record) -
+  **implemented**: `sentry_logs_level=None` is now the default, and the other two are
+  `sentry_logging_breadcrumb_level` and `sentry_auto_session_tracking`
 - [#187](https://github.com/modern-python/lite-bootstrap/issues/187) Document what the stack costs
 
 sentry-python:

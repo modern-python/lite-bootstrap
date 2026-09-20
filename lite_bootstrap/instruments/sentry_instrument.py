@@ -1,7 +1,9 @@
 import dataclasses
+import logging
 import typing
 
 from lite_bootstrap import import_checker
+from lite_bootstrap.helpers.warn import warn_at_caller
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 from lite_bootstrap.instruments.logging_factory import STRUCTLOG_META_KEYS, StructuredLogPayload
 
@@ -13,6 +15,7 @@ if typing.TYPE_CHECKING:
 
 if import_checker.is_sentry_installed:
     import sentry_sdk
+    from sentry_sdk.integrations.logging import LoggingIntegration
 
 
 # Back-compat alias: this vocabulary moved to logging_factory and was renamed
@@ -28,7 +31,9 @@ class SentryConfig(BaseConfig):
     sentry_max_breadcrumbs: int = 15
     sentry_max_value_length: int = 16384
     sentry_attach_stacktrace: bool = True
+    sentry_auto_session_tracking: bool = True
     sentry_integrations: list["Integration"] = dataclasses.field(default_factory=list)
+    sentry_logging_breadcrumb_level: int | None = logging.INFO
     sentry_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     sentry_tags: dict[str, str] | None = None
     sentry_default_integrations: bool = True
@@ -93,21 +98,42 @@ class SentryInstrument(BaseInstrument[SentryConfig]):
     def dependencies_installed() -> bool:
         return import_checker.is_sentry_installed
 
+    def _warn_breadcrumb_level_ignored(self, reason: str) -> None:
+        if self.bootstrap_config.sentry_logging_breadcrumb_level != logging.INFO:
+            warn_at_caller(f"sentry_logging_breadcrumb_level is ignored, {reason}")
+
+    def _build_integrations(self) -> list["Integration"]:
+        config = self.bootstrap_config
+        if any(integration.identifier == LoggingIntegration.identifier for integration in config.sentry_integrations):
+            self._warn_breadcrumb_level_ignored("sentry_integrations already supplies a LoggingIntegration")
+            return config.sentry_integrations
+        if not config.sentry_default_integrations:
+            self._warn_breadcrumb_level_ignored("sentry_default_integrations is False")
+            return config.sentry_integrations
+        return [
+            *config.sentry_integrations,
+            LoggingIntegration(level=config.sentry_logging_breadcrumb_level, sentry_logs_level=None),
+        ]
+
     def bootstrap(self) -> None:
         config = self.bootstrap_config
-        sentry_sdk.init(
-            dsn=config.sentry_dsn,
-            sample_rate=config.sentry_sample_rate,
-            traces_sample_rate=config.sentry_traces_sample_rate,
-            environment=config.service_environment,
-            max_breadcrumbs=config.sentry_max_breadcrumbs,
-            max_value_length=config.sentry_max_value_length,
-            attach_stacktrace=config.sentry_attach_stacktrace,
-            integrations=config.sentry_integrations,
-            default_integrations=config.sentry_default_integrations,
-            before_send=wrap_before_send_callbacks(enrich_sentry_event_from_structlog_log, config.sentry_before_send),
-            **config.sentry_additional_params,
-        )
+        init_params: dict[str, typing.Any] = {
+            "dsn": config.sentry_dsn,
+            "sample_rate": config.sentry_sample_rate,
+            "traces_sample_rate": config.sentry_traces_sample_rate,
+            "environment": config.service_environment,
+            "max_breadcrumbs": config.sentry_max_breadcrumbs,
+            "max_value_length": config.sentry_max_value_length,
+            "attach_stacktrace": config.sentry_attach_stacktrace,
+            "auto_session_tracking": config.sentry_auto_session_tracking,
+            "integrations": self._build_integrations(),
+            "default_integrations": config.sentry_default_integrations,
+            "before_send": wrap_before_send_callbacks(
+                enrich_sentry_event_from_structlog_log, config.sentry_before_send
+            ),
+        }
+        init_params.update(config.sentry_additional_params)
+        sentry_sdk.init(**init_params)
         tags: dict[str, str] = config.sentry_tags or {}
         sentry_sdk.set_tags(tags)
 
