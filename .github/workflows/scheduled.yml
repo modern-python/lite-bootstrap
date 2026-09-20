@@ -1,7 +1,10 @@
 name: scheduled-dep-check
 on:
   schedule:
-    - cron: "0 6 * * 1"        # Mondays 06:00 UTC
+    # Daily: both resolutions here are unpinned, so an upstream release can break main
+    # between runs. Daily bounds that window at a day and attributes the failure to upstream
+    # (a tracking issue) instead of to whichever pull request happens to run next.
+    - cron: "0 6 * * *"        # daily 06:00 UTC
   workflow_dispatch: {}
 
 concurrency:
