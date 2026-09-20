@@ -136,6 +136,11 @@ jobs:
     # pins each direct dependency to the floor pyproject.toml declares and bootstraps against it.
     # Per framework rather than all-extras at once: a floor declared in one extra pulls the shared
     # stack up for the others, so a combined resolution tests a set no user installs.
+    # Runtime smoke only, by design (#236): pytest cannot run here because conftest.py hard-imports
+    # opentelemetry, sentry_sdk and structlog, and `ty` would report the frameworks this target
+    # deliberately did not install as unresolved. So nothing type-checks at the floor - an
+    # annotation naming an optional dependency's internals has to span the declared range, and only
+    # a human checks that.
     if: inputs.lowest-direct
     runs-on: ubuntu-latest
     strategy:
