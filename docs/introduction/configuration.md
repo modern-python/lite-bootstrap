@@ -77,7 +77,7 @@ To bootstrap Prometheus for FastStream, you must provide at least one of:
 
 - `prometheus_middleware_cls` - the broker metrics middleware, e.g.
   `faststream.redis.prometheus.RedisPrometheusMiddleware`. It is constructed with the instrument's
-  registry and added to the broker.
+  registry and added to the broker, when the application has one.
 - `prometheus_collector_registry` - a `prometheus_client.CollectorRegistry` of your own, used in
   place of the fresh one the instrument would otherwise build.
 
