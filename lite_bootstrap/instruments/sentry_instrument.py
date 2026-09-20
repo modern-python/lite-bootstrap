@@ -50,9 +50,12 @@ class SentryConfig(BaseConfig):
 def enrich_sentry_event_from_structlog_log(
     event: "sentry_types.Event", _: "sentry_types.Hint"
 ) -> typing.Optional["sentry_types.Event"]:
+    # sentry-sdk fills "formatted" on newer versions and "message" at the declared floor of 2.1,
+    # so read whichever is present and write the rewritten text back to that same key.
+    logentry = event.get("logentry") or {}
+    message_key = "formatted" if logentry.get("formatted") else "message"
     if not (
-        (logentry := event.get("logentry"))
-        and (formatted_message := logentry.get("formatted"))
+        (formatted_message := logentry.get(message_key))
         and isinstance(formatted_message, str)
         and isinstance(event.get("contexts"), dict)
     ):
@@ -66,7 +69,7 @@ def enrich_sentry_event_from_structlog_log(
     if not payload.message:
         return event
 
-    event["logentry"]["formatted"] = payload.message  # ty: ignore[invalid-assignment]
+    event["logentry"][message_key] = payload.message  # ty: ignore[invalid-assignment]
     if payload.extra:
         event["contexts"]["structlog"] = payload.extra
     return event

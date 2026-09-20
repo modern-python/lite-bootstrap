@@ -1,5 +1,6 @@
 import copy
 import dataclasses
+import json
 import logging
 import typing
 from unittest.mock import patch
@@ -11,6 +12,7 @@ from sentry_sdk.integrations.logging import LoggingIntegration
 
 from lite_bootstrap.instruments import sentry_instrument
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument
+from lite_bootstrap.instruments.sentry_instrument import enrich_sentry_event_from_structlog_log
 from tests.conftest import LoggingMock, SentryTestTransport
 
 
@@ -20,7 +22,6 @@ if typing.TYPE_CHECKING:
 from lite_bootstrap.instruments.sentry_instrument import (
     SentryConfig,
     SentryInstrument,
-    enrich_sentry_event_from_structlog_log,
 )
 
 
@@ -158,13 +159,44 @@ def installed_logging_integration() -> LoggingIntegration:
     return integration
 
 
+@pytest.mark.parametrize("message_key", ["formatted", "message"])
+def test_structlog_enrichment_reads_whichever_logentry_key_the_sdk_populates(message_key: str) -> None:
+    """INVARIANT: the structlog payload is read from the logentry key the installed sentry-sdk fills.
+
+    `logentry.formatted` is not universal: at the declared floor of sentry-sdk 2.1 a log event carries
+    its text in `logentry.message` and has no `formatted` key at all. Reading only `formatted` makes
+    `skip_sentry=True` silently stop suppressing events there — the log reaches Sentry anyway, and
+    nothing fails, so only a run at the floor shows it.
+    """
+    event = {"logentry": {message_key: json.dumps({"event": "boom", "skip_sentry": True})}, "contexts": {}}
+
+    assert enrich_sentry_event_from_structlog_log(event, {}) is None  # ty: ignore[invalid-argument-type]
+
+
+@pytest.mark.parametrize("message_key", ["formatted", "message"])
+def test_structlog_enrichment_writes_back_to_the_key_it_read(message_key: str) -> None:
+    """The rewritten message has to land on the key the SDK actually renders."""
+    event = {
+        "logentry": {message_key: json.dumps({"event": "boom", "user": 7})},
+        "contexts": {},
+    }
+
+    enriched = enrich_sentry_event_from_structlog_log(event, {})  # ty: ignore[invalid-argument-type]
+
+    assert enriched is not None
+    assert enriched["logentry"][message_key] == "boom"
+    assert enriched["contexts"]["structlog"] == {"user": 7}
+
+
 def test_sentry_bootstrap_disables_the_sentry_logs_handler(minimal_sentry_config: SentryConfig) -> None:
     instrument = SentryInstrument(bootstrap_config=minimal_sentry_config)
     instrument.bootstrap()
 
     try:
         integration = installed_logging_integration()
-        assert integration._sentry_logs_handler is None  # noqa: SLF001
+        if sentry_instrument.SENTRY_LOGS_LEVEL_SUPPORTED:
+            # Below sentry-sdk 2.25 there is no Sentry Logs handler to disable, or to look at.
+            assert integration._sentry_logs_handler is None  # noqa: SLF001
         assert integration._breadcrumb_handler is not None  # noqa: SLF001
         assert integration._handler is not None  # noqa: SLF001
         assert minimal_sentry_config.sentry_integrations == []
@@ -173,7 +205,7 @@ def test_sentry_bootstrap_disables_the_sentry_logs_handler(minimal_sentry_config
 
 
 def test_sentry_bootstrap_keeps_a_user_supplied_logging_integration(minimal_sentry_config: SentryConfig) -> None:
-    supplied = LoggingIntegration(sentry_logs_level=logging.INFO)
+    supplied = LoggingIntegration()
     bootstrap_config = dataclasses.replace(minimal_sentry_config, sentry_integrations=[supplied])
     instrument = SentryInstrument(bootstrap_config=bootstrap_config)
     instrument.bootstrap()
@@ -286,8 +318,16 @@ def test_sentry_passes_sentry_logs_level_only_when_the_sdk_accepts_it(
     `TypeError: LoggingIntegration.__init__() got an unexpected keyword argument` at bootstrap.
     Below 2.25 there is no Sentry Logs feature, so there is no handler to disable either.
     """
-    monkeypatch.setattr(sentry_instrument, "SENTRY_LOGS_LEVEL_SUPPORTED", supported)
-    integrations = SentryInstrument(bootstrap_config=minimal_sentry_config)._build_integrations()  # noqa: SLF001
+    recorded: dict[str, typing.Any] = {}
 
-    logging_integration = next(one for one in integrations if isinstance(one, LoggingIntegration))
-    assert (logging_integration._sentry_logs_handler is None) is supported  # noqa: SLF001
+    class RecordingLoggingIntegration(LoggingIntegration):
+        def __init__(self, **kwargs: typing.Any) -> None:  # noqa: ANN401
+            recorded.update(kwargs)
+
+    monkeypatch.setattr(sentry_instrument, "SENTRY_LOGS_LEVEL_SUPPORTED", supported)
+    monkeypatch.setattr(sentry_instrument, "LoggingIntegration", RecordingLoggingIntegration)
+    SentryInstrument(bootstrap_config=minimal_sentry_config)._build_integrations()  # noqa: SLF001
+
+    # Asserted on the kwargs rather than on the constructed integration: the attribute that would
+    # reveal them does not exist on an SDK without the parameter, which is the case under test.
+    assert ("sentry_logs_level" in recorded) is supported

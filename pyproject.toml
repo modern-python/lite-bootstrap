@@ -48,7 +48,11 @@ orjson = [
 sentry = [
     # >=1.31 for the `max_value_length` init option; >=2.1 for sentry_sdk.set_tags (plural,
     # SentryInstrument.bootstrap) -- the higher floor wins.
-    "sentry-sdk>=2.1",
+    # 2.1 predates Python 3.13's FrameLocalsProxy, which the SDK fails to pickle when capturing a
+    # request, and 3.14 needs later fixes again. Marked rather than raised, so 3.10-3.12 keep 2.1.
+    "sentry-sdk>=2.1; python_version < '3.13'",
+    "sentry-sdk>=2.11; python_version == '3.13'",
+    "sentry-sdk>=2.59; python_version >= '3.14'",
 ]
 pyroscope = [
     # >=0.7.2 for pyroscope.shutdown() (PyroscopeInstrument.teardown); 0.7.1 and below carry
