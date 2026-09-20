@@ -4,7 +4,7 @@ Speed alone does not settle whether a scenario is worth adopting. This drives a 
 raises, with an incoming `sentry-trace` header, and prints what survived on the captured event:
 the transaction name, whether the incoming distributed trace was continued, and the breadcrumbs.
 
-    python verify.py errors_only errors_only_no_txn errors_only_skip_txn
+    python verify.py errors_only errors_only_no_txn errors_only_logging_lean errors_only_skip_txn
 
 Each scenario runs in its own process, because `sentry_sdk.init` cannot be undone between them.
 """
@@ -34,7 +34,7 @@ INCOMING_SPAN_ID: typing.Final = "bbbbbbbbbbbbbbbb"
 logger = logging.getLogger("bench")
 
 
-HERE: typing.Final = pathlib.Path(__file__).resolve().parent
+HERE = pathlib.Path(__file__).resolve().parent
 
 
 class CapturingTransport(Transport):
@@ -89,13 +89,18 @@ def describe(scenario: str, event: dict[str, typing.Any]) -> dict[str, typing.An
     }
 
 
-def describe_one(scenario: str) -> None:
+def resolve(parser: argparse.ArgumentParser, name: str) -> typing.Callable[[], dict[str, typing.Any]]:
+    if name not in sentry_scenarios.SCENARIOS:
+        parser.error(f"unknown scenario: {name}")
+    build = sentry_scenarios.SCENARIOS[name]
+    if build is None:
+        parser.error(f"scenario '{name}' captures nothing")
+    return build
+
+
+def run_scenario(scenario: str, build: typing.Callable[[], dict[str, typing.Any]]) -> None:
     transport = CapturingTransport()
-    kwargs = sentry_scenarios.SCENARIOS[scenario]
-    if kwargs is None:
-        msg = f"scenario '{scenario}' captures nothing"
-        raise ValueError(msg)
-    init_kwargs = kwargs()
+    init_kwargs = build()
     init_kwargs["transport"] = transport
     sentry_sdk.init(**init_kwargs)
     for patch in sentry_scenarios.PATCHES.get(scenario, ()):
@@ -110,30 +115,21 @@ def describe_one(scenario: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("scenario", nargs="+")
+    parser.add_argument("scenarios", nargs="+")
     args = parser.parse_args()
-
-    # Validate every scenario before running any, so a typo in the last one does not
-    # surface as a subprocess traceback after the earlier ones have already run.
-    for scenario in args.scenario:
-        if scenario not in sentry_scenarios.SCENARIOS:
-            parser.error(f"unknown scenario: {scenario}")
-        if sentry_scenarios.SCENARIOS[scenario] is None:
-            parser.error(f"scenario '{scenario}' captures nothing")
+    builds = [resolve(parser, name) for name in args.scenarios]
 
     logging.basicConfig(level=logging.INFO, stream=io.StringIO())
 
-    # Each extra scenario gets its own process: `sentry_sdk.init` and the PATCHES
-    # monkeypatches cannot be undone, so a loop here would report later scenarios
-    # through the earlier one's patches.
-    if len(args.scenario) > 1:
-        for scenario in args.scenario:
+    if len(args.scenarios) > 1:
+        # One process each; inprocess.py explains why none of this can be undone between scenarios.
+        for scenario in args.scenarios:
             subprocess.run(  # noqa: S603
                 [sys.executable, str(HERE / "verify.py"), scenario], check=True, cwd=HERE
             )
         return
 
-    describe_one(args.scenario[0])
+    run_scenario(args.scenarios[0], builds[0])
 
 
 if __name__ == "__main__":
