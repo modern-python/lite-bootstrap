@@ -285,7 +285,7 @@ cd benchmarks
 ../.venv/bin/python run_http.py stack async bare,full,full_all_tuned
 
 # what a scenario gives up, and where the time goes inside one
-../.venv/bin/python verify.py errors_only_no_txn
+../.venv/bin/python verify.py errors_only errors_only_no_txn errors_only_logging_lean errors_only_skip_txn
 ../.venv/bin/python micro.py
 ../.venv/bin/python profile_one.py sentry errors_only
 ../.venv/bin/python profile_one.py sentry errors_only --callers 'Random.seed'
