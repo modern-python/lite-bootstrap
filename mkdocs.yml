@@ -9,6 +9,7 @@ nav:
       - Quickstart: introduction/quickstart.md
       - Installation: introduction/installation.md
       - Configuration: introduction/configuration.md
+      - Performance: introduction/performance.md
   - Integrations:
       - Litestar: integrations/litestar.md
       - FastStream: integrations/faststream.md
@@ -74,7 +75,11 @@ markdown_extensions:
   - pymdownx.tabbed:
       alternate_style: true
   - pymdownx.inlinehilite
-  - pymdownx.snippets
+  # Reaches benchmarks/README.md, outside docs_dir: the performance page shares its tables
+  # rather than keeping a second copy of the numbers, and check_paths makes a move fail loudly.
+  - pymdownx.snippets:
+      base_path: ["."]
+      check_paths: true
   - pymdownx.superfences
   - def_list
   - codehilite:

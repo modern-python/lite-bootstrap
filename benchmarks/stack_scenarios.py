@@ -4,8 +4,8 @@ Configured through `FastAPIBootstrapper`, so these are the costs a real service 
 OTLP spans go to `stub_otlp.py` in a separate process so the exporter succeeds instead of
 spinning on retry backoff; Sentry events go to `driver.TRANSPORT`.
 
-The `_patch_*` helpers simulate configuration lite-bootstrap does not expose yet
-(issues #184 and #185), so the value of exposing it can be measured.
+Every scenario here is reachable through `FastAPIConfig`, so a reader can copy the tuned
+configuration into their own service and get the measured behaviour.
 """
 
 import os
@@ -14,14 +14,10 @@ import typing
 import structlog
 from driver import DSN, TRANSPORT
 from fastapi import FastAPI
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased
 from sentry_sdk.integrations.fastapi import FastApiIntegration
-from sentry_sdk.integrations.logging import LoggingIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
 
-import lite_bootstrap.instruments.opentelemetry_instrument as otel_instrument
 from lite_bootstrap import FastAPIBootstrapper, FastAPIConfig
 
 
@@ -43,6 +39,8 @@ _OTEL: typing.Final = {
     "opentelemetry_endpoint": OTLP_ENDPOINT,
     "opentelemetry_exporter_protocol": "http",
 }
+_OTEL_EXCLUDE_SPANS: typing.Final = {"opentelemetry_exclude_spans": ["receive", "send"]}
+_OTEL_SAMPLER: typing.Final = {"opentelemetry_sampler": ParentBased(TraceIdRatioBased(SAMPLE_RATIO))}
 _PROMETHEUS: typing.Final = {"prometheus_metrics_path": "/metrics"}
 _LOGGING: typing.Final = {"logging_enabled": True}
 _SENTRY: typing.Final = {
@@ -58,9 +56,10 @@ def _sentry_tuned() -> dict[str, typing.Any]:
         "sentry_integrations": [
             StarletteIntegration(http_methods_to_capture=()),
             FastApiIntegration(http_methods_to_capture=()),
-            LoggingIntegration(level=None, sentry_logs_level=None),
         ],
-        "sentry_additional_params": {"transport": TRANSPORT, "auto_session_tracking": False},
+        "sentry_logging_breadcrumb_level": None,
+        "sentry_auto_session_tracking": False,
+        "sentry_additional_params": {"transport": TRANSPORT},
     }
 
 
@@ -86,42 +85,11 @@ SCENARIOS: dict[str, typing.Callable[[], dict[str, typing.Any]]] = {
     "full_no_otel": lambda: config(_PROMETHEUS, _LOGGING, _SENTRY),
     "full_no_sentry": lambda: config(_OTEL, _PROMETHEUS, _LOGGING),
     "full_sentry_tuned": lambda: config(_OTEL, _PROMETHEUS, _LOGGING, _sentry_tuned()),
+    "otel_exclude_spans": lambda: config(_OTEL, _OTEL_EXCLUDE_SPANS),
+    "otel_sampler": lambda: config(_OTEL, _OTEL_SAMPLER),
+    "otel_tuned": lambda: config(_OTEL, _OTEL_EXCLUDE_SPANS, _OTEL_SAMPLER),
+    "full_all_tuned": lambda: config(_OTEL, _OTEL_EXCLUDE_SPANS, _OTEL_SAMPLER, _PROMETHEUS, _LOGGING, _sentry_tuned()),
 }
-
-
-def _patch_exclude_send_receive_spans() -> None:
-    """`instrument_app` accepts `exclude_spans`; lite-bootstrap never passes it (issue #185)."""
-    original = FastAPIInstrumentor.instrument_app
-
-    def patched(**kwargs: object) -> None:
-        kwargs.setdefault("exclude_spans", ["receive", "send"])
-        original(**typing.cast("dict[str, typing.Any]", kwargs))
-
-    FastAPIInstrumentor.instrument_app = staticmethod(patched)  # ty: ignore[invalid-assignment]
-
-
-def _patch_ratio_sampler() -> None:
-    """`TracerProvider()` defaults to always-on and no sampler is configurable (issue #184)."""
-    original = otel_instrument.TracerProvider
-
-    def patched(**kwargs: object) -> TracerProvider:
-        typed = typing.cast("dict[str, typing.Any]", kwargs)
-        return original(sampler=ParentBased(TraceIdRatioBased(SAMPLE_RATIO)), **typed)
-
-    otel_instrument.TracerProvider = patched  # ty: ignore[invalid-assignment]
-
-
-PATCHES: dict[str, list[typing.Callable[[], None]]] = {
-    "otel_exclude_spans": [_patch_exclude_send_receive_spans],
-    "otel_sampler": [_patch_ratio_sampler],
-    "otel_tuned": [_patch_exclude_send_receive_spans, _patch_ratio_sampler],
-    "full_all_tuned": [_patch_exclude_send_receive_spans, _patch_ratio_sampler],
-}
-
-SCENARIOS["otel_exclude_spans"] = SCENARIOS["otel"]
-SCENARIOS["otel_sampler"] = SCENARIOS["otel"]
-SCENARIOS["otel_tuned"] = SCENARIOS["otel"]
-SCENARIOS["full_all_tuned"] = SCENARIOS["full_sentry_tuned"]
 
 
 def make_app(kind: str) -> FastAPI:
@@ -149,21 +117,14 @@ def make_app(kind: str) -> FastAPI:
     return app
 
 
-def setup(scenario: str) -> None:
-    """Apply the patches, then bootstrap. Patches must land before `instrument_app` runs."""
-    for patch in PATCHES.get(scenario, ()):
-        patch()
-
-
 def bootstrap(scenario: str, app: FastAPI) -> None:
     FastAPIBootstrapper(FastAPIConfig(application=app, **SCENARIOS[scenario]())).bootstrap()
 
 
 def build(scenario: str, app_kind: str) -> FastAPI:
-    setup(scenario)
     app = make_app(app_kind)
     bootstrap(scenario, app)
     return app
 
 
-__all__ = ["APPS", "PATCHES", "SCENARIOS", "bootstrap", "build", "config", "make_app", "setup"]
+__all__ = ["APPS", "SCENARIOS", "bootstrap", "build", "config", "make_app"]

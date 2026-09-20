@@ -15,7 +15,7 @@ Additional parameters can also be supplied through the settings object:
 - `sentry_max_breadcrumbs` - the total amount of breadcrumbs
 - `sentry_max_value_length` - the max event payload length
 - `sentry_attach_stacktrace` - if True, stack traces are automatically attached to all messages logged
-- `sentry_auto_session_tracking` - whether every request opens and closes a Sentry release-health `Session` (default: `True`), measured at ~7 µs per request. Set it to `False` if you do not use Sentry release health.
+- `sentry_auto_session_tracking` - whether every request opens and closes a Sentry release-health `Session` (default: `True`), measured at ~7.7 µs per request. Set it to `False` if you do not use Sentry release health.
 - `sentry_integrations` - list of integrations to enable
 - `sentry_logging_breadcrumb_level` - the minimum standard-library log level recorded as a breadcrumb (default: `logging.INFO`). Passed as `LoggingIntegration(level=...)`; see below.
 - `sentry_tags` - key/value string pairs that are both indexed and searchable
@@ -24,6 +24,9 @@ Additional parameters can also be supplied through the settings object:
 - `sentry_before_send` - optional callback chained after the built-in structlog enricher, passed to `sentry_sdk.init(before_send=...)`
 
 Read more about sentry_sdk params [here](https://docs.sentry.io/platforms/python/configuration/options/).
+
+Sentry is the second most expensive instrument in the stack, and the settings that actually move
+the number are not the ones most people reach for. See [Performance](performance.md).
 
 ### Sentry logging integration
 
@@ -37,8 +40,7 @@ off, but `SentryLogsHandler.emit` formats the record *before* it checks whether 
 ([getsentry/sentry-python#7402](https://github.com/getsentry/sentry-python/issues/7402)) - it formats
 every `INFO`+ record and discards the result. Dropping breadcrumbs as well, with
 `sentry_logging_breadcrumb_level=None`, saves more but costs you log breadcrumbs on error events, so
-it stays on by default. Both are measured in
-[the benchmarks](https://github.com/modern-python/lite-bootstrap/blob/main/benchmarks/README.md#4c-logging-cost-per-record-not-per-request).
+it stays on by default. Both are measured on the [performance page](performance.md#where-the-time-goes).
 
 Two ways to opt out of the appended integration: supply your own `LoggingIntegration` in
 `sentry_integrations`, which lite-bootstrap leaves untouched, or set
@@ -47,6 +49,8 @@ Under either, `sentry_logging_breadcrumb_level` is ignored and lite-bootstrap wa
 
 
 ## Prometheus
+
+Prometheus is the cheapest of the three non-logging instruments; see [Performance](performance.md).
 
 To bootstrap Prometheus, you must provide at least:
 
@@ -106,6 +110,7 @@ Additional parameters:
 
 Sampling is the cheapest way to cut what tracing costs: on a benchmark endpoint returning a constant,
 `ParentBased(TraceIdRatioBased(0.01))` saved ~55 µs per request against the always-on default.
+OpenTelemetry is the most expensive instrument in the stack; see [Performance](performance.md).
 
 ```python
 from opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased
@@ -120,7 +125,7 @@ config = FastAPIConfig(
 For FastAPI there is additionally:
 
 - `opentelemetry_exclude_spans` - drops the ASGI `receive` and/or `send` spans, leaving only the
-  server span. Empty by default, which records all three. `["receive", "send"]` is worth ~33 µs per
+  server span. Empty by default, which records all three. `["receive", "send"]` is worth ~34 µs per
   request on the benchmark endpoint, at the cost of two thirds of the spans disappearing from your
   trace view.
 
@@ -152,6 +157,9 @@ When OpenTelemetry is also enabled, a `PyroscopeSpanProcessor` is automatically 
 ## Structlog
 
 Structlog is bootstrapped by default. To opt out, set `logging_enabled=False`.
+
+Configuring it costs almost nothing; the cost arrives per log record, and most of it is Sentry's.
+See [Performance](performance.md).
 
 Additional parameters:
 
