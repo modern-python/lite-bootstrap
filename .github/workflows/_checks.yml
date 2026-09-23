@@ -166,7 +166,18 @@ jobs:
           cache-dependency-glob: "**/pyproject.toml"
       - run: uv python install ${{ matrix.python-version }}
       - run: uv venv --python ${{ matrix.python-version }}
+      # --only-binary rather than --no-build, which would refuse to build this project too while
+      # floor_smoke.py imports it. Naming packages is what tests/test_floors_wheel_only.py keeps
+      # from drifting as dependencies are added.
       - name: Install at the declared floors
-        run: uv pip install --resolution lowest-direct ".[${{ matrix.extras }}]"
+        run: >-
+          uv pip install --resolution lowest-direct
+          --only-binary fastapi,fastmcp,faststream,litestar,orjson,pydantic
+          --only-binary opentelemetry-api,opentelemetry-sdk,opentelemetry-instrumentation
+          --only-binary opentelemetry-instrumentation-asgi,opentelemetry-instrumentation-fastapi
+          --only-binary opentelemetry-exporter-otlp-proto-grpc,opentelemetry-exporter-otlp-proto-http
+          --only-binary prometheus-client,prometheus-fastapi-instrumentator
+          --only-binary pyroscope-io,sentry-sdk,structlog,typing-extensions
+          ".[${{ matrix.extras }}]"
       - name: Bootstrap at the floors
         run: .venv/bin/python scripts/floor_smoke.py ${{ matrix.target }}
