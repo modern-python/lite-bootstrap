@@ -302,26 +302,18 @@ async def test_faststream_prometheus_is_skipped_without_middleware_or_registry(b
         bootstrapper.teardown()
 
 
-def test_faststream_logging_teardown_runs_super_when_broker_write_raises(broker: RedisBroker) -> None:
+def test_faststream_logging_teardown_runs_super_when_broker_write_raises(
+    broker: RedisBroker, monkeypatch: pytest.MonkeyPatch
+) -> None:
     bootstrap_config = build_faststream_config(broker=broker)
     instrument = FastStreamLoggingInstrument(bootstrap_config=bootstrap_config)
     instrument.bootstrap()
 
-    # Make broker.config.logger.params_storage raise on write by promoting the instance to a
-    # subclass that shadows params_storage with a property whose setter always raises.
-    logger_state = broker.config.logger
+    def _raise_on_write(_self: object, _value: object) -> None:
+        msg = "broker write boom"
+        raise RuntimeError(msg)
 
-    class _BrokenLoggerState(type(logger_state)):  # ty: ignore[unsupported-base]
-        @property  # type: ignore[override]
-        def params_storage(self) -> object:  # pragma: no cover
-            return None
-
-        @params_storage.setter
-        def params_storage(self, _value: object) -> None:
-            msg = "broker write boom"
-            raise RuntimeError(msg)
-
-    logger_state.__class__ = _BrokenLoggerState
+    monkeypatch.setattr(type(broker.config.logger), "params_storage", property(fset=_raise_on_write), raising=False)
 
     # super().teardown() still runs (LoggingInstrument's structlog reset); broker write raises last.
     with pytest.raises(RuntimeError, match="broker write boom"):
