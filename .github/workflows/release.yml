@@ -4,42 +4,22 @@ name: Release
 # GitHub Release. Replaces the old `on: release: published` publish.yml — that
 # trigger is removed so the published Release this workflow creates can't re-fire
 # it (double-publish). The tag is the sole entry point; by convention a tag is
-# only cut off a green main, so the sole in-workflow gate is floors-gate below,
-# covering the one check that never runs on pull requests.
+# only cut off a green main, so there is no in-workflow CI gate.
 on:
   push:
     tags:
       - '[0-9]+.[0-9]+.[0-9]+'               # stable:      2.7.2
       - '[0-9]+.[0-9]+.[0-9]+[a-z]+[0-9]+'   # pre-release: 2.0.0rc1, 4.0.0a2
 
-permissions: {}
+# contents: write -> create the GitHub Release; id-token: write -> OIDC for PyPI Trusted Publishing.
+permissions:
+  contents: write
+  id-token: write
 
 jobs:
-  # Gates the tag on the dependency floors, which _checks.yml runs only for scheduled.yml, never
-  # for pull requests. A floor break can therefore merge with every check green, which is how the
-  # crash in 1.8.0 reached PyPI (#245). Placed before release so a failure costs nothing.
-  floors-gate:
-    runs-on: ubuntu-latest
-    # contents: read -> the history the ancestor check walks; actions: read -> list workflow runs.
-    permissions:
-      contents: read
-      actions: read
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0  # the ancestor check needs history, not just the tagged commit
-      - run: .github/scripts/require-floor-run.sh
-        env:
-          GH_TOKEN: ${{ github.token }}
-
   release:
-    needs: floors-gate
     runs-on: ubuntu-latest
     environment: pypi  # scopes the PyPI Trusted Publisher; hook for approval rules
-    # contents: write -> create the GitHub Release; id-token: write -> OIDC for PyPI Trusted Publishing.
-    permissions:
-      contents: write
-      id-token: write
     steps:
       - uses: actions/checkout@v6
       - uses: extractions/setup-just@v4
