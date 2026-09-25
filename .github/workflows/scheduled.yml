@@ -1,7 +1,7 @@
 name: scheduled-dep-check
 on:
   schedule:
-    # Daily: both resolutions here are unpinned, so an upstream release can break main
+    # Daily: the resolution here is unpinned, so an upstream release can break main
     # between runs. Daily bounds that window at a day and attributes the failure to upstream
     # (a tracking issue) instead of to whichever pull request happens to run next.
     - cron: "0 6 * * *"        # daily 06:00 UTC
@@ -14,8 +14,6 @@ concurrency:
 jobs:
   checks:
     uses: ./.github/workflows/_checks.yml
-    with:
-      lowest-direct: true
 
   report-failure:
     needs: checks

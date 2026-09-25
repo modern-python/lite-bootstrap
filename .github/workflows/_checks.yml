@@ -1,15 +1,6 @@
 name: checks
 on:
-  workflow_call:
-    inputs:
-      lowest-direct:
-        description: >-
-          Run the declared dependency floors. Off for PRs: the job resolves direct dependencies at
-          their floor and transitives at their newest, so a release published upstream today can
-          turn it red for reasons no PR here caused. scheduled.yml turns it on, where that failure
-          opens a tracking issue instead of blocking a merge.
-        type: boolean
-        default: false
+  workflow_call: {}
 
 jobs:
   lint:
@@ -131,7 +122,7 @@ jobs:
           if [ -n "$failed" ]; then echo "::error::extras failed isolated install+import:$failed"; exit 1; fi
           echo "all extras install and import in isolation"
 
-  lowest-direct:
+  floors:
     # Every other job resolves newest, so a declared floor is a claim nothing checks. This one
     # pins each direct dependency to the floor pyproject.toml declares and bootstraps against it.
     # Per framework rather than all-extras at once: a floor declared in one extra pulls the shared
@@ -141,7 +132,7 @@ jobs:
     # deliberately did not install as unresolved. So nothing type-checks at the floor - an
     # annotation naming an optional dependency's internals has to span the declared range, and only
     # a human checks that.
-    if: inputs.lowest-direct
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
