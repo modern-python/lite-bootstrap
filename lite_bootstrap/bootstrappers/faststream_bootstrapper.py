@@ -26,7 +26,7 @@ if import_checker.is_prometheus_client_installed:
 
 if import_checker.is_opentelemetry_installed:
     from opentelemetry import trace
-    from opentelemetry.metrics import Meter, MeterProvider
+    from opentelemetry.metrics import Meter, MeterProvider, get_meter_provider
     from opentelemetry.trace import TracerProvider, get_tracer_provider
 
     tracer: typing.Final = trace.get_tracer(__name__)
@@ -149,7 +149,9 @@ class FastStreamOpenTelemetryInstrument(OpenTelemetryInstrument):
         config = self.bootstrap_config
         if config.opentelemetry_middleware_cls and config.application.broker:
             config.application.broker.add_middleware(
-                config.opentelemetry_middleware_cls(tracer_provider=get_tracer_provider())
+                config.opentelemetry_middleware_cls(
+                    tracer_provider=get_tracer_provider(), meter_provider=get_meter_provider()
+                )
             )
 
 

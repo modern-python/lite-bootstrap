@@ -15,7 +15,10 @@ from faststream.redis import RedisBroker, TestRedisBroker
 from faststream.redis.opentelemetry import RedisTelemetryMiddleware
 from faststream.redis.prometheus import RedisPrometheusMiddleware
 from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
+from opentelemetry.metrics import MeterProvider, get_meter_provider
 from opentelemetry.sdk import resources
+from opentelemetry.sdk.metrics import MeterProvider as SDKMeterProvider
+from opentelemetry.trace import TracerProvider
 from starlette import status
 from starlette.testclient import TestClient
 
@@ -380,5 +383,32 @@ def test_faststream_bootstrap_applies_opentelemetry_instrumentors(
         assert len(instruments) == 1
         assert instruments[0]._tracer_provider is not None  # noqa: SLF001
         assert recorded_tracer_providers == [instruments[0]._tracer_provider]  # noqa: SLF001
+    finally:
+        bootstrapper.teardown()
+
+
+async def test_faststream_otel_hands_the_middleware_the_meter_provider(broker: RedisBroker) -> None:
+    """FastStream's telemetry middleware declares meter_provider and was being handed nothing."""
+    recorded: dict[str, object] = {}
+
+    class RecordingTelemetryMiddleware(RedisTelemetryMiddleware):
+        def __init__(
+            self, *, tracer_provider: "TracerProvider | None" = None, meter_provider: "MeterProvider | None" = None
+        ) -> None:
+            recorded["tracer_provider"] = tracer_provider
+            recorded["meter_provider"] = meter_provider
+            super().__init__(tracer_provider=tracer_provider, meter_provider=meter_provider)
+
+    bootstrap_config = dataclasses.replace(
+        build_faststream_config(broker=broker),
+        opentelemetry_metrics_endpoint="localhost:4317",
+        opentelemetry_middleware_cls=RecordingTelemetryMiddleware,
+    )
+    bootstrapper = FastStreamBootstrapper(bootstrap_config=bootstrap_config)
+    try:
+        bootstrapper.bootstrap()
+
+        assert recorded["meter_provider"] is get_meter_provider()
+        assert isinstance(get_meter_provider(), SDKMeterProvider)
     finally:
         bootstrapper.teardown()

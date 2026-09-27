@@ -10,6 +10,8 @@ from unittest.mock import patch
 import fastapi
 import pytest
 import structlog
+from opentelemetry.metrics import get_meter_provider
+from opentelemetry.sdk.metrics import MeterProvider as SDKMeterProvider
 from starlette import status
 from starlette.testclient import TestClient
 
@@ -423,3 +425,19 @@ def test_fastapi_access_log_records_a_raising_request(
     assert level == "exception"
     # No response ever started, so there is no status to report.
     assert fields["http"]["status_code"] is None
+
+
+def test_fastapi_otel_hands_the_instrumentor_the_meter_provider(fastapi_config: FastAPIConfig) -> None:
+    """The FastAPI instrumentor builds duration histograms, which reach a no-op provider unasked."""
+    config = dataclasses.replace(fastapi_config, opentelemetry_metrics_endpoint="localhost:4317")
+    bootstrapper = FastAPIBootstrapper(bootstrap_config=config)
+
+    with patch.object(fastapi_bootstrapper.FastAPIInstrumentor, "instrument_app") as mock_instrument_app:
+        try:
+            bootstrapper.bootstrap()
+        finally:
+            with patch.object(fastapi_bootstrapper.FastAPIInstrumentor, "uninstrument_app"):
+                bootstrapper.teardown()
+
+    assert mock_instrument_app.call_args.kwargs["meter_provider"] is get_meter_provider()
+    assert isinstance(get_meter_provider(), SDKMeterProvider)

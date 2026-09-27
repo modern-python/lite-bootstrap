@@ -37,6 +37,7 @@ if import_checker.is_structlog_installed:
     fastapi_access_logger: typing.Final = structlog.get_logger("http.access")
 
 if import_checker.is_opentelemetry_installed:
+    from opentelemetry.metrics import get_meter_provider
     from opentelemetry.trace import get_tracer_provider
 
 if import_checker.is_fastapi_opentelemetry_installed:
@@ -200,6 +201,7 @@ class FastAPIOpenTelemetryInstrument(OpenTelemetryInstrument):
         FastAPIInstrumentor.instrument_app(
             app=self.bootstrap_config.app,
             tracer_provider=get_tracer_provider(),
+            meter_provider=get_meter_provider(),
             excluded_urls=",".join(self._build_excluded_urls()),
             exclude_spans=self.bootstrap_config.opentelemetry_exclude_spans,
         )

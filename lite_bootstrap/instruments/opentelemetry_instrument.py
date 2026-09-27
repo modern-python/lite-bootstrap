@@ -16,7 +16,10 @@ if typing.TYPE_CHECKING:
 
 if import_checker.is_opentelemetry_sdk_installed:
     from opentelemetry.context import Context
+    from opentelemetry.metrics import get_meter_provider, set_meter_provider
     from opentelemetry.sdk import resources
+    from opentelemetry.sdk.metrics import MeterProvider
+    from opentelemetry.sdk.metrics.export import MetricExporter, PeriodicExportingMetricReader
     from opentelemetry.sdk.trace import ReadableSpan, SpanProcessor, TracerProvider
     from opentelemetry.sdk.trace.export import (
         BatchSpanProcessor,
@@ -30,9 +33,11 @@ if import_checker.is_otlp_grpc_exporter_installed:
     # opentelemetry-api can be present without the grpc otlp exporter package (e.g.
     # lite-bootstrap[fastmcp] pulls bare opentelemetry-api transitively); this must
     # stay a separate guard from is_opentelemetry_installed above.
+    from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter as OTLPGrpcMetricExporter
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter as OTLPGrpcSpanExporter
 
 if import_checker.is_otlp_http_exporter_installed:
+    from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter as OTLPHttpMetricExporter
     from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as OTLPHttpSpanExporter
 
 if import_checker.is_pyroscope_installed:
@@ -64,6 +69,7 @@ class OpenTelemetryConfig(OpenTelemetryServiceFieldsConfig):
         default_factory=lambda: os.environ.get("HOSTNAME") or None
     )
     opentelemetry_endpoint: str | None = None
+    opentelemetry_metrics_endpoint: str | None = None
     opentelemetry_insecure: bool = True
     opentelemetry_exporter_protocol: typing.Literal["grpc", "http"] = "grpc"
     opentelemetry_instrumentors: list[typing.Union[InstrumentorWithParams, "BaseInstrumentor"]] = dataclasses.field(
@@ -77,25 +83,30 @@ class OpenTelemetryConfig(OpenTelemetryServiceFieldsConfig):
     opentelemetry_excluded_urls: list[str] = dataclasses.field(default_factory=list)
 
     def __post_init__(self) -> None:
-        host = self._parse_remote_insecure_host()
-        if host is not None:
+        for host in self._parse_remote_insecure_hosts():
             warn_at_caller(
-                f"OTLP exporter sending traces unencrypted to non-local host {host!r}; "
+                f"OTLP exporter sending telemetry unencrypted to non-local host {host!r}; "
                 "set opentelemetry_insecure=False or use a localhost/unix endpoint."
             )
         super().__post_init__()
 
-    def _parse_remote_insecure_host(self) -> str | None:
+    def _parse_remote_insecure_hosts(self) -> list[str]:
+        """Return each distinct host an insecure, non-local endpoint points at, in declaration order."""
+        endpoints = (self.opentelemetry_endpoint, self.opentelemetry_metrics_endpoint)
+        hosts = (self._parse_remote_insecure_host(endpoint) for endpoint in endpoints)
+        return list(dict.fromkeys(host for host in hosts if host is not None))
+
+    def _parse_remote_insecure_host(self, endpoint: str | None) -> str | None:
         """Return the host name if the endpoint is insecure AND non-local; else None."""
         if self.opentelemetry_exporter_protocol != "grpc":
             return None
-        if not self.opentelemetry_endpoint or not self.opentelemetry_insecure:
+        if not endpoint or not self.opentelemetry_insecure:
             return None
-        if self.opentelemetry_endpoint.startswith("unix://"):
+        if endpoint.startswith("unix://"):
             return None
         # urlparse treats schemeless input as `path`, misparsing `host:port` forms.
         # Prepend `//` so urlparse always sees a network-location-style input.
-        raw = self.opentelemetry_endpoint
+        raw = endpoint
         if "://" not in raw:
             raw = f"//{raw}"
         parsed = urllib.parse.urlparse(raw)
@@ -144,9 +155,14 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
     ``OpenTelemetryInstrument`` per process; do not bootstrap a second instance.
     """
 
-    not_configured_reason = "opentelemetry_endpoint is empty and opentelemetry_log_traces is False"
+    not_configured_reason = (
+        "opentelemetry_endpoint and opentelemetry_metrics_endpoint are empty and opentelemetry_log_traces is False"
+    )
     missing_dependency_message = "opentelemetry-sdk is not installed"
     _tracer_provider: "TracerProvider | None" = dataclasses.field(
+        default_factory=lambda: None, init=False, repr=False, compare=False
+    )
+    _meter_provider: "MeterProvider | None" = dataclasses.field(
         default_factory=lambda: None, init=False, repr=False, compare=False
     )
     _prior_logger_disabled: dict[str, bool] = dataclasses.field(
@@ -155,7 +171,11 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
 
     @classmethod
     def is_configured(cls, bootstrap_config: "OpenTelemetryConfig") -> bool:
-        return bool(bootstrap_config.opentelemetry_endpoint or bootstrap_config.opentelemetry_log_traces)
+        return bool(
+            bootstrap_config.opentelemetry_endpoint
+            or bootstrap_config.opentelemetry_metrics_endpoint
+            or bootstrap_config.opentelemetry_log_traces
+        )
 
     @staticmethod
     def dependencies_installed() -> bool:
@@ -223,6 +243,50 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
             return None
         return OTLPHttpSpanExporter(endpoint=config.opentelemetry_endpoint)
 
+    def _build_metric_exporter(self) -> "MetricExporter | None":
+        """Return the OTLP metric exporter for the configured protocol, or None after warning it is missing.
+
+        Only call this once opentelemetry_metrics_endpoint is set: both warnings claim that it is.
+        """
+        config = self.bootstrap_config
+        if config.opentelemetry_exporter_protocol == "grpc":
+            if not import_checker.is_otlp_grpc_exporter_installed:
+                warn_at_caller(
+                    "opentelemetry_metrics_endpoint is set but the gRPC OTLP exporter is not installed; "
+                    "metrics will not be exported. Install lite-bootstrap[otl].",
+                    category=InstrumentDependencyMissingWarning,
+                )
+                return None
+            return OTLPGrpcMetricExporter(
+                endpoint=config.opentelemetry_metrics_endpoint,
+                insecure=config.opentelemetry_insecure,
+            )
+        if not import_checker.is_otlp_http_exporter_installed:
+            warn_at_caller(
+                "opentelemetry_metrics_endpoint is set but the HTTP OTLP exporter is not installed; "
+                "metrics will not be exported. Install lite-bootstrap[otl-http].",
+                category=InstrumentDependencyMissingWarning,
+            )
+            return None
+        return OTLPHttpMetricExporter(endpoint=config.opentelemetry_metrics_endpoint)
+
+    def _bootstrap_metrics(self, resource: "resources.Resource") -> None:
+        config = self.bootstrap_config
+        if not config.opentelemetry_metrics_endpoint:
+            return
+        metric_exporter = self._build_metric_exporter()
+        if metric_exporter is None:
+            return
+        meter_provider = MeterProvider(
+            resource=resource, metric_readers=[PeriodicExportingMetricReader(metric_exporter)]
+        )
+        set_meter_provider(meter_provider)
+        if get_meter_provider() is not meter_provider:
+            warn_at_caller(
+                "a MeterProvider is already installed; the configured metrics exporter and resource will not be used"
+            )
+        self._meter_provider = meter_provider
+
     def _apply_instrumentors(self, tracer_provider: "TracerProvider") -> None:
         for one_instrumentor in self.bootstrap_config.opentelemetry_instrumentors:
             if isinstance(one_instrumentor, InstrumentorWithParams):
@@ -236,7 +300,8 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
     def bootstrap(self) -> None:
         config = self.bootstrap_config
         self._silence_otel_loggers()
-        tracer_provider = TracerProvider(resource=self._build_resource(), sampler=config.opentelemetry_sampler)
+        resource = self._build_resource()
+        tracer_provider = TracerProvider(resource=resource, sampler=config.opentelemetry_sampler)
         set_tracer_provider(tracer_provider)
         if get_tracer_provider() is not tracer_provider:
             warn_at_caller(
@@ -249,6 +314,7 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
             tracer_provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter(formatter=_format_span)))
         if config.opentelemetry_endpoint and (span_exporter := self._build_span_exporter()):
             tracer_provider.add_span_processor(BatchSpanProcessor(span_exporter))
+        self._bootstrap_metrics(resource)
         self._apply_instrumentors(tracer_provider)
 
     def teardown(self) -> None:
@@ -268,6 +334,12 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
                         self._tracer_provider.shutdown()
                 finally:
                     self._tracer_provider = None
+            if self._meter_provider is not None:
+                try:
+                    with teardown_errors.capture("MeterProvider"):
+                        self._meter_provider.shutdown()
+                finally:
+                    self._meter_provider = None
 
 
 # Backward-compatible alias preserved for users importing the old (lowercase t) spelling.
