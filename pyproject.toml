@@ -7,7 +7,7 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.10,<4"
 license = "MIT"
-keywords = ["microservices", "bootstrap", "opentelemetry", "sentry", "error-tracing", "fastapi", "litestar", "faststream", "structlog", "fastmcp", "python"]
+keywords = ["microservices", "bootstrap", "opentelemetry", "sentry", "prometheus", "healthcheck", "fastapi", "litestar", "faststream", "structlog", "fastmcp", "python"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
