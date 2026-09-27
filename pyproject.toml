@@ -71,6 +71,8 @@ otl = [
     "opentelemetry-sdk>=1.28",
     "opentelemetry-exporter-otlp-proto-grpc>=1.28",
     "opentelemetry-instrumentation>=0.49b0",
+    # The exporter pulls grpcio, whose first cp314 wheels (1.75.1) require typing-extensions>=4.12.
+    "typing-extensions>=4.12; python_version >= '3.14'",
 ]
 otl-http = [
     "opentelemetry-api>=1.28",
@@ -91,6 +93,8 @@ fastapi = [
     # >=0.112.2 for fastapi.routing._merge_lifespan_context, which FastAPIBootstrapper._wrap_lifespan
     # uses to chain teardown onto the user's lifespan. Private, so it can move without a deprecation.
     "fastapi>=0.112.2",
+    # fastapi 0.112.2 requires typing-extensions>=4.8.
+    "typing-extensions>=4.8",
 ]
 fastapi-sentry = [
     "lite-bootstrap[fastapi,sentry]",
@@ -107,6 +111,12 @@ fastapi-metrics = [
     # >=8.0.1 carries the _IncludedRouter fix required for FastAPI >=0.137
     # (trallnag/prometheus-fastapi-instrumentator#370).
     "prometheus-fastapi-instrumentator>=8.0.1",
+    # The instrumentator requires starlette>=1.0, which fastapi first allows at 0.133.
+    "fastapi>=0.133",
+    # The lowest typing-extensions a wheel-only resolve accepts with fastapi 0.133: its pydantic
+    # stack needs 4.12, and 4.14.1 on the interpreters whose pydantic-core wheels start later.
+    "typing-extensions>=4.12; python_version < '3.13'",
+    "typing-extensions>=4.14.1; python_version >= '3.13'",
 ]
 fastapi-all = [
     "lite-bootstrap[fastapi-sentry,fastapi-otl,fastapi-logging,fastapi-metrics,pyroscope]",
@@ -158,6 +168,8 @@ faststream = [
     # combination pins typing-extensions at 4.8 and drags pydantic back to a build that has no
     # cp313 wheel either.
     "typing-extensions>=4.12.2",
+    # pydantic 2.12, the 3.14 floor above, requires >=4.14.1.
+    "typing-extensions>=4.14.1; python_version >= '3.14'",
 ]
 faststream-sentry = [
     "lite-bootstrap[faststream,sentry]",
@@ -181,6 +193,8 @@ fastmcp = [
     # (FastMcpBootstrapper registers its teardown through them --
     # docs/adr/0001-fastmcp-teardown-via-provider-lifespan.md).
     "fastmcp>=3.0",
+    # fastmcp 3.0 pulls py-key-value-aio, which requires typing-extensions>=4.15.
+    "typing-extensions>=4.15",
 ]
 fastmcp-metrics = [
     "lite-bootstrap[fastmcp]",
