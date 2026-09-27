@@ -336,7 +336,9 @@ def test_two_free_bootstrappers_both_bootstrap(free_bootstrapper_config: FreeCon
 
     try:
         first.bootstrap()
-        second.bootstrap()
+        # The second loses the set-once race for the tracer provider, which #227 made audible.
+        with pytest.warns(UserWarning, match="a TracerProvider is already installed"):
+            second.bootstrap()
 
         assert first.is_bootstrapped
         assert second.is_bootstrapped

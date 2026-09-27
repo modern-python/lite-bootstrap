@@ -182,11 +182,11 @@ def test_pyroscope_otel_adds_span_processor_when_configured() -> None:
         opentelemetry_log_traces=True,
         pyroscope_endpoint="http://pyroscope:4040",
     )
-    with patch("lite_bootstrap.instruments.opentelemetry_instrument.set_tracer_provider"):
-        instrument = OpenTelemetryInstrument(bootstrap_config=config)  # type: ignore[arg-type]
+    instrument = OpenTelemetryInstrument(bootstrap_config=config)  # type: ignore[arg-type]
+    try:
         instrument.bootstrap()
-        # The tracer_provider local is set; verify span processor fires on a real span
-    instrument.teardown()
+    finally:
+        instrument.teardown()
 
 
 def test_pyroscope_otel_span_processor_integration() -> None:
