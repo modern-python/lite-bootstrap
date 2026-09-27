@@ -175,6 +175,12 @@ def test_pyroscope_span_processor_on_start_remote_parent() -> None:
         mock_pyroscope.add_thread_tag.assert_any_call("span_name", "remote-root")
 
 
+def test_pyroscope_span_processor_does_not_fail_provider_force_flush() -> None:
+    provider = SDKTracerProvider()
+    provider.add_span_processor(otel_module.PyroscopeSpanProcessor())
+    assert provider.force_flush() is True
+
+
 def test_pyroscope_otel_adds_span_processor_when_configured() -> None:
     """OTel instrument adds PyroscopeSpanProcessor when pyroscope_endpoint is set."""
     config = FreeConfig(

@@ -47,7 +47,7 @@ if import_checker.is_opentelemetry_installed:
         }
         return event_dict
 
-else:  # pragma: no cover
+else:  # pragma: no cover - only without opentelemetry, i.e. neither the [otl] nor the [otl-http] extra
 
     def tracer_injection(_: "WrappedLogger", __: str, event_dict: "EventDict") -> "EventDict":
         return event_dict

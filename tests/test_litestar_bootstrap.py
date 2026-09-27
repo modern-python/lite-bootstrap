@@ -258,7 +258,7 @@ def test_litestar_otel_apps_cache_evicts_dead_refs() -> None:
     )
 
     async def transient_app(scope: dict, receive: object, send: object) -> None:  # noqa: ARG001
-        return None  # pragma: no cover
+        return None  # pragma: no cover - only a weakref target; the test never calls it
 
     weak_app = weakref.ref(transient_app)
     middleware._otel_apps[transient_app] = "marker"  # noqa: SLF001  # ty: ignore[invalid-assignment]
