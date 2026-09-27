@@ -4,9 +4,11 @@ import typing
 import warnings
 from importlib import reload
 
+import opentelemetry.trace
 import pytest
 import sentry_sdk
 from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
+from opentelemetry.util._once import Once
 from sentry_sdk.envelope import Envelope
 from structlog.typing import EventDict, WrappedLogger
 
@@ -39,6 +41,19 @@ class SentryTestTransport(sentry_sdk.Transport):
 
     def capture_envelope(self, envelope: Envelope) -> None:
         self.mock_envelopes.append(envelope)
+
+
+@pytest.fixture(autouse=True)
+def _reset_tracer_provider() -> typing.Iterator[None]:
+    """Give each test the process-global TracerProvider unset, as a fresh process has it.
+
+    `set_tracer_provider` is set-once, so without this the first test to bootstrap owns the global
+    and every later one silently loses the race against it. Restoring the two module-level names
+    the SDK guards it with is the only way back: there is no public reset.
+    """
+    yield
+    opentelemetry.trace._TRACER_PROVIDER = None  # noqa: SLF001
+    opentelemetry.trace._TRACER_PROVIDER_SET_ONCE = Once()  # noqa: SLF001
 
 
 @pytest.fixture

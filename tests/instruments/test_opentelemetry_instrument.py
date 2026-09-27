@@ -6,7 +6,9 @@ from unittest.mock import patch
 
 import pytest
 from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
+from opentelemetry.sdk.trace import TracerProvider as SDKTracerProvider
 from opentelemetry.sdk.trace import sampling
+from opentelemetry.trace import set_tracer_provider
 
 import lite_bootstrap.instruments.opentelemetry_instrument as otel_module
 from lite_bootstrap import import_checker
@@ -395,3 +397,44 @@ def test_missing_exporter_warning_points_at_the_caller_of_bootstrap(
         instrument.teardown()
 
     assert warning_source_files(caught, InstrumentDependencyMissingWarning) == [__file__]
+
+
+def test_bootstrap_warns_when_a_tracer_provider_is_already_installed() -> None:
+    """REGRESSION #227: losing the set-once race leaves a provider nothing will ever feed.
+
+    `set_tracer_provider` is refused when the application installed its own provider first, so the
+    exporter, sampler and resource configured here are never used, and the BatchSpanProcessor
+    worker thread the instrument started runs idle until teardown. The SDK's own complaint about
+    the refusal goes to a logger `_silence_otel_loggers` has just disabled, so without this warning
+    nothing reports it.
+    """
+    application_provider = SDKTracerProvider()
+    set_tracer_provider(application_provider)
+    instrument = OpenTelemetryInstrument(bootstrap_config=OpenTelemetryConfig(opentelemetry_log_traces=True))
+
+    try:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            instrument.bootstrap()
+    finally:
+        instrument.teardown()
+
+    assert [str(one_warning.message) for one_warning in caught] == [
+        "a TracerProvider is already installed; the configured exporter, sampler and resource will not be used"
+    ]
+    # The frame to blame is the caller's, not lite_bootstrap's own bootstrap().
+    assert warning_source_files(caught, UserWarning) == [__file__]
+
+
+def test_bootstrap_is_silent_when_it_installs_the_tracer_provider() -> None:
+    """The warning marks a lost race, so winning one must stay quiet."""
+    instrument = OpenTelemetryInstrument(bootstrap_config=OpenTelemetryConfig(opentelemetry_log_traces=True))
+
+    try:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            instrument.bootstrap()
+    finally:
+        instrument.teardown()
+
+    assert warning_source_files(caught, UserWarning) == []

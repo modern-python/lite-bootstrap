@@ -24,7 +24,7 @@ if import_checker.is_opentelemetry_sdk_installed:
         SimpleSpanProcessor,
         SpanExporter,
     )
-    from opentelemetry.trace import Span, format_span_id, set_tracer_provider
+    from opentelemetry.trace import Span, format_span_id, get_tracer_provider, set_tracer_provider
 
 if import_checker.is_otlp_grpc_exporter_installed:
     # opentelemetry-api can be present without the grpc otlp exporter package (e.g.
@@ -238,6 +238,10 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
         self._silence_otel_loggers()
         tracer_provider = TracerProvider(resource=self._build_resource(), sampler=config.opentelemetry_sampler)
         set_tracer_provider(tracer_provider)
+        if get_tracer_provider() is not tracer_provider:
+            warn_at_caller(
+                "a TracerProvider is already installed; the configured exporter, sampler and resource will not be used"
+            )
         self._tracer_provider = tracer_provider
         if import_checker.is_pyroscope_installed and getattr(config, "pyroscope_endpoint", None):
             tracer_provider.add_span_processor(PyroscopeSpanProcessor())
