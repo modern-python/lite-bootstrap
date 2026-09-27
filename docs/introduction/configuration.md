@@ -99,9 +99,10 @@ Additional parameters for FastAPI integration:
 
 ## Opentelemetry
 
-To bootstrap Opentelemetry, you must provide at least:
+To bootstrap Opentelemetry, you must provide at least one of:
 
-- `opentelemetry_endpoint`.
+- `opentelemetry_endpoint`, for traces.
+- `opentelemetry_metrics_endpoint`, for metrics.
 
 Additional parameters:
 
@@ -116,6 +117,29 @@ Additional parameters:
 - `opentelemetry_sampler` - an `opentelemetry.sdk.trace.sampling.Sampler` deciding which traces are recorded. Unset, the SDK's own default applies: `parentbased_always_on`, which records every trace that is not the child of a non-recording remote parent, unless `OTEL_TRACES_SAMPLER` / `OTEL_TRACES_SAMPLER_ARG` say otherwise.
 - `opentelemetry_generate_health_check_spans` - generate spans for health check handlers if `True`.
 - `opentelemetry_excluded_urls` - extra URLs excluded from tracing; the metrics path and (unless health-check spans are enabled) the health-check path are excluded automatically.
+- `opentelemetry_metrics_endpoint` - will be passed to `OTLPMetricExporter` as endpoint, and turns on the metrics signal. Its own field rather than a flag on `opentelemetry_endpoint`, so upgrading never starts exporting metrics you did not ask for. Under `opentelemetry_exporter_protocol="http"` this is a full URL (e.g. `http://collector:4318/v1/metrics`); `opentelemetry_exporter_protocol` and `opentelemetry_insecure` are shared with traces.
+
+### Metrics
+
+Left unset, no `MeterProvider` is installed and the metrics signal stays off. Set it, and the
+FastAPI, Litestar and FastStream instrumentations start recording their duration histograms
+against it; until then they build those instruments against a no-op provider and the data goes
+nowhere.
+
+The export interval is the SDK's, 60 seconds, overridable with `OTEL_METRIC_EXPORT_INTERVAL`.
+
+If the Prometheus instrument is also configured, request metrics are recorded twice: once for the
+scrape endpoint and once for the OTLP pipeline, under different names. That is supported, and it
+is what you want when the two feed different backends, but pointing both at one backend
+double-counts.
+
+```python
+config = FastAPIConfig(
+    service_name="my-service",
+    opentelemetry_endpoint="localhost:4317",
+    opentelemetry_metrics_endpoint="localhost:4317",
+)
+```
 
 Sampling is the cheapest way to cut what tracing costs: on a benchmark endpoint returning a constant,
 `ParentBased(TraceIdRatioBased(0.01))` saved ~55 µs per request against the always-on default.

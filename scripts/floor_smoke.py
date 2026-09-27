@@ -100,6 +100,7 @@ def _free() -> None:
             sentry_tags={"floor": "smoke"},
             pyroscope_endpoint=PYROSCOPE_ENDPOINT,
             opentelemetry_endpoint=OTLP_ENDPOINT,
+            opentelemetry_metrics_endpoint=OTLP_ENDPOINT,
             opentelemetry_log_traces=True,
         )
     )
@@ -127,6 +128,7 @@ def _fastapi() -> None:
             sentry_additional_params=SENTRY_PARAMS,
             pyroscope_endpoint=PYROSCOPE_ENDPOINT,
             opentelemetry_endpoint=OTLP_ENDPOINT,
+            opentelemetry_metrics_endpoint=OTLP_ENDPOINT,
             opentelemetry_log_traces=True,
         )
     )
@@ -153,6 +155,7 @@ def _litestar() -> None:
             sentry_additional_params=SENTRY_PARAMS,
             pyroscope_endpoint=PYROSCOPE_ENDPOINT,
             opentelemetry_endpoint=OTLP_ENDPOINT,
+            opentelemetry_metrics_endpoint=OTLP_ENDPOINT,
             opentelemetry_log_traces=True,
         )
     )
@@ -174,6 +177,7 @@ def _faststream() -> None:
             sentry_additional_params=SENTRY_PARAMS,
             pyroscope_endpoint=PYROSCOPE_ENDPOINT,
             opentelemetry_endpoint=OTLP_ENDPOINT,
+            opentelemetry_metrics_endpoint=OTLP_ENDPOINT,
             opentelemetry_log_traces=True,
         )
     )

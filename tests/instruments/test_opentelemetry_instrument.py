@@ -1,11 +1,17 @@
 import logging
+import re
 import sys
 import typing
 import warnings
 from unittest.mock import patch
 
 import pytest
+from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter as OTLPGrpcMetricExporter
+from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter as OTLPHttpMetricExporter
 from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
+from opentelemetry.metrics import get_meter_provider, set_meter_provider
+from opentelemetry.sdk.metrics import MeterProvider as SDKMeterProvider
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.trace import TracerProvider as SDKTracerProvider
 from opentelemetry.sdk.trace import sampling
 from opentelemetry.trace import set_tracer_provider
@@ -438,3 +444,124 @@ def test_bootstrap_is_silent_when_it_installs_the_tracer_provider() -> None:
         instrument.teardown()
 
     assert warning_source_files(caught, UserWarning) == []
+
+
+def test_metrics_endpoint_alone_configures_the_instrument() -> None:
+    """The metrics signal is the same concern, so asking only for it is asking for the instrument."""
+    assert OpenTelemetryInstrument.is_configured(OpenTelemetryConfig(opentelemetry_metrics_endpoint="localhost:4317"))
+    assert not OpenTelemetryInstrument.is_configured(OpenTelemetryConfig())
+
+
+def test_metrics_endpoint_installs_a_meter_provider_carrying_the_resource() -> None:
+    """The metrics pipeline is opt-in through its own endpoint and shares the trace resource."""
+    instrument = OpenTelemetryInstrument(
+        bootstrap_config=OpenTelemetryConfig(
+            service_name="metrics-svc", opentelemetry_metrics_endpoint="localhost:4317"
+        )
+    )
+    try:
+        instrument.bootstrap()
+
+        meter_provider = get_meter_provider()
+        assert isinstance(meter_provider, SDKMeterProvider)
+        assert meter_provider is instrument._meter_provider  # noqa: SLF001
+        assert meter_provider._sdk_config.resource.attributes["service.name"] == "metrics-svc"  # noqa: SLF001
+        (reader,) = meter_provider._metric_readers  # noqa: SLF001
+        assert isinstance(reader, PeriodicExportingMetricReader)
+        assert isinstance(reader._exporter, OTLPGrpcMetricExporter)  # noqa: SLF001
+    finally:
+        instrument.teardown()
+
+
+def test_metrics_endpoint_uses_the_http_exporter_for_the_http_protocol() -> None:
+    instrument = OpenTelemetryInstrument(
+        bootstrap_config=OpenTelemetryConfig(
+            opentelemetry_metrics_endpoint="http://collector:4318/v1/metrics",
+            opentelemetry_exporter_protocol="http",
+        )
+    )
+    try:
+        instrument.bootstrap()
+
+        meter_provider = instrument._meter_provider  # noqa: SLF001
+        assert meter_provider is not None
+        (reader,) = meter_provider._metric_readers  # noqa: SLF001
+        assert isinstance(reader, PeriodicExportingMetricReader)
+        assert isinstance(reader._exporter, OTLPHttpMetricExporter)  # noqa: SLF001
+    finally:
+        instrument.teardown()
+
+
+def test_no_metrics_endpoint_installs_no_meter_provider() -> None:
+    """Opt-in means a tracing-only config must leave the meter provider global untouched."""
+    instrument = OpenTelemetryInstrument(bootstrap_config=OpenTelemetryConfig(opentelemetry_log_traces=True))
+    try:
+        instrument.bootstrap()
+
+        assert instrument._meter_provider is None  # noqa: SLF001
+        assert not isinstance(get_meter_provider(), SDKMeterProvider)
+    finally:
+        instrument.teardown()
+
+
+def test_teardown_shuts_down_the_meter_provider() -> None:
+    instrument = OpenTelemetryInstrument(
+        bootstrap_config=OpenTelemetryConfig(opentelemetry_metrics_endpoint="localhost:4317")
+    )
+    instrument.bootstrap()
+    meter_provider = instrument._meter_provider  # noqa: SLF001
+    assert meter_provider is not None
+
+    with patch.object(meter_provider, "shutdown") as mock_shutdown:
+        instrument.teardown()
+
+    mock_shutdown.assert_called_once_with()
+    assert instrument._meter_provider is None  # noqa: SLF001
+
+
+@pytest.mark.parametrize(
+    ("protocol", "endpoint", "flag_name", "expected_extra"),
+    [
+        ("grpc", "localhost:4317", "is_otlp_grpc_exporter_installed", "lite-bootstrap[otl]"),
+        ("http", "http://collector:4318/v1/metrics", "is_otlp_http_exporter_installed", "lite-bootstrap[otl-http]"),
+    ],
+)
+def test_bootstrap_warns_when_metrics_endpoint_set_without_its_exporter(
+    protocol: typing.Literal["grpc", "http"], endpoint: str, flag_name: str, expected_extra: str
+) -> None:
+    """Configured-but-missing is a deployment surprise, so it warns rather than silently skipping."""
+    instrument = OpenTelemetryInstrument(
+        bootstrap_config=OpenTelemetryConfig(
+            opentelemetry_metrics_endpoint=endpoint, opentelemetry_exporter_protocol=protocol
+        )
+    )
+    try:
+        with (
+            patch.object(import_checker, flag_name, False),
+            pytest.warns(InstrumentDependencyMissingWarning, match=re.escape(expected_extra)),
+        ):
+            instrument.bootstrap()
+
+        assert instrument._meter_provider is None  # noqa: SLF001
+    finally:
+        instrument.teardown()
+
+
+def test_bootstrap_warns_when_a_meter_provider_is_already_installed() -> None:
+    """`set_meter_provider` is set-once too, so the metrics pipeline can be orphaned exactly as #227's was."""
+    set_meter_provider(SDKMeterProvider())
+    instrument = OpenTelemetryInstrument(
+        bootstrap_config=OpenTelemetryConfig(opentelemetry_metrics_endpoint="localhost:4317")
+    )
+
+    try:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            instrument.bootstrap()
+    finally:
+        instrument.teardown()
+
+    assert [str(one_warning.message) for one_warning in caught] == [
+        "a MeterProvider is already installed; the configured metrics exporter and resource will not be used"
+    ]
+    assert warning_source_files(caught, UserWarning) == [__file__]

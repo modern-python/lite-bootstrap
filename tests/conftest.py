@@ -4,6 +4,7 @@ import typing
 import warnings
 from importlib import reload
 
+import opentelemetry.metrics._internal
 import opentelemetry.trace
 import pytest
 import sentry_sdk
@@ -44,16 +45,19 @@ class SentryTestTransport(sentry_sdk.Transport):
 
 
 @pytest.fixture(autouse=True)
-def _reset_tracer_provider() -> typing.Iterator[None]:
-    """Give each test the process-global TracerProvider unset, as a fresh process has it.
+def _reset_otel_providers() -> typing.Iterator[None]:
+    """Give each test the process-global tracer and meter providers unset, as a fresh process has them.
 
-    `set_tracer_provider` is set-once, so without this the first test to bootstrap owns the global
-    and every later one silently loses the race against it. Restoring the two module-level names
-    the SDK guards it with is the only way back: there is no public reset.
+    Both setters are set-once, so without this the first test to bootstrap owns the global and every
+    later one silently loses the race against it. Restoring the module-level names the SDK guards
+    them with is the only way back: there is no public reset. The meter provider keeps its pair in
+    `opentelemetry.metrics._internal`, one module below the public re-export.
     """
     yield
     opentelemetry.trace._TRACER_PROVIDER = None  # noqa: SLF001
     opentelemetry.trace._TRACER_PROVIDER_SET_ONCE = Once()  # noqa: SLF001
+    opentelemetry.metrics._internal._METER_PROVIDER = None  # noqa: SLF001
+    opentelemetry.metrics._internal._METER_PROVIDER_SET_ONCE = Once()  # noqa: SLF001
 
 
 @pytest.fixture

@@ -8,6 +8,7 @@ import sys
 import typing
 import warnings
 import weakref
+from unittest.mock import AsyncMock, patch
 
 import litestar
 import pytest
@@ -16,6 +17,8 @@ from litestar import status_codes
 from litestar.config.app import AppConfig
 from litestar.middleware.logging import LoggingMiddlewareConfig
 from litestar.testing import TestClient
+from opentelemetry.metrics import get_meter_provider
+from opentelemetry.sdk.metrics import MeterProvider as SDKMeterProvider
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace import TracerProvider as SDKTracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -23,6 +26,7 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 from opentelemetry.trace import get_tracer_provider
 
 from lite_bootstrap import LitestarBootstrapper, LitestarConfig, import_checker
+from lite_bootstrap.bootstrappers import litestar_bootstrapper
 from lite_bootstrap.bootstrappers.litestar_bootstrapper import (
     _LITESTAR_DEFAULT_REQUEST_MAX_BODY_SIZE,
     LitestarLoggingInstrument,
@@ -233,6 +237,7 @@ async def test_litestar_otel_apps_cache_skips_non_weakrefable_app() -> None:
     tracer_provider = TracerProvider()
     middleware = LitestarOpenTelemetryInstrumentationMiddleware(
         tracer_provider=tracer_provider,
+        meter_provider=SDKMeterProvider(),
         excluded_urls=set(),
     )
 
@@ -254,6 +259,7 @@ def test_litestar_otel_apps_cache_evicts_dead_refs() -> None:
     tracer_provider = TracerProvider()
     middleware = LitestarOpenTelemetryInstrumentationMiddleware(
         tracer_provider=tracer_provider,
+        meter_provider=SDKMeterProvider(),
         excluded_urls=set(),
     )
 
@@ -544,6 +550,7 @@ def test_litestar_otel_middleware_hands_the_instrumentor_a_parsed_exclude_list()
     """
     middleware = LitestarOpenTelemetryInstrumentationMiddleware(
         tracer_provider=TracerProvider(),
+        meter_provider=SDKMeterProvider(),
         excluded_urls={"/custom-metrics"},
     )
 
@@ -611,3 +618,42 @@ def test_litestar_otel_keeps_caller_supplied_excluded_urls_as_regexes(litestar_c
         assert client.get("/items/42").status_code == status_codes.HTTP_200_OK
 
     assert exporter.get_finished_spans() == ()
+
+
+async def test_litestar_otel_middleware_hands_the_instrumentor_the_meter_provider() -> None:
+    """opentelemetry-instrumentation-asgi builds duration histograms when given a meter provider."""
+    meter_provider = SDKMeterProvider()
+    middleware = LitestarOpenTelemetryInstrumentationMiddleware(
+        tracer_provider=TracerProvider(),
+        meter_provider=meter_provider,
+        excluded_urls=set(),
+    )
+
+    async def next_app(scope: dict, receive: object, send: object) -> None:  # noqa: ARG001
+        return None  # pragma: no cover - the patched middleware never calls through
+
+    scope: dict = {"type": "http"}
+    with patch.object(litestar_bootstrapper, "OpenTelemetryMiddleware") as mock_middleware:
+        mock_middleware.return_value = AsyncMock()
+        await middleware.handle(scope, object(), object(), next_app)  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
+
+    assert mock_middleware.call_args.kwargs["meter_provider"] is meter_provider
+
+
+def test_litestar_otel_instrument_passes_the_installed_meter_provider(litestar_config: LitestarConfig) -> None:
+    config = dataclasses.replace(litestar_config, opentelemetry_metrics_endpoint="localhost:4317")
+    bootstrapper = LitestarBootstrapper(bootstrap_config=config)
+
+    try:
+        bootstrapper.bootstrap()
+
+        appended = [
+            one_middleware
+            for one_middleware in config.application_config.middleware
+            if isinstance(one_middleware, LitestarOpenTelemetryInstrumentationMiddleware)
+        ]
+        assert len(appended) == 1
+        assert appended[0]._meter_provider is get_meter_provider()  # noqa: SLF001
+        assert isinstance(get_meter_provider(), SDKMeterProvider)
+    finally:
+        bootstrapper.teardown()

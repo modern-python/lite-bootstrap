@@ -51,10 +51,12 @@ if import_checker.is_litestar_opentelemetry_installed:
     from litestar.middleware import ASGIMiddleware
     from litestar.types.asgi_types import ASGIApp, Receive, Scope, Send
     from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
+    from opentelemetry.metrics import MeterProvider
     from opentelemetry.trace import TracerProvider
     from opentelemetry.util.http import parse_excluded_urls
 
 if import_checker.is_opentelemetry_installed:
+    from opentelemetry.metrics import get_meter_provider
     from opentelemetry.trace import get_tracer_provider
 
 if import_checker.is_structlog_installed:
@@ -101,8 +103,11 @@ def build_litestar_route_details_from_scope(
 if import_checker.is_litestar_opentelemetry_installed:
 
     class LitestarOpenTelemetryInstrumentationMiddleware(ASGIMiddleware):
-        def __init__(self, tracer_provider: "TracerProvider", excluded_urls: set[str]) -> None:
+        def __init__(
+            self, tracer_provider: "TracerProvider", meter_provider: "MeterProvider", excluded_urls: set[str]
+        ) -> None:
             self._tracer_provider = tracer_provider
+            self._meter_provider = meter_provider
             # OpenTelemetryMiddleware only parses a raw string from 0.56b0; the floor is 0.49b0.
             self._excluded_urls = parse_excluded_urls(",".join(excluded_urls))
             # WeakKeyDictionary so wrapper apps are evicted when Litestar drops the
@@ -126,6 +131,7 @@ if import_checker.is_litestar_opentelemetry_installed:
                     default_span_details=build_litestar_route_details_from_scope,
                     excluded_urls=self._excluded_urls,
                     tracer_provider=self._tracer_provider,
+                    meter_provider=self._meter_provider,
                 )
                 with contextlib.suppress(TypeError):
                     self._otel_apps[next_app] = otel_app  # ty: ignore[invalid-assignment]
@@ -256,6 +262,7 @@ class LitestarOpenTelemetryInstrument(OpenTelemetryInstrument):
         self.bootstrap_config.application_config.middleware.append(
             LitestarOpenTelemetryInstrumentationMiddleware(
                 tracer_provider=get_tracer_provider(),
+                meter_provider=get_meter_provider(),
                 excluded_urls=self._build_excluded_url_patterns(),
             )
         )
