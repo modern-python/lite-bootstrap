@@ -144,11 +144,11 @@ jobs:
         # orjson because it belongs to no *-all extra and its floor is a wheel-availability
         # one, which only an interpreter matrix can check.
         include:
-          - {target: free, extras: "free-all,orjson"}
-          - {target: fastapi, extras: "fastapi-all"}
-          - {target: litestar, extras: "litestar-all"}
-          - {target: faststream, extras: "faststream-all"}
-          - {target: fastmcp, extras: "fastmcp-all"}
+          - {target: free, extras: "--extra free-all --extra orjson"}
+          - {target: fastapi, extras: "--extra fastapi-all"}
+          - {target: litestar, extras: "--extra litestar-all"}
+          - {target: faststream, extras: "--extra faststream-all"}
+          - {target: fastmcp, extras: "--extra fastmcp-all"}
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v8.2.0
@@ -157,7 +157,9 @@ jobs:
           cache-dependency-glob: "**/pyproject.toml"
       - run: uv python install ${{ matrix.python-version }}
       - run: uv venv --python ${{ matrix.python-version }}
-      - name: Install at the declared floors
-        run: uv pip install --resolution lowest-direct ".[${{ matrix.extras }}]"
+      # Pinned with builds allowed, so a floor with no wheel fails the wheel-only install below.
+      - run: uv pip compile pyproject.toml ${{ matrix.extras }} --no-deps --resolution lowest-direct -o floors.txt
+      - run: uv pip install -r pyproject.toml ${{ matrix.extras }} --constraints floors.txt --no-build
+      - run: uv pip install --no-deps .
       - name: Bootstrap at the floors
         run: .venv/bin/python scripts/floor_smoke.py ${{ matrix.target }}
