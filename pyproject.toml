@@ -267,5 +267,4 @@ asyncio_default_fixture_loop_scope = "function"
 fail_under = 100
 exclude_also = [
     "if typing.TYPE_CHECKING:",
-    "except ImportError:"
 ]

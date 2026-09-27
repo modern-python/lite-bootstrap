@@ -126,7 +126,7 @@ if import_checker.is_opentelemetry_sdk_installed and import_checker.is_pyroscope
                 pyroscope.remove_thread_tag(_PYROSCOPE_SPAN_ID_KEY, format_span_id(span.context.span_id))
                 pyroscope.remove_thread_tag(_PYROSCOPE_SPAN_NAME_KEY, span.name)
 
-        def force_flush(self, timeout_millis: int = 30000) -> bool:  # pragma: no cover  # noqa: ARG002
+        def force_flush(self, timeout_millis: int = 30000) -> bool:  # noqa: ARG002
             return True
 
 
