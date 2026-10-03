@@ -12,8 +12,8 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: "**/pyproject.toml"
-      - run: uv python install 3.10
-      - run: uv python pin 3.10
+      - run: uv python install 3.11
+      - run: uv python pin 3.11
       - run: just install lint-ci
       - run: just adr-check
 
@@ -49,7 +49,6 @@ jobs:
       fail-fast: false
       matrix:
         python-version:
-          - "3.10"
           - "3.11"
           - "3.12"
           - "3.13"
@@ -96,7 +95,7 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: "**/pyproject.toml"
-      - run: uv python install 3.10
+      - run: uv python install 3.11
       - name: Each extra installs and imports in isolation
         run: |
           set -uo pipefail
@@ -110,12 +109,12 @@ jobs:
             faststream faststream-sentry faststream-otl faststream-logging faststream-metrics faststream-all \
             fastmcp fastmcp-metrics fastmcp-all"
           failed=""
-          uv venv --python 3.10 .v-bare >/dev/null
+          uv venv --python 3.11 .v-bare >/dev/null
           if uv pip install --python .v-bare/bin/python . >/dev/null 2>&1 \
                && .v-bare/bin/python -c "import lite_bootstrap"; then :; else failed="$failed __bare__"; fi
           rm -rf .v-bare
           for e in $extras; do
-            uv venv --python 3.10 ".v-$e" >/dev/null
+            uv venv --python 3.11 ".v-$e" >/dev/null
             if uv pip install --python ".v-$e/bin/python" ".[$e]" >/dev/null 2>&1 \
                  && ".v-$e/bin/python" -c "import lite_bootstrap"; then :; else failed="$failed $e"; fi
             rm -rf ".v-$e"
@@ -138,7 +137,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
         target: [free, fastapi, litestar, faststream, fastmcp]
         # These `include` entries name an existing `target`, so each adds `extras` to that
         # target's five combinations rather than creating a job of its own. `free` carries

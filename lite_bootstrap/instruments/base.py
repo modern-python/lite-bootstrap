@@ -1,8 +1,6 @@
 import dataclasses
 import typing
 
-import typing_extensions
-
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class BaseConfig:
@@ -21,13 +19,13 @@ class BaseConfig:
         """
 
     @classmethod
-    def from_dict(cls, data: dict[str, typing.Any]) -> typing_extensions.Self:
+    def from_dict(cls, data: dict[str, typing.Any]) -> typing.Self:
         """Build a config from a dict; unknown keys are silently dropped, explicit None overrides defaults."""
         field_names = {f.name for f in dataclasses.fields(cls)}
         return cls(**{k: v for k, v in data.items() if k in field_names})
 
     @classmethod
-    def from_object(cls, obj: object) -> typing_extensions.Self:
+    def from_object(cls, obj: object) -> typing.Self:
         """Build a config by merging non-None attributes from obj; None or missing attributes fall back to defaults."""
         field_names = {f.name for f in dataclasses.fields(cls)}
         prepared_data = {field: value for field in field_names if (value := getattr(obj, field, None)) is not None}

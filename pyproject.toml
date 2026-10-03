@@ -5,13 +5,12 @@ authors = [
     { name = "Artur Shiriev", email = "me@shiriev.ru" },
 ]
 readme = "README.md"
-requires-python = ">=3.10,<4"
+requires-python = ">=3.11,<4"
 license = "MIT"
 keywords = ["microservices", "bootstrap", "opentelemetry", "sentry", "prometheus", "healthcheck", "fastapi", "litestar", "faststream", "structlog", "fastmcp", "python"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -21,11 +20,9 @@ classifiers = [
 ]
 version = "0"
 dependencies = [
-    # Runtime use: `typing_extensions.Self` (base.py) and `typing_extensions.TypedDict`
-    # (healthchecks) — the latter is required by pydantic/FastAPI on Python < 3.12
-    # (`typing.TypedDict` is rejected there). Pure Python, so ft-friendly.
-    # >=4.0 for `Self`; >=4.6 because 4.4 and 4.5 raise on import under Python >=3.12
-    # (they subclass `typing.TypeVar`). The higher floor wins.
+    # Runtime use: `typing_extensions.TypedDict` (healthchecks), required by pydantic/FastAPI on
+    # Python < 3.12 (`typing.TypedDict` is rejected there). Pure Python, so ft-friendly.
+    # >=4.6 because 4.4 and 4.5 raise on import under Python >=3.12 (they subclass `typing.TypeVar`).
     "typing-extensions>=4.6",
 ]
 
@@ -49,7 +46,7 @@ sentry = [
     # >=1.31 for the `max_value_length` init option; >=2.1 for sentry_sdk.set_tags (plural,
     # SentryInstrument.bootstrap) -- the higher floor wins.
     # 2.1 predates Python 3.13's FrameLocalsProxy, which the SDK fails to pickle when capturing a
-    # request, and 3.14 needs later fixes again. Marked rather than raised, so 3.10-3.12 keep 2.1.
+    # request, and 3.14 needs later fixes again. Marked rather than raised, so 3.11-3.12 keep 2.1.
     # 2.69.0 signs `sentry-trace`/`baggage` into SigV4 SignedHeaders and then rewrites them after
     # signing, so every aiobotocore AWS call inside a transaction fails with SignatureDoesNotMatch
     # (getsentry/sentry-python#7426, fixed in 2.69.1).
