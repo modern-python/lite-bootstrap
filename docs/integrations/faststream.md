@@ -5,19 +5,19 @@
 === "uv"
 
       ```bash
-      uv add lite-bootstrap[faststream-all]
+      uv add "lite-bootstrap[faststream-all]"
       ```
 
 === "pip"
 
       ```bash
-      pip install lite-bootstrap[faststream-all]
+      pip install "lite-bootstrap[faststream-all]"
       ```
 
 === "poetry"
 
       ```bash
-      poetry add lite-bootstrap[faststream-all]
+      poetry add "lite-bootstrap[faststream-all]"
       ```
 
 Read more about available extras [here](../introduction/installation.md).

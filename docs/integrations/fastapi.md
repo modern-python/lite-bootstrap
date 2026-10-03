@@ -7,19 +7,19 @@
 === "uv"
 
       ```bash
-      uv add lite-bootstrap[fastapi-all]
+      uv add "lite-bootstrap[fastapi-all]"
       ```
 
 === "pip"
 
       ```bash
-      pip install lite-bootstrap[fastapi-all]
+      pip install "lite-bootstrap[fastapi-all]"
       ```
 
 === "poetry"
 
       ```bash
-      poetry add lite-bootstrap[fastapi-all]
+      poetry add "lite-bootstrap[fastapi-all]"
       ```
 
 Read more about available extras [here](../introduction/installation.md).

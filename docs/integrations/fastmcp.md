@@ -5,19 +5,19 @@
 === "uv"
 
       ```bash
-      uv add lite-bootstrap[fastmcp-all]
+      uv add "lite-bootstrap[fastmcp-all]"
       ```
 
 === "pip"
 
       ```bash
-      pip install lite-bootstrap[fastmcp-all]
+      pip install "lite-bootstrap[fastmcp-all]"
       ```
 
 === "poetry"
 
       ```bash
-      poetry add lite-bootstrap[fastmcp-all]
+      poetry add "lite-bootstrap[fastmcp-all]"
       ```
 
 Read more about available extras [here](../introduction/installation.md).
@@ -61,10 +61,6 @@ FastMcpConfig(
 
 Enabled, each message is logged with its `method`, `source` and `type`, plus `duration` in
 nanoseconds. A message that raises is logged at exception level and the exception is re-raised.
-
-This replaces `logging_turn_off_middleware`, which has been removed. Setting it now raises
-`TypeError`: the default flipped from on to off, so a service that configured the old field has to
-decide again rather than upgrade past the change unnoticed.
 
 Set `health_checks_enabled=False` to omit the health route.
 

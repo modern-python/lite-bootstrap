@@ -1,25 +1,25 @@
 # Usage with `Litestar`
 
-*Another example of usage with LiteStar - [litestar-sqlalchemy-template](https://github.com/modern-python/litestar-sqlalchemy-template)*
+*Another example of usage with Litestar - [litestar-sqlalchemy-template](https://github.com/modern-python/litestar-sqlalchemy-template)*
 
 ## 1. Install `lite-bootstrap[litestar-all]`:
 
 === "uv"
 
       ```bash
-      uv add lite-bootstrap[litestar-all]
+      uv add "lite-bootstrap[litestar-all]"
       ```
 
 === "pip"
 
       ```bash
-      pip install lite-bootstrap[litestar-all]
+      pip install "lite-bootstrap[litestar-all]"
       ```
 
 === "poetry"
 
       ```bash
-      poetry add lite-bootstrap[litestar-all]
+      poetry add "lite-bootstrap[litestar-all]"
       ```
 
 Read more about available extras [here](../introduction/installation.md).
@@ -122,8 +122,8 @@ LitestarConfig(
 
 ## Request body size limit
 
-`LitestarBootstrapper` builds its app with `Litestar.from_config()`, which —
-unlike `Litestar(...)` — passes every `AppConfig` field explicitly and so
+`LitestarBootstrapper` builds its app with `Litestar.from_config()`, which,
+unlike `Litestar(...)`, passes every `AppConfig` field explicitly and so
 skips the 10 MB `request_max_body_size` default that `Litestar(...)` applies.
 Left as-is, that means every handler that reads a request body returns `500:
 'request_max_body_size' set to 'Empty' on all layers`

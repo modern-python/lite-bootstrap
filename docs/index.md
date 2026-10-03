@@ -22,7 +22,7 @@ With `lite-bootstrap`, you receive an application with lightweight built-in supp
 
 Those instruments can be bootstrapped for:
 
-- [LiteStar](integrations/litestar.md)
+- [Litestar](integrations/litestar.md)
 - [FastStream](integrations/faststream.md)
 - [FastAPI](integrations/fastapi.md)
 - [FastMCP](integrations/fastmcp.md)

@@ -23,15 +23,14 @@ Each instrument alone, driving the ASGI app in-process so only library cost show
 
 Four things here are worth knowing before you tune anything:
 
-- **OpenTelemetry costs about twice what Sentry does**, and is the dominant cost of the stack. Most
-  people assume Sentry is the expensive one.
+- **OpenTelemetry costs about twice what Sentry does**, and is the dominant cost of the stack.
 - **Structlog costs nothing until you actually log.** `LoggingInstrument` adds ~0.1 µs per request
   when configured. The cost arrives per record, not per request, and most of it is Sentry's two
   log handlers: on a three-record endpoint Sentry costs 12.3 µs per record, of which those
   handlers are 9.6.
 - **`sentry_traces_sample_rate=1.0` costs a further +353 µs per request.** If you set it, set it
   next to a sample rate you actually want.
-- **The Sentry knobs people reach for do nothing.** This is the useful negative result:
+- **The Sentry knobs people reach for do nothing.**
 
 --8<-- "benchmarks/README.md:sentryablation"
 
@@ -59,7 +58,9 @@ so there is nothing else material hiding in it. That configuration is:
 One thing to leave off rather than turn on: the FastAPI access log
 ([`fastapi_logging_middleware_enabled`](../integrations/fastapi.md#logging)) is off by default, and
 turning it on makes every request emit a log record. On a service that otherwise logs nothing per
-request, that is the difference between the first row of the logging table above and the rest of it.
+request, every request then pays the per-record cost measured here:
+
+--8<-- "benchmarks/README.md:logging"
 
 lite-bootstrap already applies one saving for you: it passes `sentry_logs_level=None` by default,
 because it never enables Sentry Logs and the handler formats every record before checking whether
@@ -87,5 +88,5 @@ much larger one.
 **Read the µs columns, not the percentages.** A stack that costs 70% of a do-nothing handler's
 throughput costs a few percent of a handler that waits 5 ms on a database.
 
-Numbers are machine-specific and move a few percent between runs. The ordering and the ratios are
-the durable part.
+Numbers are machine-specific and move a few percent between runs. The ordering and ratios are
+stable across runs.

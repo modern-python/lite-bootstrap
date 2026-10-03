@@ -18,7 +18,7 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![ty](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ty/main/assets/badge/v0.json)](https://github.com/astral-sh/ty)
 
-`lite-bootstrap` wires production observability — OpenTelemetry, Prometheus, Sentry, and structlog — into FastAPI, Litestar, and FastStream services in a few lines, with no boilerplate.
+`lite-bootstrap` wires production observability — OpenTelemetry, Prometheus, Sentry, and structlog — into FastAPI, Litestar, FastStream, and FastMCP services in a few lines, with no boilerplate.
 
 With `lite-bootstrap`, you receive an application with lightweight built-in support for:
 
@@ -33,7 +33,7 @@ With `lite-bootstrap`, you receive an application with lightweight built-in supp
 
 Those instruments can be bootstrapped for:
 
-- [LiteStar](https://lite-bootstrap.modern-python.org/integrations/litestar/)
+- [Litestar](https://lite-bootstrap.modern-python.org/integrations/litestar/)
 - [FastStream](https://lite-bootstrap.modern-python.org/integrations/faststream/)
 - [FastAPI](https://lite-bootstrap.modern-python.org/integrations/fastapi/)
 - [FastMCP](https://lite-bootstrap.modern-python.org/integrations/fastmcp/)
@@ -43,7 +43,7 @@ Those instruments can be bootstrapped for:
 
 A few constraints that aren't obvious from the API:
 
-- **One bootstrapper per application instance.** Constructing two `FastAPIBootstrapper`s around the same `fastapi.FastAPI` (or two `FastMcpBootstrapper`s around the same `FastMCP`) stacks teardown hooks and re-wraps the lifespan. The library warns and skips the second attachment, but the second bootstrapper's `teardown()` won't fire on ASGI shutdown.
+- **One bootstrapper per application instance.** Constructing two `FastAPIBootstrapper`s around the same `fastapi.FastAPI` (or two `FastMcpBootstrapper`s around the same `FastMCP`) is not supported. The second bootstrapper warns at construction, and its `bootstrap()` raises `ConfigurationError`.
 - **One `OpenTelemetryInstrument` per process.** `bootstrap()` calls `opentelemetry.trace.set_tracer_provider(...)`, which the OTel SDK enforces as set-once — subsequent calls log a warning and have no effect. `teardown()` flushes spans and closes exporters but can't reset the process-global pointer.
 - **`teardown()` is idempotent.** `BaseBootstrapper.teardown()` short-circuits if not bootstrapped; per-instrument teardown methods are safe to call multiple times.
 - **Partial teardown failures are aggregated.** If an instrument's teardown raises, the bootstrapper continues with the rest of the instruments and raises `TeardownError` at the end with all collected failures.
@@ -52,7 +52,7 @@ A few constraints that aren't obvious from the API:
 
 Usage examples:
 
-- with LiteStar - [litestar-sqlalchemy-template](https://github.com/modern-python/litestar-sqlalchemy-template)
+- with Litestar - [litestar-sqlalchemy-template](https://github.com/modern-python/litestar-sqlalchemy-template)
 - with FastAPI - [fastapi-sqlalchemy-template](https://github.com/modern-python/fastapi-sqlalchemy-template)
 
 ## Acknowledgements
@@ -68,7 +68,7 @@ The following ideas were borrowed:
 The following intentionally differ:
 
 - **Configuration**: `lite-bootstrap` uses frozen `dataclass` configs (no `pydantic` / `pydantic-settings` runtime dependency), which is what makes it "lite". `microbootstrap` configures everything through `pydantic-settings` models.
-- **Granular extras**: `lite-bootstrap` has exactly **one** mandatory runtime dependency, the pure-Python `typing-extensions`; every instrument (`sentry`, `otl`, `logging`, `pyroscope`) and every framework (`fastapi`, `litestar`, `faststream`) is its own extra, plus an opt-in `orjson` speedup for logging, per-pair combos (`fastapi-sentry`, `litestar-otl`, `faststream-metrics`, …) and `*-all` rollups. You install only what you actually use. It also runs on free-threaded CPython (3.13t/3.14t): every extra whose dependencies are pure Python installs there, and the ones that don't are blocked upstream — `orjson` and `pyroscope` have no free-threaded wheels, and `otl` needs `grpcio`, so use `otl-http` instead. `microbootstrap` bundles the full observability stack (opentelemetry, sentry-sdk, structlog, pyroscope-io, rich, pydantic-settings, …) as base dependencies and only splits framework packages into extras.
+- **Granular extras**: `lite-bootstrap` has exactly **one** mandatory runtime dependency, the pure-Python `typing-extensions`; every instrument (`sentry`, `otl`, `logging`, `pyroscope`) and every framework (`fastapi`, `litestar`, `faststream`, `fastmcp`) is its own extra, plus an opt-in `orjson` speedup for logging, per-pair combos (`fastapi-sentry`, `litestar-otl`, `faststream-metrics`, …) and `*-all` rollups. You install only what you actually use. It also runs on free-threaded CPython (3.13t/3.14t): every extra whose dependencies are pure Python installs there, and the ones that don't are blocked upstream — `orjson` and `pyroscope` have no free-threaded wheels, and `otl` needs `grpcio`, so use `otl-http` instead. `microbootstrap` bundles the full observability stack (opentelemetry, sentry-sdk, structlog, pyroscope-io, rich, pydantic-settings, …) as base dependencies and only splits framework packages into extras.
 - **Scope**: `lite-bootstrap` is deliberately narrow — only instrument wiring. It does not include a Granian server runner or a console writer.
 
 ## 📚 [Documentation](https://lite-bootstrap.modern-python.org)

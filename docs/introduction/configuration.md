@@ -25,8 +25,8 @@ Additional parameters can also be supplied through the settings object:
 
 Read more about sentry_sdk params [here](https://docs.sentry.io/platforms/python/configuration/options/).
 
-Sentry is the second most expensive instrument in the stack, and the settings that actually move
-the number are not the ones most people reach for. See [Performance](performance.md).
+Sentry is the second most expensive instrument in the stack. Its cost comes almost entirely from the ASGI
+integration; see [Performance](performance.md).
 
 ### Sentry logging integration
 
@@ -52,9 +52,8 @@ Under either, `sentry_logging_breadcrumb_level` is ignored and lite-bootstrap wa
 
 Prometheus is the cheapest of the three non-logging instruments; see [Performance](performance.md).
 
-To bootstrap Prometheus, you must provide at least:
-
-- `prometheus_metrics_path`.
+Prometheus is on by default when its extra is installed, serving metrics at `prometheus_metrics_path`
+(default: `/metrics`). Set `prometheus_metrics_path` to an empty string to disable it.
 
 Additional parameters:
 
@@ -103,6 +102,7 @@ To bootstrap Opentelemetry, you must provide at least one of:
 
 - `opentelemetry_endpoint`, for traces.
 - `opentelemetry_metrics_endpoint`, for metrics.
+- `opentelemetry_log_traces=True`, to log spans to stdout.
 
 Additional parameters:
 
@@ -111,7 +111,7 @@ Additional parameters:
 - `opentelemetry_endpoint` - will be passed to `OTLPSpanExporter` as endpoint. Under `opentelemetry_exporter_protocol="http"` this is a full URL (e.g. `http://collector:4318/v1/traces`).
 - `opentelemetry_namespace` - will be passed to the `Resource`.
 - `opentelemetry_exporter_protocol` - OTLP exporter transport: `"grpc"` (default, needs the `otl` extra) or `"http"` (needs the `otl-http` extra, no `grpcio` - installable on free-threaded Python).
-- `opentelemetry_insecure` - whether the gRPC OTLP connection is insecure (gRPC only; for `http` the endpoint URL scheme carries security).
+- `opentelemetry_insecure` - whether the gRPC OTLP connection is insecure (default: `True`; gRPC only; for `http` the endpoint URL scheme carries security). While it is `True`, an endpoint pointing at a non-local host triggers a warning that telemetry is sent unencrypted.
 - `opentelemetry_instrumentors` - a list of extra instrumentors.
 - `opentelemetry_log_traces` - traces will be logged to stdout.
 - `opentelemetry_sampler` - an `opentelemetry.sdk.trace.sampling.Sampler` deciding which traces are recorded. Unset, the SDK's own default applies: `parentbased_always_on`, which records every trace that is not the child of a non-recording remote parent, unless `OTEL_TRACES_SAMPLER` / `OTEL_TRACES_SAMPLER_ARG` say otherwise.
@@ -266,7 +266,7 @@ async def handler(request: Request) -> dict[str, str]:
 Additional parameters for Litestar's access-log middleware:
 
 - `litestar_logging_middleware_enabled` - turn on request/response access logging (default: `False`).
-- `litestar_logging_middleware_config` - a caller-supplied `LoggingMiddlewareConfig` that replaces the built-in defaults wholesale.
+- `litestar_logging_middleware_config` - a caller-supplied `LoggingMiddlewareConfig` that replaces the built-in defaults wholesale. It is ignored, with a warning, unless `litestar_logging_middleware_enabled` is `True`.
 
 See [the Litestar integration guide](../integrations/litestar.md#logging) for what gets logged and why access logging defaults to off.
 
@@ -283,8 +283,7 @@ it defaults to off.
 
 The per-MCP-message access log is **off by default**:
 
-- `fastmcp_logging_middleware_enabled` - turn on the access log (default: `False`). Replaces
-  `logging_turn_off_middleware`, which has been removed.
+- `fastmcp_logging_middleware_enabled` - turn on the access log (default: `False`).
 
 See [the FastMCP integration guide](../integrations/fastmcp.md#logging) for what gets logged.
 
@@ -329,11 +328,11 @@ To bootstrap swagger, you have the following parameters:
 - `swagger_path`
 - `swagger_offline_docs` - option to turn on offline docs.
 
-For Litestar `swagger_path` is required to bootstrap swagger instrument.
+Swagger is on by default at `swagger_path` (default: `/docs`). For Litestar, set `swagger_path` to an empty string to disable it.
 
 ## Health checks
 
-To bootstrap Health checks, you must provide set `health_checks_enabled` to True.
+Health checks are on by default; set `health_checks_enabled=False` to disable them.
 
 Additional params:
 

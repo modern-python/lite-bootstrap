@@ -158,6 +158,7 @@ bare FastAPI, so the two tables are not directly comparable.
 
 ### 4c. Logging: cost per record, not per request
 
+<!-- --8<-- [start:logging] -->
 Three records per request, in-process:
 
 | scenario | +µs/req | delta |
@@ -165,6 +166,7 @@ Three records per request, in-process:
 | sentry-sdk defaults | +101.1 | |
 | `sentry_logs_level=None` (lite-bootstrap's default since #186) | +93.8 | −2.4 µs/record |
 | also `sentry_logging_breadcrumb_level=None` | +72.4 | −9.6 µs/record total |
+<!-- --8<-- [end:logging] -->
 
 Two handlers run per log record. `SentryLogsHandler.emit` calls `self.format(record)` *before* it
 checks `has_logs_enabled(client.options)`, so with Sentry Logs disabled (the default, and
