@@ -18,7 +18,7 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: "**/pyproject.toml"
-      - run: uv python install 3.10
+      - run: uv python install 3.11
       - name: Export locked dependencies
         run: uv export --all-extras --no-hashes > /tmp/requirements.txt
       - name: Install pip-audit
