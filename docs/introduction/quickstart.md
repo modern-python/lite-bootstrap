@@ -15,19 +15,19 @@ supported instrument:
 === "uv"
 
       ```bash
-      uv add lite-bootstrap[fastapi-all]
+      uv add "lite-bootstrap[fastapi-all]"
       ```
 
 === "pip"
 
       ```bash
-      pip install lite-bootstrap[fastapi-all]
+      pip install "lite-bootstrap[fastapi-all]"
       ```
 
 === "poetry"
 
       ```bash
-      poetry add lite-bootstrap[fastapi-all]
+      poetry add "lite-bootstrap[fastapi-all]"
       ```
 
 Want only some instruments? See the extras matrix in
@@ -82,8 +82,9 @@ With the config above, your service now exposes:
 
 ## 5. Enable more
 
-Each instrument is opt-in: add its config field to turn it on. Unset (or empty)
-fields are skipped automatically, so you only pay for what you enable.
+Logging, health checks, Prometheus and Swagger are on by default whenever their extras are
+installed. OpenTelemetry, Sentry, Pyroscope and CORS stay off until you set their config fields;
+unset (or empty) fields are skipped automatically.
 
 ```python
 config = FastAPIConfig(
@@ -99,8 +100,9 @@ config = FastAPIConfig(
 )
 ```
 
-To see exactly which instruments were enabled or skipped at startup, inspect the
-bootstrapper:
+To see which instruments were enabled or skipped at startup, inspect the bootstrapper.
+`skipped_instruments` lists only instruments skipped by configuration; a configured instrument
+whose extra is not installed is skipped with an `InstrumentDependencyMissingWarning` instead.
 
 ```python
 bootstrapper = FastAPIBootstrapper(config)
