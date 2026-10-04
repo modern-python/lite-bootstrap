@@ -70,8 +70,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - python-version: "3.13t"
-            extras: "logging,sentry,fastapi,faststream,fastapi-metrics,faststream-metrics,otl-http"
           - python-version: "3.14t"
             extras: "logging,sentry,fastapi,litestar,faststream,fastmcp,fastapi-metrics,litestar-metrics,faststream-metrics,fastmcp-metrics,otl-http"
     steps:
@@ -82,7 +80,7 @@ jobs:
           cache-dependency-glob: "**/pyproject.toml"
       - run: uv python install ${{ matrix.python-version }}
       - run: uv venv --python ${{ matrix.python-version }}
-      - name: Install core + ft-ready extras (orjson/otl-grpc/pyroscope excluded; otl-http included; litestar/fastmcp 3.14t-only)
+      - name: Install core + ft-ready extras (orjson/otl-grpc/pyroscope excluded; otl-http included)
         run: uv pip install ".[${{ matrix.extras }}]"
       - name: Free-threaded smoke test
         run: .venv/bin/python scripts/ft_smoke.py
