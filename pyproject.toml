@@ -214,6 +214,8 @@ dev = [
     # conftest imports structlog.typing at runtime, which the library does not. The suite's
     # floor is higher than the one the `logging` extra publishes; this is where it belongs.
     "structlog>=22.2",
+    # for the Taskiq recipe test only; Taskiq is not an extra.
+    "taskiq[opentelemetry]",
 ]
 lint = [
     "ty",
