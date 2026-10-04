@@ -15,6 +15,7 @@ nav:
       - FastStream: integrations/faststream.md
       - FastAPI: integrations/fastapi.md
       - FastMCP: integrations/fastmcp.md
+      - Taskiq: integrations/taskiq.md
       - Free bootstrapper: integrations/free.md
 theme:
   name: material
