@@ -170,6 +170,24 @@ For FastStream there is additionally:
   health-check span is recorded unless `opentelemetry_generate_health_check_spans` is False, and any
   `opentelemetry_instrumentors` are applied.
 
+### Resource
+
+The `Resource` is built with the SDK's `Resource.create`, so OpenTelemetry resource detectors work
+with no lite-bootstrap setting. Name them, comma-separated, in `OTEL_EXPERIMENTAL_RESOURCE_DETECTORS`;
+each name is an entry point in the `opentelemetry_resource_detector` group. The SDK registers
+`process`, `os` and `host`; separately installed detector packages register their own names:
+
+```bash
+OTEL_EXPERIMENTAL_RESOURCE_DETECTORS=process,os
+```
+
+`OTEL_RESOURCE_ATTRIBUTES` is honoured as well.
+
+The attributes lite-bootstrap sets (`service.name`, `service.namespace`, `service.version`,
+`container.name`) are merged last and override anything a detector or environment variable supplies.
+`service_name` defaults to `"micro-service"`, so `OTEL_SERVICE_NAME` is overridden unless `service_name`
+is empty: set `opentelemetry_service_name` or `service_name` instead.
+
 
 ## Pyroscope
 
@@ -186,6 +204,23 @@ Additional parameters:
 - `pyroscope_additional_params` - additional params passed directly to `pyroscope.configure`.
 
 When OpenTelemetry is also enabled, a `PyroscopeSpanProcessor` is automatically added to the tracer provider. It tags root spans with a `pyroscope.profile.id` attribute and sets Pyroscope thread tags so that traces and profiles can be linked in the Grafana UI.
+
+`pyroscope-io` publishes no free-threaded wheels, so the `pyroscope` extra cannot install on
+free-threaded CPython ([#171](https://github.com/modern-python/lite-bootstrap/issues/171)). Sentry's
+continuous profiler is pure Python and runs there; enable it through `sentry_additional_params`:
+
+```python
+import sentry_sdk
+
+config = FreeConfig(
+    sentry_dsn="https://key@sentry.example.com/1",
+    sentry_additional_params={"profile_session_sample_rate": 1.0, "profile_lifecycle": "manual"},
+)
+FreeBootstrapper(config).bootstrap()
+sentry_sdk.profiler.start_profiler()
+```
+
+Read more about Sentry's profiling options [here](https://docs.sentry.io/platforms/python/profiling/).
 
 ## Structlog
 

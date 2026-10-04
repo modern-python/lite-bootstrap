@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 import sys
 import typing
@@ -118,6 +119,46 @@ def test_opentelemetry_sampler_wins_over_sampler_env_vars(monkeypatch: pytest.Mo
         instrument.bootstrap()
         assert instrument._tracer_provider is not None  # noqa: SLF001
         assert instrument._tracer_provider.sampler is sampling.ALWAYS_OFF  # noqa: SLF001
+    finally:
+        instrument.teardown()
+
+
+@pytest.mark.parametrize(
+    ("config", "expected_service_name"),
+    [
+        (OpenTelemetryConfig(opentelemetry_log_traces=True), "micro-service"),
+        (OpenTelemetryConfig(opentelemetry_log_traces=True, service_name="configured"), "configured"),
+        (
+            OpenTelemetryConfig(
+                opentelemetry_log_traces=True, service_name="configured", opentelemetry_service_name="otel-configured"
+            ),
+            "otel-configured",
+        ),
+    ],
+)
+def test_opentelemetry_configured_service_name_wins_over_env(
+    monkeypatch: pytest.MonkeyPatch, config: OpenTelemetryConfig, expected_service_name: str
+) -> None:
+    monkeypatch.setenv("OTEL_SERVICE_NAME", "from-env")
+    instrument = OpenTelemetryInstrument(bootstrap_config=config)
+    try:
+        instrument.bootstrap()
+        assert instrument._tracer_provider is not None  # noqa: SLF001
+        assert instrument._tracer_provider.resource.attributes["service.name"] == expected_service_name  # noqa: SLF001
+    finally:
+        instrument.teardown()
+
+
+def test_opentelemetry_resource_detectors_enrich_resource(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OTEL_EXPERIMENTAL_RESOURCE_DETECTORS", "process")
+    monkeypatch.setenv("OTEL_RESOURCE_ATTRIBUTES", "deployment.environment=from-env")
+    instrument = OpenTelemetryInstrument(bootstrap_config=OpenTelemetryConfig(opentelemetry_log_traces=True))
+    try:
+        instrument.bootstrap()
+        assert instrument._tracer_provider is not None  # noqa: SLF001
+        attributes = instrument._tracer_provider.resource.attributes  # noqa: SLF001
+        assert attributes["process.pid"] == os.getpid()
+        assert attributes["deployment.environment"] == "from-env"
     finally:
         instrument.teardown()
 
