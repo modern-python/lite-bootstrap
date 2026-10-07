@@ -1,6 +1,6 @@
 import contextlib
 import logging
-import typing
+from collections.abc import Generator
 
 
 class LiteBootstrapError(RuntimeError):
@@ -44,7 +44,7 @@ class TeardownErrorCollector:
         self._logger = logger
 
     @contextlib.contextmanager
-    def capture(self, name: str) -> typing.Iterator[None]:
+    def capture(self, name: str) -> Generator[None]:
         """Record an ``Exception`` raised by one teardown step under ``name`` and continue."""
         try:
             yield
@@ -55,7 +55,7 @@ class TeardownErrorCollector:
 
 
 @contextlib.contextmanager
-def collect_teardown_errors(logger: logging.Logger | None = None) -> typing.Iterator[TeardownErrorCollector]:
+def collect_teardown_errors(logger: logging.Logger | None = None) -> Generator[TeardownErrorCollector]:
     """Collect the failures of individual teardown steps and raise them together.
 
     Raises :class:`TeardownError` on leaving the block if any ``capture()`` recorded
