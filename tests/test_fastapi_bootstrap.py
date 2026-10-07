@@ -5,6 +5,7 @@ import logging
 import typing
 import uuid
 import warnings
+from collections.abc import Generator
 from unittest.mock import patch
 
 import fastapi
@@ -290,7 +291,7 @@ def access_logger() -> typing.Iterator[RecordingAccessLogger]:
 
 
 @contextlib.contextmanager
-def _bootstrapped(config: FastAPIConfig) -> typing.Iterator["fastapi.FastAPI"]:
+def _bootstrapped(config: FastAPIConfig) -> Generator["fastapi.FastAPI"]:
     bootstrapper = FastAPIBootstrapper(bootstrap_config=config)
     try:
         yield bootstrapper.bootstrap()
@@ -299,7 +300,7 @@ def _bootstrapped(config: FastAPIConfig) -> typing.Iterator["fastapi.FastAPI"]:
 
 
 @contextlib.contextmanager
-def _bootstrapped_with_route(config: FastAPIConfig) -> typing.Iterator["fastapi.FastAPI"]:
+def _bootstrapped_with_route(config: FastAPIConfig) -> Generator["fastapi.FastAPI"]:
     with _bootstrapped(config) as application:
 
         @application.post("/items/{item_id}")

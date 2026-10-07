@@ -2,6 +2,7 @@ import contextlib
 import dataclasses
 import time
 import typing
+from collections.abc import AsyncGenerator
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
@@ -264,7 +265,7 @@ class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI"]):
     not_ready_message = "fastapi is not installed"
 
     @contextlib.asynccontextmanager
-    async def lifespan_manager(self, _: "fastapi.FastAPI") -> typing.AsyncIterator[dict[str, typing.Any]]:
+    async def lifespan_manager(self, _: "fastapi.FastAPI") -> AsyncGenerator[dict[str, typing.Any]]:
         try:
             yield {}
         finally:

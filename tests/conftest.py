@@ -2,6 +2,7 @@ import contextlib
 import sys
 import typing
 import warnings
+from collections.abc import Generator
 from importlib import reload
 
 import opentelemetry.metrics._internal
@@ -89,7 +90,7 @@ def warning_source_files(caught: typing.Iterable[warnings.WarningMessage], categ
 
 
 @contextlib.contextmanager
-def emulate_package_missing(package_name: str) -> typing.Iterator[None]:
+def emulate_package_missing(package_name: str) -> Generator[None]:
     old_module = sys.modules[package_name]
     sys.modules[package_name] = None  # ty: ignore[invalid-assignment]
     reload(import_checker)
@@ -103,7 +104,7 @@ def emulate_package_missing(package_name: str) -> typing.Iterator[None]:
 @contextlib.contextmanager
 def emulate_package_missing_with_module_reload(
     package_name: str, module_names: typing.Iterable[str]
-) -> typing.Iterator[None]:
+) -> Generator[None]:
     # Reload listed modules under emulate_package_missing so their
     # `if import_checker.is_X_installed: import X` blocks re-evaluate against
     # the patched flag. `importlib.reload` preserves existing module globals,

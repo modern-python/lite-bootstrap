@@ -2,6 +2,7 @@ import contextlib
 import dataclasses
 import time
 import typing
+from collections.abc import AsyncGenerator
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
@@ -42,7 +43,7 @@ if import_checker.is_fastmcp_installed:
             self._teardown = teardown
 
         @contextlib.asynccontextmanager
-        async def lifespan(self) -> typing.AsyncIterator[None]:
+        async def lifespan(self) -> AsyncGenerator[None]:
             try:
                 yield
             finally:

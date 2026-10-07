@@ -8,6 +8,7 @@ import sys
 import typing
 import warnings
 import weakref
+from collections.abc import Generator
 from unittest.mock import AsyncMock, patch
 
 import litestar
@@ -307,7 +308,7 @@ class _RecordingHandler(logging.Handler):
 
 
 @contextlib.contextmanager
-def _recorded_litestar_logs() -> typing.Iterator[list[str]]:
+def _recorded_litestar_logs() -> Generator[list[str]]:
     """Record Litestar's rendered log lines.
 
     Enter this inside the TestClient context: Litestar's StructLoggingConfig runs dictConfig at
