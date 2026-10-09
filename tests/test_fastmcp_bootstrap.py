@@ -2,11 +2,13 @@ import contextlib
 import typing
 import uuid
 import warnings
+from collections.abc import Generator
 from unittest.mock import MagicMock
 
 import prometheus_client
 import pytest
 from fastmcp import FastMCP
+from fastmcp.server.http import StarletteWithLifespan
 from fastmcp.server.middleware import MiddlewareContext
 from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
 from opentelemetry.sdk.trace import ReadableSpan
@@ -20,7 +22,11 @@ from starlette.testclient import TestClient
 
 from lite_bootstrap import BootstrapperNotReadyError, FastMcpBootstrapper, FastMcpConfig
 from lite_bootstrap.bootstrappers import fastmcp_bootstrapper
-from lite_bootstrap.bootstrappers.fastmcp_bootstrapper import FastMcpLoggingMiddleware, FastMcpOpenTelemetryInstrument
+from lite_bootstrap.bootstrappers.fastmcp_bootstrapper import (
+    FastMcpLoggingMiddleware,
+    FastMcpOpenTelemetryInstrument,
+    _postprocess_http_apps,
+)
 from lite_bootstrap.exceptions import ConfigurationError
 from tests.conftest import (
     emulate_package_missing,
@@ -360,7 +366,7 @@ def _server_spans(exporter: InMemorySpanExporter) -> list[ReadableSpan]:
 @contextlib.contextmanager
 def _bootstrapped_with_span_exporter(
     **overrides: typing.Any,  # noqa: ANN401
-) -> typing.Iterator[tuple[FastMcpBootstrapper, FastMCP, InMemorySpanExporter]]:
+) -> Generator[tuple[FastMcpBootstrapper, FastMCP, InMemorySpanExporter]]:
     bootstrapper = FastMcpBootstrapper(bootstrap_config=_make_test_config(opentelemetry_log_traces=True, **overrides))
     application = bootstrapper.bootstrap()
     tracer_provider = get_tracer_provider()
@@ -460,3 +466,28 @@ def test_fastmcp_otel_is_skipped_without_asgi_instrumentation() -> None:
             assert "http_app" not in vars(application)
         finally:
             bootstrapper.teardown()
+
+
+def test_fastmcp_http_app_postprocessors_chain_and_restore_in_reverse() -> None:
+    application = FastMCP()
+    applied: list[str] = []
+
+    def postprocessor(name: str) -> typing.Callable[[StarletteWithLifespan], StarletteWithLifespan]:
+        def postprocess(http_application: StarletteWithLifespan) -> StarletteWithLifespan:
+            applied.append(name)
+            return http_application
+
+        return postprocess
+
+    restore_first = _postprocess_http_apps(application, postprocessor("first"))
+    restore_second = _postprocess_http_apps(application, postprocessor("second"))
+    application.http_app()
+    assert applied == ["first", "second"]
+
+    restore_second()
+    applied.clear()
+    application.http_app()
+    assert applied == ["first"]
+
+    restore_first()
+    assert "http_app" not in vars(application)
