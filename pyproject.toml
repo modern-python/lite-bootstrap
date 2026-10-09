@@ -198,12 +198,16 @@ fastmcp = [
     # fastmcp 3.0 pulls py-key-value-aio, which requires typing-extensions>=4.15.
     "typing-extensions>=4.15",
 ]
+fastmcp-otl = [
+    "lite-bootstrap[fastmcp,otl]",
+    "opentelemetry-instrumentation-asgi>=0.49b0",
+]
 fastmcp-metrics = [
     "lite-bootstrap[fastmcp]",
     "prometheus-client>=0.20",
 ]
 fastmcp-all = [
-    "lite-bootstrap[fastmcp,fastmcp-metrics,sentry,logging,pyroscope]",
+    "lite-bootstrap[fastmcp,fastmcp-otl,fastmcp-metrics,sentry,logging,pyroscope]",
 ]
 
 [dependency-groups]

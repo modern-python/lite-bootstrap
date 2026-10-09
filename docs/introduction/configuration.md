@@ -122,7 +122,7 @@ Additional parameters:
 ### Metrics
 
 Left unset, no `MeterProvider` is installed and the metrics signal stays off. Set it, and the
-FastAPI, Litestar and FastStream instrumentations start recording their duration histograms
+FastAPI, Litestar, FastStream and FastMCP instrumentations start recording their duration histograms
 against it; until then they build those instruments against a no-op provider and the data goes
 nowhere.
 
