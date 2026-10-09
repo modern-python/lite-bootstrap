@@ -198,10 +198,18 @@ def _fastmcp() -> None:
             sentry_dsn=SENTRY_DSN,
             sentry_additional_params=SENTRY_PARAMS,
             pyroscope_endpoint=PYROSCOPE_ENDPOINT,
+            opentelemetry_endpoint=OTLP_ENDPOINT,
+            opentelemetry_metrics_endpoint=OTLP_ENDPOINT,
+            opentelemetry_log_traces=True,
         )
     )
-    bootstrapper.bootstrap()
-    bootstrapper.teardown()
+    application = bootstrapper.bootstrap()
+    try:
+        # FastMcpOpenTelemetryInstrument adds its middleware to the application http_app() builds.
+        application.http_app()
+        _emit_span()
+    finally:
+        bootstrapper.teardown()
 
 
 TARGETS: typing.Final = {

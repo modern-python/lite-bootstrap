@@ -64,6 +64,18 @@ nanoseconds. A message that raises is logged at exception level and the exceptio
 
 Set `health_checks_enabled=False` to omit the health route.
 
+## Tracing
+
+With `opentelemetry_endpoint` set (and the `fastmcp-otl` extra installed), every ASGI application
+`application.http_app()` builds, including the one `application.run(transport="http")` builds, is
+wrapped in OpenTelemetry's ASGI middleware. Each request produces a server span named after its
+route, such as `POST /mcp` or `GET /health/`, with the route in `http.route`. A request to an
+unknown path produces a span named after the HTTP method alone, without `http.route`.
+
+The metrics path, the health-check path (unless `opentelemetry_generate_health_check_spans` is on)
+and `opentelemetry_excluded_urls` produce no spans. An application already instrumented by
+`StarletteInstrumentor` is left as is, so no request is traced twice.
+
 Teardown is wired through FastMCP's provider lifecycle — `bootstrapper.teardown()`
 runs automatically when the FastMCP server's ASGI lifespan shuts down (i.e. when
 the application that serves `application.http_app()` shuts down).

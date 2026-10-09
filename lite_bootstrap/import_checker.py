@@ -37,4 +37,7 @@ is_otlp_grpc_exporter_installed = _safe_find_spec("opentelemetry.exporter.otlp.p
 is_otlp_http_exporter_installed = _safe_find_spec("opentelemetry.exporter.otlp.proto.http.trace_exporter")
 is_pyroscope_installed = find_spec("pyroscope") is not None
 is_fastmcp_installed = find_spec("fastmcp") is not None
+is_fastmcp_opentelemetry_installed = (
+    is_opentelemetry_installed and is_fastmcp_installed and _safe_find_spec("opentelemetry.instrumentation.asgi")
+)
 is_orjson_installed = find_spec("orjson") is not None

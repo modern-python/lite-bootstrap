@@ -8,7 +8,7 @@ You can choose required framework and instruments using this table:
 |---------------|--------------------|----------------------|-------------------|---------------------|--------------------------------------|
 | sentry        | `litestar-sentry`  | `faststream-sentry`  | `fastapi-sentry`  | `sentry` (compose)  | `sentry`                             |
 | prometheus    | `litestar-metrics` | `faststream-metrics` | `fastapi-metrics` | `fastmcp-metrics`   | not used                             |
-| opentelemetry | `litestar-otl`     | `faststream-otl`     | `fastapi-otl`     | not used            | `otl`                                |
+| opentelemetry | `litestar-otl`     | `faststream-otl`     | `fastapi-otl`     | `fastmcp-otl`       | `otl`                                |
 | pyroscope     | `pyroscope`        | `pyroscope`          | `pyroscope`       | `pyroscope`         | `pyroscope`                          |
 | structlog     | `litestar-logging` | `faststream-logging` | `fastapi-logging` | `logging` (compose) | `logging`                            |
 | cors          | no extra           | not used             | no extra          | not used            | not used                             |

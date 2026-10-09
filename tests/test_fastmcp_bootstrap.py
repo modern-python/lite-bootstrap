@@ -1,3 +1,4 @@
+import contextlib
 import typing
 import uuid
 import warnings
@@ -7,11 +8,19 @@ import prometheus_client
 import pytest
 from fastmcp import FastMCP
 from fastmcp.server.middleware import MiddlewareContext
+from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
+from opentelemetry.sdk.trace import ReadableSpan
+from opentelemetry.sdk.trace import TracerProvider as SDKTracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace import SpanKind, get_tracer_provider
 from starlette import status
+from starlette.applications import Starlette
 from starlette.testclient import TestClient
 
 from lite_bootstrap import BootstrapperNotReadyError, FastMcpBootstrapper, FastMcpConfig
-from lite_bootstrap.bootstrappers.fastmcp_bootstrapper import FastMcpLoggingMiddleware
+from lite_bootstrap.bootstrappers import fastmcp_bootstrapper
+from lite_bootstrap.bootstrappers.fastmcp_bootstrapper import FastMcpLoggingMiddleware, FastMcpOpenTelemetryInstrument
 from lite_bootstrap.exceptions import ConfigurationError
 from tests.conftest import (
     emulate_package_missing,
@@ -338,3 +347,116 @@ def test_second_fastmcp_bootstrapper_bootstrap_raises() -> None:
             second.bootstrap()
     finally:
         first.teardown()
+
+
+def _count_opentelemetry_middlewares(http_application: Starlette) -> int:
+    return sum(middleware.cls is OpenTelemetryMiddleware for middleware in http_application.user_middleware)
+
+
+def _server_spans(exporter: InMemorySpanExporter) -> list[ReadableSpan]:
+    return [span for span in exporter.get_finished_spans() if span.kind == SpanKind.SERVER]
+
+
+@contextlib.contextmanager
+def _bootstrapped_with_span_exporter(
+    **overrides: typing.Any,  # noqa: ANN401
+) -> typing.Iterator[tuple[FastMcpBootstrapper, FastMCP, InMemorySpanExporter]]:
+    bootstrapper = FastMcpBootstrapper(bootstrap_config=_make_test_config(opentelemetry_log_traces=True, **overrides))
+    application = bootstrapper.bootstrap()
+    tracer_provider = get_tracer_provider()
+    assert isinstance(tracer_provider, SDKTracerProvider)
+    exporter = InMemorySpanExporter()
+    tracer_provider.add_span_processor(SimpleSpanProcessor(exporter))
+    try:
+        yield bootstrapper, application, exporter
+    finally:
+        bootstrapper.teardown()
+
+
+def test_fastmcp_otel_span_carries_route_template() -> None:
+    with (
+        _bootstrapped_with_span_exporter() as (bootstrapper, application, exporter),
+        TestClient(application.http_app()) as client,
+    ):
+        assert client.get(bootstrapper.bootstrap_config.health_checks_path).status_code == status.HTTP_200_OK
+        client.post("/mcp", json={})
+
+    server_spans = _server_spans(exporter)
+    health_checks_path = bootstrapper.bootstrap_config.health_checks_path
+    assert [span.name for span in server_spans] == [f"GET {health_checks_path}", "POST /mcp"]
+    assert [(span.attributes or {}).get("http.route") for span in server_spans] == [health_checks_path, "/mcp"]
+
+
+def test_fastmcp_otel_unmatched_path_span_is_named_by_method_only() -> None:
+    with (
+        _bootstrapped_with_span_exporter() as (_, application, exporter),
+        TestClient(application.http_app()) as client,
+    ):
+        assert client.get("/missing/abc").status_code == status.HTTP_404_NOT_FOUND
+
+    server_spans = _server_spans(exporter)
+    assert [span.name for span in server_spans] == ["GET"]
+    assert "http.route" not in (server_spans[0].attributes or {})
+
+
+def test_fastmcp_otel_excludes_infrastructure_and_configured_paths() -> None:
+    with (
+        _bootstrapped_with_span_exporter(
+            health_checks_path="/custom-health/",
+            opentelemetry_generate_health_check_spans=False,
+            opentelemetry_excluded_urls=["/mcp"],
+        ) as (bootstrapper, application, exporter),
+        TestClient(application.http_app()) as client,
+    ):
+        client.get("/custom-health/")
+        client.get("/custom-health")
+        client.get(bootstrapper.bootstrap_config.prometheus_metrics_path)
+        client.post("/mcp", json={})
+        client.get("/custom-healthy")
+
+    assert [span.name for span in _server_spans(exporter)] == ["GET"]
+
+
+def test_fastmcp_otel_instruments_every_http_app_once() -> None:
+    with _bootstrapped_with_span_exporter() as (bootstrapper, application, _):
+        first_http_application = application.http_app()
+        second_http_application = application.http_app(path="/other")
+        instrument = next(one for one in bootstrapper.instruments if isinstance(one, FastMcpOpenTelemetryInstrument))
+        instrument._instrument_http_app(first_http_application)  # noqa: SLF001
+
+    assert _count_opentelemetry_middlewares(first_http_application) == 1
+    assert _count_opentelemetry_middlewares(second_http_application) == 1
+
+
+def test_fastmcp_otel_teardown_restores_http_app() -> None:
+    with _bootstrapped_with_span_exporter() as (_, application, _):
+        assert "http_app" in vars(application)
+
+    assert "http_app" not in vars(application)
+    assert _count_opentelemetry_middlewares(application.http_app()) == 0
+
+
+def test_fastmcp_otel_leaves_http_app_alone_when_not_configured() -> None:
+    bootstrapper = FastMcpBootstrapper(bootstrap_config=_make_test_config())
+    application = bootstrapper.bootstrap()
+    try:
+        assert "http_app" not in vars(application)
+        assert _count_opentelemetry_middlewares(application.http_app()) == 0
+    finally:
+        bootstrapper.teardown()
+
+
+def test_fastmcp_otel_is_skipped_without_asgi_instrumentation() -> None:
+    with emulate_package_missing_with_module_reload(
+        "opentelemetry.instrumentation.asgi",
+        ["lite_bootstrap.bootstrappers.fastmcp_bootstrapper"],
+    ):
+        with pytest.warns(UserWarning, match="opentelemetry-instrumentation-asgi"):
+            bootstrapper = fastmcp_bootstrapper.FastMcpBootstrapper(
+                bootstrap_config=_make_test_config(opentelemetry_log_traces=True)
+            )
+        application = bootstrapper.bootstrap()
+        try:
+            assert "http_app" not in vars(application)
+        finally:
+            bootstrapper.teardown()
