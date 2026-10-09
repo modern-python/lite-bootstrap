@@ -80,7 +80,7 @@ route, such as `POST /mcp` or `GET /health/`, with the route in `http.route`. A 
 unknown path produces a span named after the HTTP method alone, without `http.route`.
 
 The metrics path, the health-check path (unless `opentelemetry_generate_health_check_spans` is on)
-and `opentelemetry_excluded_urls` produce no spans. An application already instrumented by
+`opentelemetry_excluded_urls` and `OTEL_PYTHON_STARLETTE_EXCLUDED_URLS` produce no spans. An application already instrumented by
 `StarletteInstrumentor` is left as is, so no request is traced twice.
 
 Teardown is wired through FastMCP's provider lifecycle — `bootstrapper.teardown()`

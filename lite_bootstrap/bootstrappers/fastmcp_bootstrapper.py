@@ -48,9 +48,6 @@ if import_checker.is_prometheus_fastapi_instrumentator_installed:
     _DEFAULT_METRICS_PARAMETERS: typing.Final = frozenset(inspect.signature(instrumentator_metrics.default).parameters)
 
 
-# OpenTelemetryMiddleware matches its patterns against a full URL, not a bare path.
-_EXCLUDED_URL_SCHEME_AND_HOST: typing.Final = r"^\w+://[^/]*"
-
 _TOOL_CALL_STATUS_SUCCESS: typing.Final = "success"
 _TOOL_CALL_STATUS_ERROR: typing.Final = "error"
 
@@ -230,22 +227,6 @@ class FastMcpOpenTelemetryInstrument(OpenTelemetryInstrument):
     def dependencies_installed() -> bool:
         return OpenTelemetryInstrument.dependencies_installed() and import_checker.is_fastmcp_opentelemetry_installed
 
-    def _build_excluded_url_patterns(self) -> list[str]:
-        """Anchored patterns for the derived paths, plus the caller's own entries verbatim.
-
-        The trailing slash is stripped and matched optionally, so ``/health/`` excludes the path with
-        or without it. Anchoring is needed because ``ExcludeList`` searches unanchored: a bare
-        ``/health`` would also silence ``/healthy``. Caller-supplied entries stay untouched because
-        OpenTelemetry documents them as regexes.
-        """
-        anchored_patterns: typing.Final = {
-            rf"{_EXCLUDED_URL_SCHEME_AND_HOST}{re.escape(normalized_path)}(?:/|$)"
-            for excluded_path in self._build_infrastructure_excluded_paths()
-            # A bare "/" would anchor to every URL, so it is dropped along with empty values.
-            if (normalized_path := excluded_path.rstrip("/"))
-        }
-        return sorted(anchored_patterns | set(self.bootstrap_config.opentelemetry_excluded_urls))
-
     def _instrument_http_app(self, http_application: "StarletteWithLifespan") -> "StarletteWithLifespan":
         if getattr(http_application, _OPENTELEMETRY_INSTRUMENTED_MARKER, False):
             return http_application
@@ -255,7 +236,7 @@ class FastMcpOpenTelemetryInstrument(OpenTelemetryInstrument):
                 build_fastmcp_route_details_from_scope, routes=http_application.routes
             ),
             # OpenTelemetryMiddleware only parses a raw string from 0.56b0; the floor is 0.49b0.
-            excluded_urls=parse_excluded_urls(",".join(self._build_excluded_url_patterns())),
+            excluded_urls=parse_excluded_urls(",".join(self._build_excluded_url_patterns("STARLETTE"))),
             tracer_provider=get_tracer_provider(),
             meter_provider=get_meter_provider(),
         )

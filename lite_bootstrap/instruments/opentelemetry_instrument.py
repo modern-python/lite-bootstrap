@@ -1,6 +1,7 @@
 import dataclasses
 import logging
 import os
+import re
 import typing
 import urllib.parse
 
@@ -59,6 +60,9 @@ class OpenTelemetryServiceFieldsConfig(BaseConfig):
     opentelemetry_service_name: str | None = None
     opentelemetry_namespace: str | None = None
 
+
+# OpenTelemetry's ExcludeList searches its patterns in a full URL, not a bare path.
+_EXCLUDED_URL_SCHEME_AND_HOST: typing.Final = r"^\w+://[^/]*"
 
 _LOCAL_HOSTS: typing.Final[frozenset[str]] = frozenset({"localhost", "127.0.0.1", "::1", ""})
 
@@ -198,6 +202,26 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
 
     def _build_excluded_urls(self) -> set[str]:
         return set(self.bootstrap_config.opentelemetry_excluded_urls) | self._build_infrastructure_excluded_paths()
+
+    def _build_excluded_url_patterns(self, environment_key: str) -> list[str]:
+        """Patterns for OpenTelemetry's ``ExcludeList``, which searches them unanchored in the full URL.
+
+        Derived paths are anchored to the start of the path and to a segment end, with the trailing slash
+        optional, so ``/metrics/`` excludes ``/metrics`` but neither ``/api/metrics/`` nor ``/metricsx``.
+        Caller-supplied entries and ``OTEL_PYTHON_<environment_key>_EXCLUDED_URLS``, falling back to
+        ``OTEL_PYTHON_EXCLUDED_URLS`` as OpenTelemetry does, stay verbatim because they are regexes.
+        """
+        anchored_patterns: typing.Final = {
+            rf"{_EXCLUDED_URL_SCHEME_AND_HOST}{re.escape(normalized_path)}(?:/|$)"
+            for excluded_path in self._build_infrastructure_excluded_paths()
+            # A bare "/" would anchor to every URL, so it is dropped along with empty values.
+            if (normalized_path := excluded_path.rstrip("/"))
+        }
+        environment_urls: typing.Final = os.environ.get(
+            f"OTEL_PYTHON_{environment_key}_EXCLUDED_URLS", os.environ.get("OTEL_PYTHON_EXCLUDED_URLS", "")
+        )
+        environment_patterns: typing.Final = {url.strip() for url in environment_urls.split(",") if url.strip()}
+        return sorted(anchored_patterns | set(self.bootstrap_config.opentelemetry_excluded_urls) | environment_patterns)
 
     def _silence_otel_loggers(self) -> None:
         for logger_name in ("opentelemetry.instrumentation.instrumentor", "opentelemetry.trace"):
