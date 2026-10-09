@@ -1,15 +1,12 @@
 import contextlib
 import dataclasses
-import gc
 import inspect
 import json
 import logging
 import sys
 import typing
 import warnings
-import weakref
 from collections.abc import Generator
-from unittest.mock import AsyncMock, patch
 
 import litestar
 import pytest
@@ -17,21 +14,23 @@ import structlog
 from litestar import status_codes
 from litestar.config.app import AppConfig
 from litestar.middleware.logging import LoggingMiddlewareConfig
+from litestar.plugins import InitPluginProtocol
+from litestar.plugins.opentelemetry import OpenTelemetryPlugin
 from litestar.testing import TestClient
+from litestar.types import Scope
 from opentelemetry.metrics import get_meter_provider
 from opentelemetry.sdk.metrics import MeterProvider as SDKMeterProvider
-from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace import TracerProvider as SDKTracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-from opentelemetry.trace import get_tracer_provider
+from opentelemetry.trace import SpanKind, get_tracer_provider
 
 from lite_bootstrap import LitestarBootstrapper, LitestarConfig, import_checker
 from lite_bootstrap.bootstrappers import litestar_bootstrapper
 from lite_bootstrap.bootstrappers.litestar_bootstrapper import (
     _LITESTAR_DEFAULT_REQUEST_MAX_BODY_SIZE,
     LitestarLoggingInstrument,
-    LitestarOpenTelemetryInstrumentationMiddleware,
     build_litestar_route_details_from_scope,
     build_span_name,
 )
@@ -212,71 +211,18 @@ def test_build_span_name_no_route() -> None:
     assert build_span_name("GET", "") == "GET"
 
 
-def test_build_litestar_route_details_from_scope_path_fallback() -> None:
-    scope = {"method": "POST", "path": "/fallback/path"}
+def test_build_litestar_route_details_from_scope_ignores_raw_path() -> None:
+    scope = typing.cast("Scope", {"method": "POST", "path": "/fallback/path"})
     name, attrs = build_litestar_route_details_from_scope(scope)
-    assert name == "POST /fallback/path"
-    assert attrs == {"http.route": "/fallback/path"}
-
-
-def test_build_litestar_route_details_from_scope_no_path() -> None:
-    scope = {"type": "lifespan"}
-    name, attrs = build_litestar_route_details_from_scope(scope)
-    assert name == "HTTP"
+    assert name == "POST"
     assert attrs == {}
 
 
-class _NotWeakrefable:
-    __slots__ = ()
-
-    async def __call__(self, scope: object, receive: object, send: object) -> None:  # noqa: ARG002
-        return None
-
-
-async def test_litestar_otel_apps_cache_skips_non_weakrefable_app() -> None:
-    """Apps that don't support weak references are called but not cached."""
-    tracer_provider = TracerProvider()
-    middleware = LitestarOpenTelemetryInstrumentationMiddleware(
-        tracer_provider=tracer_provider,
-        meter_provider=SDKMeterProvider(),
-        excluded_urls=set(),
-    )
-
-    non_weakrefable_app = _NotWeakrefable()
-    # Confirm the key really is non-weakrefable so the test is meaningful.
-    with pytest.raises(TypeError):
-        weakref.ref(non_weakrefable_app)
-
-    # Call handle() twice with the non-weakrefable next_app. Both calls must succeed
-    # (TypeError suppressed on both lookup and store) and the cache stays empty.
-    scope: dict = {"type": "lifespan"}
-    await middleware.handle(scope, object(), object(), non_weakrefable_app)  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
-    await middleware.handle(scope, object(), object(), non_weakrefable_app)  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
-
-    assert len(middleware._otel_apps) == 0  # noqa: SLF001
-
-
-def test_litestar_otel_apps_cache_evicts_dead_refs() -> None:
-    tracer_provider = TracerProvider()
-    middleware = LitestarOpenTelemetryInstrumentationMiddleware(
-        tracer_provider=tracer_provider,
-        meter_provider=SDKMeterProvider(),
-        excluded_urls=set(),
-    )
-
-    async def transient_app(scope: dict, receive: object, send: object) -> None:  # noqa: ARG001
-        return None  # pragma: no cover - only a weakref target; the test never calls it
-
-    weak_app = weakref.ref(transient_app)
-    middleware._otel_apps[transient_app] = "marker"  # noqa: SLF001  # ty: ignore[invalid-assignment]
-    assert weak_app() is not None
-    assert len(middleware._otel_apps) == 1  # noqa: SLF001
-
-    del transient_app
-    gc.collect()
-
-    assert weak_app() is None
-    assert len(middleware._otel_apps) == 0  # noqa: SLF001
+def test_build_litestar_route_details_from_scope_no_path() -> None:
+    scope = typing.cast("Scope", {"type": "lifespan"})
+    name, attrs = build_litestar_route_details_from_scope(scope)
+    assert name == "HTTP"
+    assert attrs == {}
 
 
 def test_litestar_bootstrap_without_prometheus_client() -> None:
@@ -541,26 +487,6 @@ def test_second_litestar_bootstrapper_bootstrap_raises(litestar_config: Litestar
         first.teardown()
 
 
-def test_litestar_otel_middleware_hands_the_instrumentor_a_parsed_exclude_list() -> None:
-    """INVARIANT: `excluded_urls` reaches OpenTelemetryMiddleware parsed, never as a raw string.
-
-    `OpenTelemetryMiddleware` only learned to parse a string itself in
-    opentelemetry-instrumentation 0.56b0. The declared floor is 0.49b0, where a string reaches
-    `self.excluded_urls.url_disabled(url)` and raises `AttributeError` on every request, so a
-    Litestar service with OpenTelemetry returns 500 for everything.
-    """
-    middleware = LitestarOpenTelemetryInstrumentationMiddleware(
-        tracer_provider=TracerProvider(),
-        meter_provider=SDKMeterProvider(),
-        excluded_urls={"/custom-metrics"},
-    )
-
-    excluded_urls = middleware._excluded_urls  # noqa: SLF001
-    assert not isinstance(excluded_urls, str)
-    assert excluded_urls.url_disabled("http://test/custom-metrics")
-    assert not excluded_urls.url_disabled("http://test/items/1")
-
-
 def test_litestar_otel_excludes_infrastructure_paths_normalized_by_litestar(
     litestar_config: LitestarConfig,
 ) -> None:
@@ -621,40 +547,128 @@ def test_litestar_otel_keeps_caller_supplied_excluded_urls_as_regexes(litestar_c
     assert exporter.get_finished_spans() == ()
 
 
-async def test_litestar_otel_middleware_hands_the_instrumentor_the_meter_provider() -> None:
-    """opentelemetry-instrumentation-asgi builds duration histograms when given a meter provider."""
-    meter_provider = SDKMeterProvider()
-    middleware = LitestarOpenTelemetryInstrumentationMiddleware(
-        tracer_provider=TracerProvider(),
-        meter_provider=meter_provider,
-        excluded_urls=set(),
-    )
-
-    async def next_app(scope: dict, receive: object, send: object) -> None:  # noqa: ARG001
-        return None  # pragma: no cover - the patched middleware never calls through
-
-    scope: dict = {"type": "http"}
-    with patch.object(litestar_bootstrapper, "OpenTelemetryMiddleware") as mock_middleware:
-        mock_middleware.return_value = AsyncMock()
-        await middleware.handle(scope, object(), object(), next_app)  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
-
-    assert mock_middleware.call_args.kwargs["meter_provider"] is meter_provider
+def _bootstrap_with_span_exporter(config: LitestarConfig) -> tuple[litestar.Litestar, InMemorySpanExporter]:
+    application = LitestarBootstrapper(bootstrap_config=config).bootstrap()
+    tracer_provider = get_tracer_provider()
+    assert isinstance(tracer_provider, SDKTracerProvider)
+    exporter = InMemorySpanExporter()
+    tracer_provider.add_span_processor(SimpleSpanProcessor(exporter))
+    return application, exporter
 
 
-def test_litestar_otel_instrument_passes_the_installed_meter_provider(litestar_config: LitestarConfig) -> None:
+def _server_spans(exporter: InMemorySpanExporter) -> list[ReadableSpan]:
+    return [span for span in exporter.get_finished_spans() if span.kind == SpanKind.SERVER]
+
+
+def test_litestar_otel_registers_litestars_own_plugin(litestar_config: LitestarConfig) -> None:
     config = dataclasses.replace(litestar_config, opentelemetry_metrics_endpoint="localhost:4317")
     bootstrapper = LitestarBootstrapper(bootstrap_config=config)
 
     try:
         bootstrapper.bootstrap()
 
-        appended = [
-            one_middleware
-            for one_middleware in config.application_config.middleware
-            if isinstance(one_middleware, LitestarOpenTelemetryInstrumentationMiddleware)
-        ]
-        assert len(appended) == 1
-        assert appended[0]._meter_provider is get_meter_provider()  # noqa: SLF001
+        plugins = [plugin for plugin in config.application_config.plugins if isinstance(plugin, OpenTelemetryPlugin)]
+        assert len(plugins) == 1
+        assert plugins[0].config.tracer_provider is get_tracer_provider()
+        assert plugins[0].config.meter_provider is get_meter_provider()
         assert isinstance(get_meter_provider(), SDKMeterProvider)
     finally:
         bootstrapper.teardown()
+
+
+def test_litestar_otel_keeps_user_plugins(litestar_config: LitestarConfig) -> None:
+    class UserPlugin(InitPluginProtocol):
+        def on_app_init(self, app_config: AppConfig) -> AppConfig:
+            return app_config
+
+    config = dataclasses.replace(litestar_config, application_config=AppConfig(plugins=[UserPlugin()]))
+    application = LitestarBootstrapper(bootstrap_config=config).bootstrap()
+
+    assert any(isinstance(plugin, UserPlugin) for plugin in application.plugins.init)
+    assert any(isinstance(plugin, OpenTelemetryPlugin) for plugin in application.plugins.init)
+
+
+def test_litestar_otel_span_carries_route_template(litestar_config: LitestarConfig) -> None:
+    @litestar.get("/users/{user_id:int}")
+    async def get_user(user_id: int) -> dict[str, int]:
+        return {"user_id": user_id}
+
+    config = dataclasses.replace(litestar_config, application_config=AppConfig(route_handlers=[get_user]))
+    application, exporter = _bootstrap_with_span_exporter(config)
+
+    with TestClient(app=application) as client:
+        assert client.get("/users/123").status_code == status_codes.HTTP_200_OK
+
+    server_spans = _server_spans(exporter)
+    assert [span.name for span in server_spans] == ["GET /users/{user_id}"]
+    assert server_spans[0].attributes is not None
+    assert server_spans[0].attributes["http.route"] == "/users/{user_id}"
+
+
+def test_litestar_otel_unmatched_path_span_is_named_by_method_only(litestar_config: LitestarConfig) -> None:
+    """A 404 never reaches the route stack, so its span must not carry the raw path that scanners vary."""
+    application, exporter = _bootstrap_with_span_exporter(litestar_config)
+
+    with TestClient(app=application) as client:
+        assert client.get("/missing/abc").status_code == status_codes.HTTP_404_NOT_FOUND
+
+    server_spans = _server_spans(exporter)
+    assert [span.name for span in server_spans] == ["GET"]
+    assert server_spans[0].attributes is not None
+    assert "http.route" not in server_spans[0].attributes
+
+
+def test_litestar_otel_honors_excluded_urls_from_environment(
+    litestar_config: LitestarConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("OTEL_PYTHON_LITESTAR_EXCLUDED_URLS", "/from-env")
+
+    @litestar.get("/from-env")
+    async def from_env() -> None: ...
+
+    @litestar.get("/other")
+    async def other() -> None: ...
+
+    config = dataclasses.replace(litestar_config, application_config=AppConfig(route_handlers=[from_env, other]))
+    application, exporter = _bootstrap_with_span_exporter(config)
+
+    with TestClient(app=application) as client:
+        client.get("/from-env")
+        client.get("/other")
+
+    assert [span.name for span in _server_spans(exporter)] == ["GET /other"]
+
+
+def test_litestar_otel_traces_everything_when_nothing_is_excluded(litestar_config: LitestarConfig) -> None:
+    """An empty exclude list compiles to a pattern matching every path, so it must never reach the plugin."""
+
+    @litestar.get("/traced")
+    async def traced() -> None: ...
+
+    config = dataclasses.replace(
+        litestar_config,
+        application_config=AppConfig(route_handlers=[traced]),
+        prometheus_metrics_path="",
+        opentelemetry_generate_health_check_spans=True,
+    )
+    application, exporter = _bootstrap_with_span_exporter(config)
+
+    with TestClient(app=application) as client:
+        client.get("/traced")
+
+    assert [span.name for span in _server_spans(exporter)] == ["GET /traced"]
+
+
+def test_litestar_otel_is_skipped_without_litestars_opentelemetry_plugin(litestar_config: LitestarConfig) -> None:
+    """Litestar below 2.22 has no `litestar.plugins.opentelemetry`; that must skip the instrument, not crash."""
+    with emulate_package_missing_with_module_reload(
+        "litestar.plugins.opentelemetry",
+        ["lite_bootstrap.bootstrappers.litestar_bootstrapper"],
+    ):
+        with pytest.warns(UserWarning, match=r"litestar>=2\.22"):
+            bootstrapper = litestar_bootstrapper.LitestarBootstrapper(bootstrap_config=litestar_config)
+        bootstrapper.bootstrap()
+
+        assert "OpenTelemetryPlugin" not in {
+            type(plugin).__name__ for plugin in litestar_config.application_config.plugins
+        }

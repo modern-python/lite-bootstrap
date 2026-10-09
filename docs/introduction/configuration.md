@@ -116,7 +116,7 @@ Additional parameters:
 - `opentelemetry_log_traces` - traces will be logged to stdout.
 - `opentelemetry_sampler` - an `opentelemetry.sdk.trace.sampling.Sampler` deciding which traces are recorded. Unset, the SDK's own default applies: `parentbased_always_on`, which records every trace that is not the child of a non-recording remote parent, unless `OTEL_TRACES_SAMPLER` / `OTEL_TRACES_SAMPLER_ARG` say otherwise.
 - `opentelemetry_generate_health_check_spans` - generate spans for health check handlers if `True`.
-- `opentelemetry_excluded_urls` - extra URLs excluded from tracing; the metrics path and (unless health-check spans are enabled) the health-check path are excluded automatically.
+- `opentelemetry_excluded_urls` - extra regexes for URLs excluded from tracing; the metrics path and (unless health-check spans are enabled) the health-check path are excluded automatically. Litestar searches them in the request path and also honors `OTEL_PYTHON_LITESTAR_EXCLUDED_URLS`; FastAPI searches them in the full URL.
 - `opentelemetry_metrics_endpoint` - will be passed to `OTLPMetricExporter` as endpoint, and turns on the metrics signal. Its own field rather than a flag on `opentelemetry_endpoint`, so upgrading never starts exporting metrics you did not ask for. Under `opentelemetry_exporter_protocol="http"` this is a full URL (e.g. `http://collector:4318/v1/metrics`); `opentelemetry_exporter_protocol` and `opentelemetry_insecure` are shared with traces.
 
 ### Metrics
