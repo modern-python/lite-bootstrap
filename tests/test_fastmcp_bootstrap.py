@@ -7,7 +7,8 @@ from unittest.mock import MagicMock
 
 import prometheus_client
 import pytest
-from fastmcp import FastMCP
+from fastmcp import Client, FastMCP
+from fastmcp.exceptions import ToolError
 from fastmcp.server.http import StarletteWithLifespan
 from fastmcp.server.middleware import MiddlewareContext
 from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
@@ -25,6 +26,7 @@ from lite_bootstrap.bootstrappers import fastmcp_bootstrapper
 from lite_bootstrap.bootstrappers.fastmcp_bootstrapper import (
     FastMcpLoggingMiddleware,
     FastMcpOpenTelemetryInstrument,
+    FastMcpPrometheusMiddleware,
     _postprocess_http_apps,
 )
 from lite_bootstrap.exceptions import ConfigurationError
@@ -446,7 +448,6 @@ def test_fastmcp_otel_leaves_http_app_alone_when_not_configured() -> None:
     bootstrapper = FastMcpBootstrapper(bootstrap_config=_make_test_config())
     application = bootstrapper.bootstrap()
     try:
-        assert "http_app" not in vars(application)
         assert _count_opentelemetry_middlewares(application.http_app()) == 0
     finally:
         bootstrapper.teardown()
@@ -461,6 +462,140 @@ def test_fastmcp_otel_is_skipped_without_asgi_instrumentation() -> None:
             bootstrapper = fastmcp_bootstrapper.FastMcpBootstrapper(
                 bootstrap_config=_make_test_config(opentelemetry_log_traces=True)
             )
+        application = bootstrapper.bootstrap()
+        try:
+            assert _count_opentelemetry_middlewares(application.http_app()) == 0
+        finally:
+            bootstrapper.teardown()
+
+
+@pytest.fixture(autouse=True)
+def _unregister_request_metrics() -> None:
+    """Give each test unregistered request metrics: a second registration is skipped, not reused."""
+    registered_collectors = dict(prometheus_client.REGISTRY._collector_to_names)  # noqa: SLF001
+    for collector, names in registered_collectors.items():
+        if any(name.startswith(("http_request", "http_response")) for name in names):
+            prometheus_client.REGISTRY.unregister(collector)
+
+
+def _sample_value(name: str, labels: dict[str, str]) -> float:
+    return prometheus_client.REGISTRY.get_sample_value(name, labels) or 0.0
+
+
+def _http_requests_total(handler: str, method: str = "GET", status_group: str = "2xx") -> float:
+    return _sample_value("http_requests_total", {"handler": handler, "method": method, "status": status_group})
+
+
+def test_fastmcp_prometheus_counts_http_requests_by_route_template() -> None:
+    health_checks_path = f"/health-{uuid.uuid4().hex}/"
+    config = _make_test_config(health_checks_path=health_checks_path)
+    bootstrapper = FastMcpBootstrapper(bootstrap_config=config)
+    application = bootstrapper.bootstrap()
+    try:
+        with TestClient(application.http_app()) as client:
+            client.get(health_checks_path)
+            client.get(health_checks_path)
+            client.get("/missing")
+            client.get(config.prometheus_metrics_path)
+    finally:
+        bootstrapper.teardown()
+
+    expected_health_requests = 2
+    assert _http_requests_total(health_checks_path) == expected_health_requests
+    assert _http_requests_total("none", status_group="4xx") == 1
+    assert _http_requests_total(config.prometheus_metrics_path) == 0
+
+
+def test_fastmcp_prometheus_counts_requests_of_every_http_app() -> None:
+    health_checks_path = f"/health-{uuid.uuid4().hex}/"
+    bootstrapper = FastMcpBootstrapper(bootstrap_config=_make_test_config(health_checks_path=health_checks_path))
+    application = bootstrapper.bootstrap()
+    try:
+        for http_application in (application.http_app(), application.http_app(path="/other")):
+            with TestClient(http_application) as client:
+                client.get(health_checks_path)
+    finally:
+        bootstrapper.teardown()
+
+    expected_requests = 2
+    assert _http_requests_total(health_checks_path) == expected_requests
+
+
+def test_fastmcp_prometheus_instrumentator_params_are_passed() -> None:
+    health_checks_path = f"/health-{uuid.uuid4().hex}/"
+    config = _make_test_config(
+        health_checks_path=health_checks_path,
+        prometheus_instrumentator_params={"excluded_handlers": [health_checks_path]},
+    )
+    bootstrapper = FastMcpBootstrapper(bootstrap_config=config)
+    application = bootstrapper.bootstrap()
+    try:
+        with TestClient(application.http_app()) as client:
+            client.get(health_checks_path)
+    finally:
+        bootstrapper.teardown()
+
+    assert _http_requests_total(health_checks_path) == 0
+
+
+def test_fastmcp_prometheus_teardown_restores_http_app() -> None:
+    bootstrapper = FastMcpBootstrapper(bootstrap_config=_make_test_config())
+    application = bootstrapper.bootstrap()
+    assert "http_app" in vars(application)
+
+    bootstrapper.teardown()
+
+    assert "http_app" not in vars(application)
+
+
+async def test_fastmcp_prometheus_counts_tool_calls() -> None:
+    bootstrapper = FastMcpBootstrapper(bootstrap_config=_make_test_config())
+    application = bootstrapper.bootstrap()
+    echo_name = f"echo_{uuid.uuid4().hex}"
+    failing_name = f"failing_{uuid.uuid4().hex}"
+
+    def echo(text: str) -> str:
+        return text
+
+    def failing() -> str:
+        message = "boom"
+        raise ValueError(message)
+
+    application.tool(echo, name=echo_name)
+    application.tool(failing, name=failing_name)
+    try:
+        async with Client(application) as client:
+            await client.call_tool(echo_name, {"text": "hi"})
+            await client.call_tool(echo_name, {"text": "hi"})
+            with pytest.raises(ToolError):
+                await client.call_tool(failing_name, {})
+    finally:
+        bootstrapper.teardown()
+
+    expected_successes = 2
+    assert _sample_value("fastmcp_tool_calls_total", {"tool": echo_name, "status": "success"}) == expected_successes
+    assert _sample_value("fastmcp_tool_calls_total", {"tool": failing_name, "status": "error"}) == 1
+    assert _sample_value("fastmcp_tool_call_duration_seconds_count", {"tool": echo_name}) == expected_successes
+
+
+def test_fastmcp_prometheus_tool_metrics_can_be_disabled() -> None:
+    bootstrapper = FastMcpBootstrapper(
+        bootstrap_config=_make_test_config(fastmcp_prometheus_tool_metrics_enabled=False)
+    )
+    application = bootstrapper.bootstrap()
+    try:
+        assert not [one for one in application.middleware if isinstance(one, FastMcpPrometheusMiddleware)]
+    finally:
+        bootstrapper.teardown()
+
+
+def test_fastmcp_prometheus_is_skipped_without_instrumentator() -> None:
+    with emulate_package_missing_with_module_reload(
+        "prometheus_fastapi_instrumentator",
+        ["lite_bootstrap.bootstrappers.fastmcp_bootstrapper"],
+    ):
+        with pytest.warns(UserWarning, match="prometheus_fastapi_instrumentator"):
+            bootstrapper = fastmcp_bootstrapper.FastMcpBootstrapper(bootstrap_config=_make_test_config())
         application = bootstrapper.bootstrap()
         try:
             assert "http_app" not in vars(application)

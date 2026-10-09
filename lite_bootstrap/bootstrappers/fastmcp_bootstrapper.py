@@ -1,6 +1,7 @@
 import contextlib
 import dataclasses
 import functools
+import inspect
 import re
 import time
 import typing
@@ -18,13 +19,13 @@ from lite_bootstrap.instruments.sentry_instrument import SentryConfig, SentryIns
 
 if import_checker.is_fastmcp_installed:
     from fastmcp import FastMCP
+    from fastmcp.server.http import StarletteWithLifespan
     from fastmcp.server.middleware import Middleware, MiddlewareContext
     from fastmcp.server.providers import Provider
     from starlette.requests import Request
     from starlette.responses import JSONResponse, Response
 
 if import_checker.is_fastmcp_opentelemetry_installed:
-    from fastmcp.server.http import StarletteWithLifespan
     from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
     from opentelemetry.metrics import get_meter_provider
     from opentelemetry.trace import get_tracer_provider
@@ -40,9 +41,18 @@ if import_checker.is_structlog_installed:
 if import_checker.is_prometheus_client_installed:
     import prometheus_client
 
+if import_checker.is_prometheus_fastapi_instrumentator_installed:
+    from prometheus_fastapi_instrumentator import Instrumentator
+    from prometheus_fastapi_instrumentator import metrics as instrumentator_metrics
+
+    _DEFAULT_METRICS_PARAMETERS: typing.Final = frozenset(inspect.signature(instrumentator_metrics.default).parameters)
+
 
 # OpenTelemetryMiddleware matches its patterns against a full URL, not a bare path.
 _EXCLUDED_URL_SCHEME_AND_HOST: typing.Final = r"^\w+://[^/]*"
+
+_TOOL_CALL_STATUS_SUCCESS: typing.Final = "success"
+_TOOL_CALL_STATUS_ERROR: typing.Final = "error"
 
 # Set by StarletteInstrumentor too, so an application is never traced twice
 _OPENTELEMETRY_INSTRUMENTED_MARKER: typing.Final = "_is_instrumented_by_opentelemetry"
@@ -78,6 +88,24 @@ def _postprocess_http_apps(
     return restore
 
 
+def _build_tool_call_metrics() -> tuple["prometheus_client.Counter", "prometheus_client.Histogram"]:
+    # The global registry rejects a second collector of the same name, so a later bootstrap reuses the first
+    registered_collectors: typing.Final = prometheus_client.REGISTRY._names_to_collectors  # noqa: SLF001
+    if "fastmcp_tool_calls_total" in registered_collectors:
+        return (
+            typing.cast("prometheus_client.Counter", registered_collectors["fastmcp_tool_calls_total"]),
+            typing.cast("prometheus_client.Histogram", registered_collectors["fastmcp_tool_call_duration_seconds"]),
+        )
+    return (
+        prometheus_client.Counter(
+            "fastmcp_tool_calls_total", "Number of MCP tool calls by tool and outcome.", ["tool", "status"]
+        ),
+        prometheus_client.Histogram(
+            "fastmcp_tool_call_duration_seconds", "Duration of MCP tool calls by tool.", ["tool"]
+        ),
+    )
+
+
 def build_fastmcp_route_details_from_scope(
     scope: "Scope",
     routes: "typing.Iterable[BaseRoute]",
@@ -105,6 +133,32 @@ if import_checker.is_fastmcp_installed:
                 yield
             finally:
                 self._teardown()
+
+    class FastMcpPrometheusMiddleware(Middleware):
+        def __init__(
+            self,
+            tool_calls_total: "prometheus_client.Counter",
+            tool_call_duration_seconds: "prometheus_client.Histogram",
+        ) -> None:
+            self.tool_calls_total = tool_calls_total
+            self.tool_call_duration_seconds = tool_call_duration_seconds
+
+        async def on_call_tool(
+            self,
+            context: "MiddlewareContext[typing.Any]",
+            call_next: "typing.Callable[[MiddlewareContext[typing.Any]], typing.Awaitable[typing.Any]]",
+        ) -> typing.Any:  # noqa: ANN401
+            tool_name: typing.Final = context.message.name
+            start_time: typing.Final = time.perf_counter()
+            try:
+                result = await call_next(context)
+            except Exception:
+                self.tool_calls_total.labels(tool=tool_name, status=_TOOL_CALL_STATUS_ERROR).inc()
+                raise
+            finally:
+                self.tool_call_duration_seconds.labels(tool=tool_name).observe(time.perf_counter() - start_time)
+            self.tool_calls_total.labels(tool=tool_name, status=_TOOL_CALL_STATUS_SUCCESS).inc()
+            return result
 
     class FastMcpLoggingMiddleware(Middleware):
         async def on_message(
@@ -142,6 +196,9 @@ class FastMcpConfig(
 ):
     application: "FastMCP[typing.Any]" = dataclasses.field(default_factory=_make_fastmcp)
     fastmcp_logging_middleware_enabled: bool = False
+    fastmcp_prometheus_tool_metrics_enabled: bool = True
+    prometheus_instrumentator_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
+    prometheus_instrument_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -221,14 +278,46 @@ class FastMcpOpenTelemetryInstrument(OpenTelemetryInstrument):
 @dataclasses.dataclass(kw_only=True)
 class FastMcpPrometheusInstrument(PrometheusInstrument):
     bootstrap_config: FastMcpConfig
-    missing_dependency_message = "prometheus_client is not installed"
+    missing_dependency_message = "prometheus_client or prometheus_fastapi_instrumentator is not installed"
+    _restore_http_app: typing.Callable[[], None] | None = dataclasses.field(
+        default=None, init=False, repr=False, compare=False
+    )
+    _default_metrics: typing.Callable[..., typing.Any] | None = dataclasses.field(
+        default=None, init=False, repr=False, compare=False
+    )
 
     @staticmethod
     def dependencies_installed() -> bool:
-        return import_checker.is_prometheus_client_installed
+        return (
+            import_checker.is_prometheus_client_installed
+            and import_checker.is_prometheus_fastapi_instrumentator_installed
+        )
+
+    def _instrument_http_app(self, http_application: "StarletteWithLifespan") -> "StarletteWithLifespan":
+        config: typing.Final = self.bootstrap_config
+        instrumentator_params: typing.Final[dict[str, typing.Any]] = {
+            "excluded_handlers": [f"^{re.escape(config.prometheus_metrics_path)}$"],
+            **config.prometheus_instrumentator_params,
+        }
+        # A second http_app() would register the default metrics again, which the instrumentator
+        # treats as a duplicate and silently skips, so every application shares the first set.
+        if self._default_metrics is None:
+            default_metrics_params: typing.Final[dict[str, typing.Any]] = {
+                name: value
+                for name, value in {**instrumentator_params, **config.prometheus_instrument_params}.items()
+                if name in _DEFAULT_METRICS_PARAMETERS
+            }
+            self._default_metrics = instrumentator_metrics.default(**default_metrics_params)
+        Instrumentator(**instrumentator_params).add(self._default_metrics).instrument(
+            http_application, **config.prometheus_instrument_params
+        )
+        return http_application
 
     def bootstrap(self) -> None:
         config = self.bootstrap_config
+        self._restore_http_app = _postprocess_http_apps(config.application, self._instrument_http_app)
+        if config.fastmcp_prometheus_tool_metrics_enabled:
+            config.application.add_middleware(FastMcpPrometheusMiddleware(*_build_tool_call_metrics()))
 
         @config.application.custom_route(
             config.prometheus_metrics_path,
@@ -241,6 +330,11 @@ class FastMcpPrometheusInstrument(PrometheusInstrument):
                 prometheus_client.generate_latest(prometheus_client.REGISTRY),
                 headers={"content-type": prometheus_client.CONTENT_TYPE_LATEST},
             )
+
+    def teardown(self) -> None:
+        if self._restore_http_app is not None:
+            self._restore_http_app()
+            self._restore_http_app = None
 
 
 @dataclasses.dataclass(kw_only=True)

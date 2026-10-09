@@ -64,6 +64,13 @@ nanoseconds. A message that raises is logged at exception level and the exceptio
 
 Set `health_checks_enabled=False` to omit the health route.
 
+## Metrics
+
+With the `fastmcp-metrics` extra installed, the registry is served at `prometheus_metrics_path`,
+every application `application.http_app()` builds counts its requests by route, and every tool call
+is counted and timed. See [the configuration reference](../introduction/configuration.md#prometheus-fastmcp)
+for the metric names and parameters.
+
 ## Tracing
 
 With `opentelemetry_endpoint` set (and the `fastmcp-otl` extra installed), every ASGI application

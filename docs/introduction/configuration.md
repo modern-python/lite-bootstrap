@@ -95,6 +95,24 @@ Additional parameters for FastAPI integration:
 - `prometheus_instrument_params` - passed to `method Instrumentator(...).instrument`
 - `prometheus_expose_params` - passed to `method Instrumentator(...).expose`.
 
+### Prometheus FastMCP
+
+Prometheus's integration for FastMCP uses the `prometheus_client` and `prometheus_fastapi_instrumentator`
+packages, and serves `prometheus_client.REGISTRY` at `prometheus_metrics_path`.
+
+Every ASGI application `application.http_app()` builds counts its requests in `http_requests_total`,
+`http_request_duration_seconds` and the instrumentator's other default metrics, labelled by route
+(`handler="/mcp"`); requests to unknown paths are grouped into `handler="none"`, and the metrics
+route itself is not counted. Tool calls are counted in `fastmcp_tool_calls_total{tool, status}`, with
+`status` either `success` or `error`, and timed in `fastmcp_tool_call_duration_seconds{tool}`.
+
+Additional parameters for FastMCP integration:
+
+- `prometheus_instrumentator_params` - passed to `prometheus_fastapi_instrumentator.Instrumentator`;
+  `excluded_handlers` defaults to the metrics route.
+- `prometheus_instrument_params` - passed to `method Instrumentator(...).instrument`.
+- `fastmcp_prometheus_tool_metrics_enabled` - count and time tool calls (default: `True`).
+
 
 ## Opentelemetry
 

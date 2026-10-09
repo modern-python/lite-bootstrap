@@ -205,6 +205,8 @@ fastmcp-otl = [
 fastmcp-metrics = [
     "lite-bootstrap[fastmcp]",
     "prometheus-client>=0.20",
+    # >=8.0.1 to share the fastapi-metrics floor; it requires starlette>=1.0, which fastmcp 3.0 already pulls.
+    "prometheus-fastapi-instrumentator>=8.0.1",
 ]
 fastmcp-all = [
     "lite-bootstrap[fastmcp,fastmcp-otl,fastmcp-metrics,sentry,logging,pyroscope]",
