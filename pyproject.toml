@@ -123,7 +123,7 @@ fastapi-all = [
 ]
 litestar = [
     # >=2.13 for AppConfig.request_max_body_size (LitestarBootstrapper._apply_config reads it);
-    # >=2.15 for litestar.middleware.ASGIMiddleware (LitestarOpenTelemetryInstrumentationMiddleware
+    # >=2.15 for litestar.middleware.ASGIMiddleware (LitestarOpenTelemetryRouteMiddleware
     # subclasses it); >=2.19 because litestar/concurrency.py imports sniffio and only 2.19 declares
     # it -- until then it arrived via anyio, which dropped the dependency in 4.14. The highest wins.
     "litestar>=2.19",
@@ -137,6 +137,8 @@ litestar-sentry = [
 ]
 litestar-otl = [
     "lite-bootstrap[litestar,otl]",
+    # >=2.22 for litestar.plugins.opentelemetry (LitestarOpenTelemetryInstrument registers its OpenTelemetryPlugin).
+    "litestar>=2.22",
     # Raised from 0.46b0 with the rest of the train: every instrumentation package pins
     # `opentelemetry-instrumentation` to its own exact version, so they move together.
     "opentelemetry-instrumentation-asgi>=0.49b0",

@@ -31,7 +31,10 @@ is_fastapi_opentelemetry_installed = is_opentelemetry_installed and _safe_find_s
     "opentelemetry.instrumentation.fastapi"
 )
 is_litestar_opentelemetry_installed = (
-    is_opentelemetry_installed and is_litestar_installed and _safe_find_spec("opentelemetry.instrumentation.asgi")
+    is_opentelemetry_installed
+    and is_litestar_installed
+    and _safe_find_spec("opentelemetry.instrumentation.asgi")
+    and _safe_find_spec("litestar.plugins.opentelemetry")
 )
 is_otlp_grpc_exporter_installed = _safe_find_spec("opentelemetry.exporter.otlp.proto.grpc.trace_exporter")
 is_otlp_http_exporter_installed = _safe_find_spec("opentelemetry.exporter.otlp.proto.http.trace_exporter")

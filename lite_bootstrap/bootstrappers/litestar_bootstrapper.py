@@ -1,9 +1,7 @@
-import contextlib
 import dataclasses
 import pathlib
 import re
 import typing
-import weakref
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
@@ -49,11 +47,10 @@ if import_checker.is_litestar_installed and import_checker.is_prometheus_client_
 
 if import_checker.is_litestar_opentelemetry_installed:
     from litestar.middleware import ASGIMiddleware
+    from litestar.plugins.opentelemetry import OpenTelemetryConfig as LitestarOpenTelemetryConfig
+    from litestar.plugins.opentelemetry import OpenTelemetryPlugin
     from litestar.types.asgi_types import ASGIApp, Receive, Scope, Send
-    from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
-    from opentelemetry.metrics import MeterProvider
-    from opentelemetry.trace import TracerProvider
-    from opentelemetry.util.http import parse_excluded_urls
+    from opentelemetry import trace
 
 if import_checker.is_opentelemetry_installed:
     from opentelemetry.metrics import get_meter_provider
@@ -75,9 +72,6 @@ def build_span_name(method: str, route: str) -> str:
 _LOGGING_MIDDLEWARE_REQUEST_LOG_FIELDS: typing.Final = ("path", "method", "content_type", "path_params")
 _LOGGING_MIDDLEWARE_RESPONSE_LOG_FIELDS: typing.Final = ("status_code",)
 
-# OpenTelemetryMiddleware matches its patterns against a full URL, not a bare path.
-_EXCLUDED_URL_SCHEME_AND_HOST: typing.Final = r"^\w+://[^/]*"
-
 # Litestar.from_config() passes every AppConfig field explicitly, so the default that
 # Litestar.__init__ applies never reaches an app built from a config. Pinned to Litestar's
 # own default by a guard test. See https://github.com/litestar-org/litestar/issues/4296.
@@ -85,36 +79,21 @@ _LITESTAR_DEFAULT_REQUEST_MAX_BODY_SIZE: typing.Final = 10_000_000
 
 
 def build_litestar_route_details_from_scope(
-    scope: typing.MutableMapping[str, typing.Any],
+    scope: "Scope",
 ) -> tuple[str, dict[str, str]]:
-    path_template: typing.Final = scope.get("path_template")
     method: typing.Final = str(scope.get("method", "HTTP")).strip()
-    if path_template is not None:
-        path_template_stripped: typing.Final = path_template.strip()
-        return build_span_name(method, path_template_stripped), {"http.route": path_template_stripped}
-
-    path: typing.Final = scope.get("path")
-    if path is not None:
-        path_stripped: typing.Final = path.strip()
-        return build_span_name(method, path_stripped), {"http.route": path_stripped}
-    return method, {}
+    path_template: typing.Final = scope.get("path_template")
+    # Unmatched paths get no `http.route`: a raw path would let scanners explode span cardinality
+    if path_template is None:
+        return method, {}
+    path_template_stripped: typing.Final = path_template.strip()
+    return build_span_name(method, path_template_stripped), {"http.route": path_template_stripped}
 
 
 if import_checker.is_litestar_opentelemetry_installed:
 
-    class LitestarOpenTelemetryInstrumentationMiddleware(ASGIMiddleware):
-        def __init__(
-            self, tracer_provider: "TracerProvider", meter_provider: "MeterProvider", excluded_urls: set[str]
-        ) -> None:
-            self._tracer_provider = tracer_provider
-            self._meter_provider = meter_provider
-            # OpenTelemetryMiddleware only parses a raw string from 0.56b0; the floor is 0.49b0.
-            self._excluded_urls = parse_excluded_urls(",".join(excluded_urls))
-            # WeakKeyDictionary so wrapper apps are evicted when Litestar drops the
-            # next_app reference (hot reload, plugin add/remove, AppConfig rebuild).
-            # Apps that don't support weak references are simply not cached.
-            self._otel_apps: weakref.WeakKeyDictionary[ASGIApp, ASGIApp] = weakref.WeakKeyDictionary()
-
+    class LitestarOpenTelemetryRouteMiddleware(ASGIMiddleware):
+        # OpenTelemetryPlugin opens the server span before routing, so the route template is only known here
         async def handle(
             self,
             scope: "Scope",
@@ -122,20 +101,12 @@ if import_checker.is_litestar_opentelemetry_installed:
             send: "Send",
             next_app: "ASGIApp",
         ) -> None:
-            otel_app: ASGIApp | None = None
-            with contextlib.suppress(TypeError):
-                otel_app = self._otel_apps.get(next_app)
-            if otel_app is None:
-                otel_app = OpenTelemetryMiddleware(  # ty: ignore[invalid-assignment]
-                    app=next_app,
-                    default_span_details=build_litestar_route_details_from_scope,
-                    excluded_urls=self._excluded_urls,
-                    tracer_provider=self._tracer_provider,
-                    meter_provider=self._meter_provider,
-                )
-                with contextlib.suppress(TypeError):
-                    self._otel_apps[next_app] = otel_app  # ty: ignore[invalid-assignment]
-            await otel_app(scope, receive, send)  # ty: ignore[call-non-callable]
+            server_span: typing.Final = trace.get_current_span()
+            if server_span.is_recording():
+                span_name, attributes = build_litestar_route_details_from_scope(scope)
+                server_span.update_name(span_name)
+                server_span.set_attributes(attributes)
+            await next_app(scope, receive, send)
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
@@ -240,32 +211,43 @@ class LitestarLoggingInstrument(LoggingInstrument):
 @dataclasses.dataclass(kw_only=True)
 class LitestarOpenTelemetryInstrument(OpenTelemetryInstrument):
     bootstrap_config: LitestarConfig
+    missing_dependency_message = "opentelemetry-instrumentation-asgi or litestar>=2.22 is not installed"
 
-    def _build_excluded_url_patterns(self) -> set[str]:
+    @staticmethod
+    def dependencies_installed() -> bool:
+        return OpenTelemetryInstrument.dependencies_installed() and import_checker.is_litestar_opentelemetry_installed
+
+    def _build_excluded_path_patterns(self) -> list[str]:
         """Anchored patterns for the derived paths, plus the caller's own entries verbatim.
 
-        Litestar normalizes the trailing slash out of ``scope["path"]``, so a derived path
-        carrying one never matches. Stripping it alone is not enough: ``ExcludeList`` searches
-        unanchored, so a bare ``/custom-health`` would also silence ``/custom-healthy``.
-        Caller-supplied entries stay untouched because OpenTelemetry documents them as regexes.
+        The trailing slash is stripped and matched optionally, so ``/custom-health/`` excludes the
+        path with or without it. Anchoring is needed because Litestar searches its ``exclude``
+        patterns unanchored: a bare ``/custom-health`` would also silence ``/custom-healthy``.
+        Caller-supplied entries stay untouched because they are regexes.
         """
         anchored_patterns: typing.Final = {
-            rf"{_EXCLUDED_URL_SCHEME_AND_HOST}{re.escape(normalized_path)}(?:/|$)"
+            rf"^{re.escape(normalized_path)}(?:/|$)"
             for excluded_path in self._build_infrastructure_excluded_paths()
             # A bare "/" would anchor to every URL, so it is dropped along with empty values.
             if (normalized_path := excluded_path.rstrip("/"))
         }
-        return anchored_patterns | set(self.bootstrap_config.opentelemetry_excluded_urls)
+        return sorted(anchored_patterns | set(self.bootstrap_config.opentelemetry_excluded_urls))
 
     def bootstrap(self) -> None:
         super().bootstrap()
-        self.bootstrap_config.application_config.middleware.append(
-            LitestarOpenTelemetryInstrumentationMiddleware(
-                tracer_provider=get_tracer_provider(),
-                meter_provider=get_meter_provider(),
-                excluded_urls=self._build_excluded_url_patterns(),
+        application_config: typing.Final = self.bootstrap_config.application_config
+        application_config.plugins.append(
+            OpenTelemetryPlugin(
+                LitestarOpenTelemetryConfig(
+                    tracer_provider=get_tracer_provider(),
+                    meter_provider=get_meter_provider(),
+                    scope_span_details_extractor=build_litestar_route_details_from_scope,
+                    # An empty list compiles to a pattern that matches, and so skips, every path
+                    exclude=self._build_excluded_path_patterns() or None,
+                )
             )
         )
+        application_config.middleware.append(LitestarOpenTelemetryRouteMiddleware())
 
 
 @dataclasses.dataclass(kw_only=True)
