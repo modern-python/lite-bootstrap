@@ -626,3 +626,18 @@ def test_fastmcp_http_app_postprocessors_chain_and_restore_in_reverse() -> None:
 
     restore_first()
     assert "http_app" not in vars(application)
+
+
+def test_fastmcp_otel_honors_excluded_urls_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OTEL_PYTHON_EXCLUDED_URLS", raising=False)
+    monkeypatch.setenv("OTEL_PYTHON_STARLETTE_EXCLUDED_URLS", "/mcp")
+    with (
+        _bootstrapped_with_span_exporter() as (bootstrapper, application, exporter),
+        TestClient(application.http_app()) as client,
+    ):
+        client.post("/mcp", json={})
+        client.get(bootstrapper.bootstrap_config.health_checks_path)
+
+    assert [span.name for span in _server_spans(exporter)] == [
+        f"GET {bootstrapper.bootstrap_config.health_checks_path}"
+    ]

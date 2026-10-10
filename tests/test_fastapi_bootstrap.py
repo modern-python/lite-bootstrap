@@ -13,6 +13,10 @@ import pytest
 import structlog
 from opentelemetry.metrics import get_meter_provider
 from opentelemetry.sdk.metrics import MeterProvider as SDKMeterProvider
+from opentelemetry.sdk.trace import TracerProvider as SDKTracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace import SpanKind, get_tracer_provider
 from starlette import status
 from starlette.testclient import TestClient
 
@@ -442,3 +446,58 @@ def test_fastapi_otel_hands_the_instrumentor_the_meter_provider(fastapi_config: 
 
     assert mock_instrument_app.call_args.kwargs["meter_provider"] is get_meter_provider()
     assert isinstance(get_meter_provider(), SDKMeterProvider)
+
+
+def _server_span_names_for(config: FastAPIConfig, paths: typing.Iterable[str]) -> list[str]:
+    application = config.app
+
+    @application.get("/api/custom-metrics/report")
+    async def metrics_report() -> str:
+        return "ok"
+
+    @application.get("/custom-healthy")
+    async def custom_healthy() -> str:
+        return "ok"
+
+    @application.get("/from-env")
+    async def from_env() -> str:
+        return "ok"
+
+    bootstrapper = FastAPIBootstrapper(bootstrap_config=config)
+    bootstrapped_application = bootstrapper.bootstrap()
+    tracer_provider = get_tracer_provider()
+    assert isinstance(tracer_provider, SDKTracerProvider)
+    exporter = InMemorySpanExporter()
+    tracer_provider.add_span_processor(SimpleSpanProcessor(exporter))
+    try:
+        with TestClient(bootstrapped_application) as client:
+            for path in paths:
+                client.get(path, follow_redirects=False)
+    finally:
+        bootstrapper.teardown()
+    return [span.name for span in exporter.get_finished_spans() if span.kind == SpanKind.SERVER]
+
+
+def test_fastapi_otel_excludes_derived_paths_only_where_they_match_whole_segments(
+    fastapi_config: FastAPIConfig,
+) -> None:
+    """REGRESSION: `/custom-metrics/` was searched anywhere in the URL, silencing `/api/custom-metrics/report`."""
+    span_names = _server_span_names_for(
+        fastapi_config,
+        ["/custom-metrics/", "/custom-health/", "/api/custom-metrics/report", "/custom-healthy"],
+    )
+
+    assert sorted(span_names) == ["GET /api/custom-metrics/report", "GET /custom-healthy"]
+
+
+@pytest.mark.parametrize("environment_variable", ["OTEL_PYTHON_FASTAPI_EXCLUDED_URLS", "OTEL_PYTHON_EXCLUDED_URLS"])
+def test_fastapi_otel_honors_excluded_urls_from_environment(
+    fastapi_config: FastAPIConfig, monkeypatch: pytest.MonkeyPatch, environment_variable: str
+) -> None:
+    for one_variable in ("OTEL_PYTHON_FASTAPI_EXCLUDED_URLS", "OTEL_PYTHON_EXCLUDED_URLS"):
+        monkeypatch.delenv(one_variable, raising=False)
+    monkeypatch.setenv(environment_variable, "/from-env")
+
+    span_names = _server_span_names_for(fastapi_config, ["/from-env", "/custom-healthy"])
+
+    assert span_names == ["GET /custom-healthy"]
