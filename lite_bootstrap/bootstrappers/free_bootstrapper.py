@@ -21,7 +21,7 @@ class FreeBootstrapper(BaseBootstrapper[None]):
         OpenTelemetryInstrument,
         PyroscopeInstrument,
     ]
-    bootstrap_config: FreeConfig
+    bootstrap_config: FreeConfig  # ty: ignore[invalid-mutable-override]
     not_ready_message = ""
 
     def is_ready(self) -> bool:

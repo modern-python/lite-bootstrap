@@ -200,7 +200,7 @@ class FastMcpConfig(
 
 @dataclasses.dataclass(kw_only=True)
 class FastMcpHealthChecksInstrument(HealthChecksInstrument):
-    bootstrap_config: FastMcpConfig
+    bootstrap_config: FastMcpConfig  # ty: ignore[invalid-mutable-override]
 
     def bootstrap(self) -> None:
         config = self.bootstrap_config
@@ -217,7 +217,7 @@ class FastMcpHealthChecksInstrument(HealthChecksInstrument):
 
 @dataclasses.dataclass(kw_only=True)
 class FastMcpOpenTelemetryInstrument(OpenTelemetryInstrument):
-    bootstrap_config: FastMcpConfig
+    bootstrap_config: FastMcpConfig  # ty: ignore[invalid-mutable-override]
     missing_dependency_message = "opentelemetry-instrumentation-asgi is not installed"
     _restore_http_app: typing.Callable[[], None] | None = dataclasses.field(
         default=None, init=False, repr=False, compare=False
@@ -258,7 +258,7 @@ class FastMcpOpenTelemetryInstrument(OpenTelemetryInstrument):
 
 @dataclasses.dataclass(kw_only=True)
 class FastMcpPrometheusInstrument(PrometheusInstrument):
-    bootstrap_config: FastMcpConfig
+    bootstrap_config: FastMcpConfig  # ty: ignore[invalid-mutable-override]
     missing_dependency_message = "prometheus_client or prometheus_fastapi_instrumentator is not installed"
     _restore_http_app: typing.Callable[[], None] | None = dataclasses.field(
         default=None, init=False, repr=False, compare=False
@@ -320,7 +320,7 @@ class FastMcpPrometheusInstrument(PrometheusInstrument):
 
 @dataclasses.dataclass(kw_only=True)
 class FastMcpLoggingInstrument(LoggingInstrument):
-    bootstrap_config: FastMcpConfig
+    bootstrap_config: FastMcpConfig  # ty: ignore[invalid-mutable-override]
 
     def bootstrap(self) -> None:
         super().bootstrap()
@@ -340,7 +340,7 @@ class FastMcpBootstrapper(BaseBootstrapper["FastMCP[typing.Any]"]):
         FastMcpLoggingInstrument,
         FastMcpPrometheusInstrument,
     ]
-    bootstrap_config: FastMcpConfig
+    bootstrap_config: FastMcpConfig  # ty: ignore[invalid-mutable-override]
     not_ready_message = "fastmcp is not installed"
 
     def is_ready(self) -> bool:

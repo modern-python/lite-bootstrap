@@ -140,7 +140,7 @@ class LitestarConfig(
 
 @dataclasses.dataclass(kw_only=True, slots=True)
 class LitestarCorsInstrument(CorsInstrument):
-    bootstrap_config: LitestarConfig
+    bootstrap_config: LitestarConfig  # ty: ignore[invalid-mutable-override]
 
     def bootstrap(self) -> None:
         self.bootstrap_config.application_config.cors_config = CORSConfig(**self.cors_kwargs)
@@ -148,7 +148,7 @@ class LitestarCorsInstrument(CorsInstrument):
 
 @dataclasses.dataclass(kw_only=True, slots=True)
 class LitestarHealthChecksInstrument(HealthChecksInstrument):
-    bootstrap_config: LitestarConfig
+    bootstrap_config: LitestarConfig  # ty: ignore[invalid-mutable-override]
 
     def build_litestar_health_check_router(self) -> "litestar.Router":
         @litestar.get(media_type=litestar.MediaType.JSON)
@@ -168,7 +168,7 @@ class LitestarHealthChecksInstrument(HealthChecksInstrument):
 
 @dataclasses.dataclass(kw_only=True)
 class LitestarLoggingInstrument(LoggingInstrument):
-    bootstrap_config: LitestarConfig
+    bootstrap_config: LitestarConfig  # ty: ignore[invalid-mutable-override]
 
     def _build_logging_middleware_excluded_paths(self) -> list[str]:
         """Regex-escaped path prefixes for infrastructure routes not worth an access log line."""
@@ -210,7 +210,7 @@ class LitestarLoggingInstrument(LoggingInstrument):
 
 @dataclasses.dataclass(kw_only=True)
 class LitestarOpenTelemetryInstrument(OpenTelemetryInstrument):
-    bootstrap_config: LitestarConfig
+    bootstrap_config: LitestarConfig  # ty: ignore[invalid-mutable-override]
     missing_dependency_message = "opentelemetry-instrumentation-asgi or litestar>=2.22 is not installed"
 
     @staticmethod
@@ -252,7 +252,7 @@ class LitestarOpenTelemetryInstrument(OpenTelemetryInstrument):
 
 @dataclasses.dataclass(kw_only=True)
 class LitestarPrometheusInstrument(PrometheusInstrument):
-    bootstrap_config: LitestarConfig
+    bootstrap_config: LitestarConfig  # ty: ignore[invalid-mutable-override]
     missing_dependency_message = "prometheus_client is not installed"
 
     @staticmethod
@@ -280,7 +280,7 @@ class LitestarPrometheusInstrument(PrometheusInstrument):
 
 @dataclasses.dataclass(kw_only=True)
 class LitestarSwaggerInstrument(SwaggerInstrument):
-    bootstrap_config: LitestarConfig
+    bootstrap_config: LitestarConfig  # ty: ignore[invalid-mutable-override]
     not_configured_reason = "swagger_path is empty or not valid"
 
     @classmethod
@@ -328,7 +328,7 @@ class LitestarBootstrapper(BaseBootstrapper["litestar.Litestar"]):
         LitestarPrometheusInstrument,
         LitestarSwaggerInstrument,
     ]
-    bootstrap_config: LitestarConfig
+    bootstrap_config: LitestarConfig  # ty: ignore[invalid-mutable-override]
     not_ready_message = "litestar is not installed"
 
     def __init__(self, bootstrap_config: LitestarConfig) -> None:
