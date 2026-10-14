@@ -1,4 +1,5 @@
 import dataclasses
+import typing
 
 import typing_extensions
 
@@ -26,8 +27,11 @@ class HealthChecksConfig(BaseConfig):
         }
 
 
+HealthChecksConfigT = typing.TypeVar("HealthChecksConfigT", bound=HealthChecksConfig)
+
+
 @dataclasses.dataclass(kw_only=True, slots=True)
-class HealthChecksInstrument(BaseInstrument[HealthChecksConfig]):
+class HealthChecksInstrument(BaseInstrument[HealthChecksConfigT]):
     not_configured_reason = "health_checks_enabled is False"
 
     @classmethod

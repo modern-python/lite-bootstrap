@@ -32,8 +32,11 @@ class CorsConfig(BaseConfig):
         super().__post_init__()
 
 
+CorsConfigT = typing.TypeVar("CorsConfigT", bound=CorsConfig)
+
+
 @dataclasses.dataclass(kw_only=True, slots=True)
-class CorsInstrument(BaseInstrument[CorsConfig]):
+class CorsInstrument(BaseInstrument[CorsConfigT]):
     not_configured_reason = "cors_allowed_origins or cors_allowed_origin_regex must be provided"
 
     @classmethod

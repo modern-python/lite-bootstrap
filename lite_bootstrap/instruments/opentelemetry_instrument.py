@@ -145,8 +145,11 @@ if import_checker.is_opentelemetry_sdk_installed and import_checker.is_pyroscope
             return True  # pragma: no cover - matters only at the sdk 1.28 floor, whose base returns None
 
 
+OpenTelemetryConfigT = typing.TypeVar("OpenTelemetryConfigT", bound=OpenTelemetryConfig)
+
+
 @dataclasses.dataclass(kw_only=True, slots=True)
-class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfig]):
+class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfigT]):
     """OpenTelemetry tracing instrument.
 
     Lifecycle note: ``bootstrap()`` calls ``opentelemetry.trace.set_tracer_provider``,

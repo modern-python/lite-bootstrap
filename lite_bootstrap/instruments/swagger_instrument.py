@@ -1,6 +1,7 @@
 """Swagger config and minimal base instrument; framework-specific behavior lives in the bootstrapper subclasses."""
 
 import dataclasses
+import typing
 
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 
@@ -12,6 +13,9 @@ class SwaggerConfig(BaseConfig):
     swagger_offline_docs: bool = False
 
 
+SwaggerConfigT = typing.TypeVar("SwaggerConfigT", bound=SwaggerConfig)
+
+
 @dataclasses.dataclass(kw_only=True, slots=True)
-class SwaggerInstrument(BaseInstrument[SwaggerConfig]):
+class SwaggerInstrument(BaseInstrument[SwaggerConfigT]):
     pass

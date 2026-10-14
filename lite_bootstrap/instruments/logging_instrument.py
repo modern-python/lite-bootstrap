@@ -78,8 +78,11 @@ class LoggingConfig(BaseConfig):
     logging_enabled: bool = True
 
 
+LoggingConfigT = typing.TypeVar("LoggingConfigT", bound=LoggingConfig)
+
+
 @dataclasses.dataclass(kw_only=True, slots=True)
-class LoggingInstrument(BaseInstrument[LoggingConfig]):
+class LoggingInstrument(BaseInstrument[LoggingConfigT]):
     not_configured_reason = "logging_enabled is False"
     missing_dependency_message = "structlog is not installed"
     _logger_factory: "MemoryLoggerFactory | None" = dataclasses.field(

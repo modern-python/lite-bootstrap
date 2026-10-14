@@ -155,9 +155,7 @@ class _AccessLogMiddleware:
 
 
 @dataclasses.dataclass(kw_only=True)
-class FastAPILoggingInstrument(LoggingInstrument):
-    bootstrap_config: FastAPIConfig  # ty: ignore[invalid-mutable-override]
-
+class FastAPILoggingInstrument(LoggingInstrument[FastAPIConfig]):
     def bootstrap(self) -> None:
         super().bootstrap()
         if not self.bootstrap_config.fastapi_logging_middleware_enabled:
@@ -166,17 +164,13 @@ class FastAPILoggingInstrument(LoggingInstrument):
 
 
 @dataclasses.dataclass(kw_only=True, slots=True)
-class FastAPICorsInstrument(CorsInstrument):
-    bootstrap_config: FastAPIConfig  # ty: ignore[invalid-mutable-override]
-
+class FastAPICorsInstrument(CorsInstrument[FastAPIConfig]):
     def bootstrap(self) -> None:
         self.bootstrap_config.app.add_middleware(CORSMiddleware, **self.cors_kwargs)
 
 
 @dataclasses.dataclass(kw_only=True, slots=True)
-class FastAPIHealthChecksInstrument(HealthChecksInstrument):
-    bootstrap_config: FastAPIConfig  # ty: ignore[invalid-mutable-override]
-
+class FastAPIHealthChecksInstrument(HealthChecksInstrument[FastAPIConfig]):
     def build_fastapi_health_check_router(self) -> "fastapi.APIRouter":
         fastapi_router = fastapi.APIRouter(
             tags=["probes"],
@@ -194,9 +188,7 @@ class FastAPIHealthChecksInstrument(HealthChecksInstrument):
 
 
 @dataclasses.dataclass(kw_only=True)
-class FastAPIOpenTelemetryInstrument(OpenTelemetryInstrument):
-    bootstrap_config: FastAPIConfig  # ty: ignore[invalid-mutable-override]
-
+class FastAPIOpenTelemetryInstrument(OpenTelemetryInstrument[FastAPIConfig]):
     def bootstrap(self) -> None:
         super().bootstrap()
         FastAPIInstrumentor.instrument_app(
@@ -213,8 +205,7 @@ class FastAPIOpenTelemetryInstrument(OpenTelemetryInstrument):
 
 
 @dataclasses.dataclass(kw_only=True)
-class FastAPIPrometheusInstrument(PrometheusInstrument):
-    bootstrap_config: FastAPIConfig  # ty: ignore[invalid-mutable-override]
+class FastAPIPrometheusInstrument(PrometheusInstrument[FastAPIConfig]):
     missing_dependency_message = "prometheus_fastapi_instrumentator is not installed"
 
     @staticmethod
@@ -236,9 +227,7 @@ class FastAPIPrometheusInstrument(PrometheusInstrument):
 
 
 @dataclasses.dataclass(kw_only=True)
-class FastAPISwaggerInstrument(SwaggerInstrument):
-    bootstrap_config: FastAPIConfig  # ty: ignore[invalid-mutable-override]
-
+class FastAPISwaggerInstrument(SwaggerInstrument[FastAPIConfig]):
     def bootstrap(self) -> None:
         config = self.bootstrap_config
         application = config.app
