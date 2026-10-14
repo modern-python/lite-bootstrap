@@ -199,9 +199,7 @@ class FastMcpConfig(
 
 
 @dataclasses.dataclass(kw_only=True)
-class FastMcpHealthChecksInstrument(HealthChecksInstrument):
-    bootstrap_config: FastMcpConfig  # ty: ignore[invalid-mutable-override]
-
+class FastMcpHealthChecksInstrument(HealthChecksInstrument[FastMcpConfig]):
     def bootstrap(self) -> None:
         config = self.bootstrap_config
 
@@ -216,8 +214,7 @@ class FastMcpHealthChecksInstrument(HealthChecksInstrument):
 
 
 @dataclasses.dataclass(kw_only=True)
-class FastMcpOpenTelemetryInstrument(OpenTelemetryInstrument):
-    bootstrap_config: FastMcpConfig  # ty: ignore[invalid-mutable-override]
+class FastMcpOpenTelemetryInstrument(OpenTelemetryInstrument[FastMcpConfig]):
     missing_dependency_message = "opentelemetry-instrumentation-asgi is not installed"
     _restore_http_app: typing.Callable[[], None] | None = dataclasses.field(
         default=None, init=False, repr=False, compare=False
@@ -257,8 +254,7 @@ class FastMcpOpenTelemetryInstrument(OpenTelemetryInstrument):
 
 
 @dataclasses.dataclass(kw_only=True)
-class FastMcpPrometheusInstrument(PrometheusInstrument):
-    bootstrap_config: FastMcpConfig  # ty: ignore[invalid-mutable-override]
+class FastMcpPrometheusInstrument(PrometheusInstrument[FastMcpConfig]):
     missing_dependency_message = "prometheus_client or prometheus_fastapi_instrumentator is not installed"
     _restore_http_app: typing.Callable[[], None] | None = dataclasses.field(
         default=None, init=False, repr=False, compare=False
@@ -319,9 +315,7 @@ class FastMcpPrometheusInstrument(PrometheusInstrument):
 
 
 @dataclasses.dataclass(kw_only=True)
-class FastMcpLoggingInstrument(LoggingInstrument):
-    bootstrap_config: FastMcpConfig  # ty: ignore[invalid-mutable-override]
-
+class FastMcpLoggingInstrument(LoggingInstrument[FastMcpConfig]):
     def bootstrap(self) -> None:
         super().bootstrap()
         if not self.bootstrap_config.fastmcp_logging_middleware_enabled:

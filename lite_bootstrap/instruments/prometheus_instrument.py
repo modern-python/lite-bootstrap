@@ -1,6 +1,7 @@
 """Prometheus config and readiness check; framework-specific bootstrap lives in the bootstrapper subclasses."""
 
 import dataclasses
+import typing
 
 from lite_bootstrap.helpers.path import is_valid_path
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
@@ -12,8 +13,11 @@ class PrometheusConfig(BaseConfig):
     prometheus_metrics_include_in_schema: bool = False
 
 
+PrometheusConfigT = typing.TypeVar("PrometheusConfigT", bound=PrometheusConfig)
+
+
 @dataclasses.dataclass(kw_only=True, slots=True)
-class PrometheusInstrument(BaseInstrument[PrometheusConfig]):
+class PrometheusInstrument(BaseInstrument[PrometheusConfigT]):
     not_configured_reason = "prometheus_metrics_path is empty or not valid"
 
     @classmethod

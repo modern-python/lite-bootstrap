@@ -81,9 +81,7 @@ class FastStreamConfig(
 
 
 @dataclasses.dataclass(kw_only=True, slots=True)
-class FastStreamHealthChecksInstrument(HealthChecksInstrument):
-    bootstrap_config: FastStreamConfig  # ty: ignore[invalid-mutable-override]
-
+class FastStreamHealthChecksInstrument(HealthChecksInstrument[FastStreamConfig]):
     def bootstrap(self) -> None:
         config = self.bootstrap_config
 
@@ -113,8 +111,7 @@ class FastStreamHealthChecksInstrument(HealthChecksInstrument):
 
 
 @dataclasses.dataclass(kw_only=True)
-class FastStreamLoggingInstrument(LoggingInstrument):
-    bootstrap_config: FastStreamConfig  # ty: ignore[invalid-mutable-override]
+class FastStreamLoggingInstrument(LoggingInstrument[FastStreamConfig]):
     _prior_broker_params_storage: typing.Any = dataclasses.field(default=None, init=False, repr=False, compare=False)
     _broker_logger_replaced: bool = dataclasses.field(default=False, init=False, repr=False, compare=False)
 
@@ -141,9 +138,7 @@ class FastStreamLoggingInstrument(LoggingInstrument):
 
 
 @dataclasses.dataclass(kw_only=True)
-class FastStreamOpenTelemetryInstrument(OpenTelemetryInstrument):
-    bootstrap_config: FastStreamConfig  # ty: ignore[invalid-mutable-override]
-
+class FastStreamOpenTelemetryInstrument(OpenTelemetryInstrument[FastStreamConfig]):
     def bootstrap(self) -> None:
         super().bootstrap()
         config = self.bootstrap_config
@@ -160,8 +155,7 @@ def _make_collector_registry() -> "prometheus_client.CollectorRegistry":
 
 
 @dataclasses.dataclass(kw_only=True)
-class FastStreamPrometheusInstrument(PrometheusInstrument):
-    bootstrap_config: FastStreamConfig  # ty: ignore[invalid-mutable-override]
+class FastStreamPrometheusInstrument(PrometheusInstrument[FastStreamConfig]):
     collector_registry: "prometheus_client.CollectorRegistry" = dataclasses.field(init=False)
     not_configured_reason = (
         PrometheusInstrument.not_configured_reason
