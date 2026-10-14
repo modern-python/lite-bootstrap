@@ -156,7 +156,7 @@ class _AccessLogMiddleware:
 
 @dataclasses.dataclass(kw_only=True)
 class FastAPILoggingInstrument(LoggingInstrument):
-    bootstrap_config: FastAPIConfig
+    bootstrap_config: FastAPIConfig  # ty: ignore[invalid-mutable-override]
 
     def bootstrap(self) -> None:
         super().bootstrap()
@@ -167,7 +167,7 @@ class FastAPILoggingInstrument(LoggingInstrument):
 
 @dataclasses.dataclass(kw_only=True, slots=True)
 class FastAPICorsInstrument(CorsInstrument):
-    bootstrap_config: FastAPIConfig
+    bootstrap_config: FastAPIConfig  # ty: ignore[invalid-mutable-override]
 
     def bootstrap(self) -> None:
         self.bootstrap_config.app.add_middleware(CORSMiddleware, **self.cors_kwargs)
@@ -175,7 +175,7 @@ class FastAPICorsInstrument(CorsInstrument):
 
 @dataclasses.dataclass(kw_only=True, slots=True)
 class FastAPIHealthChecksInstrument(HealthChecksInstrument):
-    bootstrap_config: FastAPIConfig
+    bootstrap_config: FastAPIConfig  # ty: ignore[invalid-mutable-override]
 
     def build_fastapi_health_check_router(self) -> "fastapi.APIRouter":
         fastapi_router = fastapi.APIRouter(
@@ -195,7 +195,7 @@ class FastAPIHealthChecksInstrument(HealthChecksInstrument):
 
 @dataclasses.dataclass(kw_only=True)
 class FastAPIOpenTelemetryInstrument(OpenTelemetryInstrument):
-    bootstrap_config: FastAPIConfig
+    bootstrap_config: FastAPIConfig  # ty: ignore[invalid-mutable-override]
 
     def bootstrap(self) -> None:
         super().bootstrap()
@@ -214,7 +214,7 @@ class FastAPIOpenTelemetryInstrument(OpenTelemetryInstrument):
 
 @dataclasses.dataclass(kw_only=True)
 class FastAPIPrometheusInstrument(PrometheusInstrument):
-    bootstrap_config: FastAPIConfig
+    bootstrap_config: FastAPIConfig  # ty: ignore[invalid-mutable-override]
     missing_dependency_message = "prometheus_fastapi_instrumentator is not installed"
 
     @staticmethod
@@ -237,7 +237,7 @@ class FastAPIPrometheusInstrument(PrometheusInstrument):
 
 @dataclasses.dataclass(kw_only=True)
 class FastAPISwaggerInstrument(SwaggerInstrument):
-    bootstrap_config: FastAPIConfig
+    bootstrap_config: FastAPIConfig  # ty: ignore[invalid-mutable-override]
 
     def bootstrap(self) -> None:
         config = self.bootstrap_config
@@ -261,7 +261,7 @@ class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI"]):
         FastAPIPrometheusInstrument,
         FastAPISwaggerInstrument,
     ]
-    bootstrap_config: FastAPIConfig
+    bootstrap_config: FastAPIConfig  # ty: ignore[invalid-mutable-override]
     not_ready_message = "fastapi is not installed"
 
     @contextlib.asynccontextmanager
