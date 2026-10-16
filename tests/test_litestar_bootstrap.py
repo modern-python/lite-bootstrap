@@ -605,6 +605,31 @@ def test_litestar_otel_span_carries_route_template(litestar_config: LitestarConf
     assert server_spans[0].attributes["http.route"] == "/users/{user_id}"
 
 
+def _span_kinds_for_one_request(config: LitestarConfig) -> list[SpanKind]:
+    @litestar.get("/items")
+    async def get_items() -> list[int]:
+        return [1]
+
+    config = dataclasses.replace(config, application_config=AppConfig(route_handlers=[get_items]))
+    application, exporter = _bootstrap_with_span_exporter(config)
+
+    with TestClient(app=application) as client:
+        assert client.get("/items").status_code == status_codes.HTTP_200_OK
+
+    return sorted((span.kind for span in exporter.get_finished_spans()), key=lambda kind: kind.value)
+
+
+def test_litestar_otel_exclude_spans_defaults_to_recording_them(litestar_config: LitestarConfig) -> None:
+    """The default keeps the ASGI event spans a trace view shows today; dropping them is opt-in."""
+    assert SpanKind.INTERNAL in _span_kinds_for_one_request(litestar_config)
+
+
+def test_litestar_otel_exclude_spans_leaves_only_the_server_span(litestar_config: LitestarConfig) -> None:
+    config = dataclasses.replace(litestar_config, opentelemetry_exclude_spans=["receive", "send"])
+
+    assert _span_kinds_for_one_request(config) == [SpanKind.SERVER]
+
+
 def test_litestar_otel_unmatched_path_span_is_named_by_method_only(litestar_config: LitestarConfig) -> None:
     """A 404 never reaches the route stack, so its span must not carry the raw path that scanners vary."""
     application, exporter = _bootstrap_with_span_exporter(litestar_config)

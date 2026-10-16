@@ -173,7 +173,7 @@ config = FastAPIConfig(
 )
 ```
 
-For FastAPI there is additionally:
+For FastAPI and Litestar there is additionally:
 
 - `opentelemetry_exclude_spans` - drops the ASGI `receive` and/or `send` spans, leaving only the
   server span. Empty by default, which records all three. `["receive", "send"]` is worth ~34 µs per
