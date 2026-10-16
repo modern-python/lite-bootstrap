@@ -123,6 +123,7 @@ class LitestarConfig(
     application_config: "AppConfig" = dataclasses.field(default_factory=lambda: AppConfig())  # noqa: PLW0108
     litestar_logging_middleware_config: "LoggingMiddlewareConfig | None" = None
     litestar_logging_middleware_enabled: bool = False
+    opentelemetry_exclude_spans: list[typing.Literal["receive", "send"]] = dataclasses.field(default_factory=list)
     prometheus_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     # Bounds path-label cardinality (Litestar defaults False -> raw URLs leak memory). See litestar#4891.
     prometheus_group_path: bool = True
@@ -237,6 +238,7 @@ class LitestarOpenTelemetryInstrument(OpenTelemetryInstrument[LitestarConfig]):
                     scope_span_details_extractor=build_litestar_route_details_from_scope,
                     # An empty list compiles to a pattern that matches, and so skips, every path
                     exclude=self._build_excluded_path_patterns() or None,
+                    exclude_spans=self.bootstrap_config.opentelemetry_exclude_spans,
                 )
             )
         )

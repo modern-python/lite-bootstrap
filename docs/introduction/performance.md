@@ -46,7 +46,7 @@ In rough order of what they return:
 |---|---|---|
 | [`opentelemetry_sampler`](configuration.md#opentelemetry), 1% ratio | ~55 µs/req | 99% of your traces |
 | `http_methods_to_capture=()` on the Sentry ASGI integrations | ~35 µs/req | Sentry-side trace correlation |
-| [`opentelemetry_exclude_spans`](configuration.md#opentelemetry), FastAPI only | ~34 µs/req | the two ASGI event spans |
+| [`opentelemetry_exclude_spans`](configuration.md#opentelemetry), FastAPI and Litestar | ~34 µs/req | the two ASGI event spans |
 | [`sentry_auto_session_tracking=False`](configuration.md#sentry) | ~7.7 µs/req | Sentry release health |
 | [`sentry_logging_breadcrumb_level=None`](configuration.md#sentry-logging-integration) | ~7 µs per log record | log breadcrumbs on errors |
 
