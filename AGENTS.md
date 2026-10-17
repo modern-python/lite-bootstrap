@@ -10,7 +10,7 @@ kinds of **skip**, are defined there and are load-bearing throughout.
 ## Commands
 
 `just` (task runner) and `uv` (package manager). The [`justfile`](justfile) is the source of truth:
-run `just --list`, or read it. Every non-obvious recipe carries its intent as a comment.
+`just --list`, or read it. Every non-obvious recipe carries its intent as a comment.
 
 ## Architecture
 
