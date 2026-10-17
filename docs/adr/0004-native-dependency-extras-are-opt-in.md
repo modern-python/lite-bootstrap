@@ -4,13 +4,13 @@ Free-threaded CPython has wheels for neither `orjson` nor `grpcio`, and PEP 508 
 marker for "GIL enabled", so neither can be required conditionally. Both are therefore opt-in:
 `orjson` is its own extra (`logging` is `structlog` only) with the logging serializer falling back to
 the stdlib `json` accelerator, and OTLP over HTTP is a sibling `otl-http` extra beside a gRPC-only
-`otl`. The fallback is a documented performance change, not a correctness one — roughly 2-5x slower,
-with non-JSON-native values in log `extra` rendering via `repr`; the GIL fast path is byte-for-byte
+`otl`. The fallback is a documented performance change and does not affect correctness: it is roughly
+2-5x slower, with non-JSON-native values in log `extra` rendering via `repr`; the GIL fast path is byte-for-byte
 unchanged when `[orjson]` is installed.
 
 Both refuse the combinatorial alternative: `*-ft` twins of every logging-bearing and `*-all` extra,
 or `fastapi-otl-http`-style framework variants. A free-threaded service composes `[fastapi, otl-http]`
-itself. Replacing `orjson` with msgspec, ujson or rapidjson was also rejected — a permanent mandatory
+itself. Replacing `orjson` with msgspec, ujson or rapidjson was also rejected: it would add a permanent mandatory
 dependency, with a different encoder API and output shape, to paper over a temporary gap
 ([ijl/orjson#530](https://github.com/ijl/orjson/issues/530) tracks ft wheels); if that resolves,
 `orjson` could return to core and the fallback branch retire.

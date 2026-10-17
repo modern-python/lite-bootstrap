@@ -72,12 +72,12 @@ LitestarConfig(
 )
 ```
 
-Enabled this way, it logs metadata only — `path`, `method`, `content_type`,
-`path_params` for requests and `status_code` for responses — and skips
+Enabled this way, it logs metadata only (`path`, `method`, `content_type`,
+`path_params` for requests and `status_code` for responses) and skips
 `swagger_path`, `swagger_static_path` (when `swagger_offline_docs` is on),
 `health_checks_path` and `prometheus_metrics_path`. Those four paths are
-excluded whether or not the corresponding instrument is actually configured —
-so if you disable health checks but still serve your own route at
+excluded whether or not the corresponding instrument is configured, so if
+you disable health checks but still serve your own route at
 `health_checks_path`, that route is not access-logged either.
 
 `path` and `path_params` are logged, so a secret embedded in the URL itself
@@ -97,10 +97,9 @@ LitestarConfig(
 )
 ```
 
-A bare `LoggingMiddlewareConfig()` restores Litestar's own defaults wholesale
-— including full request/response body logging — so pass explicit
-`request_log_fields` / `response_log_fields` rather than relying on the
-built-in default.
+A bare `LoggingMiddlewareConfig()` restores all of Litestar's own defaults,
+including full request/response body logging, so pass explicit
+`request_log_fields` / `response_log_fields`.
 
 ## Prometheus
 
@@ -131,7 +130,7 @@ Left as-is, that means every handler that reads a request body returns `500:
 
 The bootstrapper works around this by filling `request_max_body_size` with
 Litestar's own 10 MB default whenever your `AppConfig` leaves it unset. This
-is not exposed as a `LitestarConfig` field — set it on your own `AppConfig`
+is not exposed as a `LitestarConfig` field. Set it on your own `AppConfig`
 instead, the same way as every other Litestar app-level knob:
 
 ```python
@@ -143,6 +142,6 @@ LitestarConfig(
 )
 ```
 
-Pass `request_max_body_size=None` for no limit. Any value you set — including
-`None` — is left untouched; the bootstrapper only fills it in when it is
+Pass `request_max_body_size=None` for no limit. Any value you set, including
+`None`, is left untouched; the bootstrapper only fills it in when it is
 unset.

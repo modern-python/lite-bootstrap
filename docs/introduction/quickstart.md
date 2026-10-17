@@ -1,8 +1,8 @@
 # Quickstart
 
-This walkthrough takes you from an empty project to a **FastAPI service with
-production observability** — metrics, health checks, CORS, Swagger, and
-structured logging — wired up in a few lines. The same pattern applies to
+This walkthrough takes you from an empty project to a FastAPI service with
+metrics, health checks, CORS, Swagger, and structured logging, wired up in a
+few lines. The same pattern applies to
 [Litestar](../integrations/litestar.md), [FastStream](../integrations/faststream.md),
 [FastMCP](../integrations/fastmcp.md), and
 [framework-free services](../integrations/free.md).
@@ -73,11 +73,11 @@ uvicorn main:app --reload
 
 With the config above, your service now exposes:
 
-- **Metrics** at `/metrics` in Prometheus format — point your scraper at it.
-- **Health check** at `/health` — wire it to your orchestrator's readiness probe.
-- **Swagger UI** at `/docs` — with offline assets, so it renders without a CDN.
-- **CORS** headers for the configured origins.
-- **Structured logging** via `structlog` — enabled by default (opt out with
+- Prometheus metrics at `/metrics`, for your scraper.
+- A health check at `/health`, for your orchestrator's readiness probe.
+- Swagger UI at `/docs`, with offline assets so it renders without a CDN.
+- CORS headers for the configured origins.
+- Structured logging via `structlog`, on by default (opt out with
   `logging_enabled=False`).
 
 ## 5. Enable more
@@ -115,6 +115,6 @@ for cls, reason in bootstrapper.skipped_instruments:
 
 ## Next steps
 
-- [Configuration](configuration.md) — every config field and per-instrument option.
-- [Integrations](../integrations/litestar.md) — Litestar, FastStream, FastMCP,
+- [Configuration](configuration.md): every config field and per-instrument option.
+- [Integrations](../integrations/litestar.md): Litestar, FastStream, FastMCP,
   and framework-free services.

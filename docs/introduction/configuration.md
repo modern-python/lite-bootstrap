@@ -271,7 +271,7 @@ config = FastAPIConfig(
 
 `logging_record_filters` attaches `logging.Filter` instances to loggers by name. A filter sees every
 record its logger emits, before any handler renders it, and may rewrite the record or return `False`
-to drop it — useful for demoting a third-party error you already handle:
+to drop it. This lets you demote a third-party error you already handle:
 
 ```python
 import logging
@@ -396,9 +396,9 @@ Additional params:
 
 When a bootstrapper is constructed, each registered instrument is checked twice:
 
-1. **`is_configured(config)`** (classmethod, runs before instantiation) — returns False if the user's config indicates this instrument shouldn't run (e.g. `sentry_dsn` empty, `logging_enabled=False`, `pyroscope_endpoint` empty). When False, the instrument is **silently skipped** and recorded in `bootstrapper.skipped_instruments: list[tuple[type, str]]` — each entry is the instrument class plus its `not_configured_reason`.
+1. `is_configured(config)` (classmethod, runs before instantiation) returns False if the user's config indicates this instrument shouldn't run (e.g. `sentry_dsn` empty, `logging_enabled=False`, `pyroscope_endpoint` empty). When False, the instrument is silently skipped and recorded in `bootstrapper.skipped_instruments: list[tuple[type, str]]`. Each entry is the instrument class plus its `not_configured_reason`.
 
-2. **`dependencies_installed()`** — runs only if `is_configured()` returned True. If the instrument's optional package is missing, an `InstrumentDependencyMissingWarning` is emitted. This is a real "configured but dependency missing" deployment surprise.
+2. `dependencies_installed()` runs only if `is_configured()` returned True. If the instrument's optional package is missing, an `InstrumentDependencyMissingWarning` is emitted, since a configured instrument with a missing dependency is usually a deployment mistake.
 
 After the loop, the bootstrapper emits one INFO-level summary log listing configured + skipped instruments. Default Python logging suppresses INFO; opt in via `logging.basicConfig(level=logging.INFO)`.
 
@@ -421,4 +421,4 @@ for cls, reason in bootstrapper.skipped_instruments:
     print(f"{cls.__name__}: {reason}")
 ```
 
-To get a human-readable view of the same information at any later point (e.g. for debugging from a REPL or a health endpoint), call `bootstrapper.build_summary()`. It returns the multi-line string that the INFO summary log emits — useful when log levels are filtered or when you want to render the bootstrapper state inline.
+To get a human-readable view of the same information at any later point (e.g. for debugging from a REPL or a health endpoint), call `bootstrapper.build_summary()`. It returns the multi-line string that the INFO summary log emits, which helps when log levels are filtered or when you want to render the bootstrapper state inline.
