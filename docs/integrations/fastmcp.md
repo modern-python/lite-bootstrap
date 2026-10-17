@@ -83,7 +83,7 @@ The metrics path, the health-check path (unless `opentelemetry_generate_health_c
 `opentelemetry_excluded_urls` and `OTEL_PYTHON_STARLETTE_EXCLUDED_URLS` produce no spans. An application already instrumented by
 `StarletteInstrumentor` is left as is, so no request is traced twice.
 
-Teardown is wired through FastMCP's provider lifecycle — `bootstrapper.teardown()`
+Teardown is wired through FastMCP's provider lifecycle: `bootstrapper.teardown()`
 runs automatically when the FastMCP server's ASGI lifespan shuts down (i.e. when
 the application that serves `application.http_app()` shuts down).
 

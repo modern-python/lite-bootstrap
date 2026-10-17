@@ -3,14 +3,14 @@
 ## Project Overview
 
 `lite-bootstrap` bootstraps a Python microservice with pre-configured observability.
-[`CONTEXT.md`](CONTEXT.md) owns the vocabulary — read it before naming a concept in code, a test, or
+[`CONTEXT.md`](CONTEXT.md) owns the vocabulary; read it before naming a concept in code, a test, or
 an issue. An instrument being **configured** versus a bootstrapper being **ready**, and the two
 kinds of **skip**, are defined there and are load-bearing throughout.
 
 ## Commands
 
-`just` (task runner) and `uv` (package manager). The [`justfile`](justfile) is the source of truth —
-`just --list`, or read it. Every non-obvious recipe carries its intent as a comment.
+`just` (task runner) and `uv` (package manager). The [`justfile`](justfile) is the source of truth:
+run `just --list`, or read it. Every non-obvious recipe carries its intent as a comment.
 
 ## Architecture
 
@@ -48,8 +48,8 @@ Four rules that are not visible in the code that follows them:
   from `__init__.py` if the old name was. A class assignment, not a subclass, so `isinstance` still
   holds; `OpentelemetryConfig` is the worked example.
 - **A warning reached from config construction or an instrument's `bootstrap()` goes through
-  `warn_at_caller`.** Neither depth is constant — a `__post_init__` cascade runs as deep as that
-  config's MRO, and `bootstrap()` sits a frame deeper whenever it calls `super().bootstrap()` — so
+  `warn_at_caller`.** Neither depth is constant: a `__post_init__` cascade runs as deep as that
+  config's MRO, and `bootstrap()` sits a frame deeper whenever it calls `super().bootstrap()`. So
   the helper walks out to the first frame outside `lite_bootstrap`. The three surviving literal
   `stacklevel=` sites lie outside both paths and stay literal; #202 measured them.
 - **Sentinels on a user's app get a `_lite_bootstrap_` prefix.** A direct attribute on the app
@@ -59,9 +59,9 @@ Four rules that are not visible in the code that follows them:
 ### Type checking
 
 `ty` is the only supported type checker; act on its diagnostics alone. The codebase leans on patterns
-Pyright reports as errors — conditional imports for optional dependencies, covariant
+Pyright reports as errors (conditional imports for optional dependencies, covariant
 `bootstrap_config` narrowing on instrument subclasses, `TypedDict` optional-key access guarded by
-`.get()` — so adding it yields noise, not findings.
+`.get()`), so adding it yields only noise.
 
 Two suppressions recur and are both correct: `invalid-method-override` on a framework subclass's
 `is_configured` classmethod, which narrows its parameter type where `ty` enforces invariance, and
