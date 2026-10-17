@@ -72,11 +72,11 @@ The following intentionally differ:
 - Free-threading. `lite-bootstrap` runs on free-threaded CPython 3.14t. Every extra whose dependencies are pure Python installs there. The rest are blocked upstream: `orjson` and `pyroscope` have no free-threaded wheels, and `otl` needs `grpcio`, so use `otl-http` instead.
 - Scope. `lite-bootstrap` only wires instruments. It does not include a Granian server runner or a console writer.
 
-## 📚 [Documentation](https://lite-bootstrap.modern-python.org)
+## Links
 
-## 📦 [PyPI](https://pypi.org/project/lite-bootstrap)
-
-## 📝 [License](https://github.com/modern-python/lite-bootstrap/blob/main/LICENSE)
+- [Documentation](https://lite-bootstrap.modern-python.org)
+- [PyPI](https://pypi.org/project/lite-bootstrap)
+- [License](https://github.com/modern-python/lite-bootstrap/blob/main/LICENSE)
 
 ## Part of `modern-python`
 
