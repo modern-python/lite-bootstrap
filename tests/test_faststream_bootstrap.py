@@ -229,6 +229,49 @@ async def test_faststream_health_check_uses_configured_broker_timeout(broker: Re
         bootstrapper.teardown()
 
 
+async def test_faststream_health_check_fails_when_second_broker_is_down(broker: RedisBroker) -> None:
+    second_broker = RedisBroker()
+    config = build_faststream_config(broker=broker)
+    config.application.add_broker(second_broker)
+    bootstrapper = FastStreamBootstrapper(bootstrap_config=config)
+    application = bootstrapper.bootstrap()
+    try:
+        with (
+            patch.object(broker, "ping", new=AsyncMock(return_value=True)),
+            patch.object(second_broker, "ping", new=AsyncMock(return_value=False)),
+            TestClient(app=application) as test_client,
+        ):
+            response = test_client.get(config.health_checks_path)
+            assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+            assert response.text == "Service is unhealthy"
+    finally:
+        bootstrapper.teardown()
+
+
+async def test_faststream_health_check_pings_every_broker(broker: RedisBroker) -> None:
+    expected_timeout = 3.0
+    second_broker = RedisBroker()
+    config = dataclasses.replace(
+        build_faststream_config(broker=broker),
+        faststream_health_check_broker_timeout=expected_timeout,
+    )
+    config.application.add_broker(second_broker)
+    bootstrapper = FastStreamBootstrapper(bootstrap_config=config)
+    application = bootstrapper.bootstrap()
+    try:
+        with (
+            patch.object(broker, "ping", new=AsyncMock(return_value=True)) as first_ping,
+            patch.object(second_broker, "ping", new=AsyncMock(return_value=True)) as second_ping,
+            TestClient(app=application) as test_client,
+        ):
+            response = test_client.get(config.health_checks_path)
+            assert response.status_code == status.HTTP_200_OK
+        first_ping.assert_called_once_with(timeout=expected_timeout)
+        second_ping.assert_called_once_with(timeout=expected_timeout)
+    finally:
+        bootstrapper.teardown()
+
+
 def test_faststream_opentelemetry_excluded_urls_in_built_set(broker: RedisBroker) -> None:
     bootstrap_config = dataclasses.replace(
         build_faststream_config(broker=broker),

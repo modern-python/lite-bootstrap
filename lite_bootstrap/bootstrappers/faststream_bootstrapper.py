@@ -1,3 +1,4 @@
+import asyncio
 import dataclasses
 import json
 import logging
@@ -104,10 +105,12 @@ class FastStreamHealthChecksInstrument(HealthChecksInstrument[FastStreamConfig])
 
     async def _define_health_status(self) -> bool:
         config = self.bootstrap_config
-        if not config.application or not config.application.broker:
+        if not config.application or not config.application.brokers:
             return False
 
-        return await config.application.broker.ping(timeout=config.faststream_health_check_broker_timeout)
+        timeout = config.faststream_health_check_broker_timeout
+        results = await asyncio.gather(*(broker.ping(timeout=timeout) for broker in config.application.brokers))
+        return all(results)
 
 
 @dataclasses.dataclass(kw_only=True)
