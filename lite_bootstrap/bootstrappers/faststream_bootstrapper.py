@@ -88,14 +88,11 @@ class FastStreamHealthChecksInstrument(HealthChecksInstrument[FastStreamConfig])
 
         @handle_get
         async def check_health(_: object) -> "AsgiResponse":
-            return (
-                AsgiResponse(
-                    json.dumps(self.render_health_check_data()).encode(),
-                    200,
-                    headers={"content-type": "application/json"},
-                )
-                if await self._define_health_status()
-                else AsgiResponse(b"Service is unhealthy", 500, headers={"content-type": "text/plain"})
+            health_status = await self.define_health_status()
+            return AsgiResponse(
+                json.dumps(self.render_health_check_data(health_status=health_status)).encode(),
+                200 if health_status else 500,
+                headers={"content-type": "application/json"},
             )
 
         if config.opentelemetry_generate_health_check_spans and import_checker.is_opentelemetry_installed:
@@ -103,7 +100,7 @@ class FastStreamHealthChecksInstrument(HealthChecksInstrument[FastStreamConfig])
 
         config.application.mount(config.health_checks_path, check_health)
 
-    async def _define_health_status(self) -> bool:
+    async def _define_framework_health_status(self) -> bool:
         config = self.bootstrap_config
         if not config.application or not config.application.brokers:
             return False

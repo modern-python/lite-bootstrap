@@ -23,8 +23,17 @@ from starlette.testclient import TestClient
 from lite_bootstrap import FastAPIBootstrapper, FastAPIConfig, import_checker
 from lite_bootstrap.bootstrappers import fastapi_bootstrapper
 from lite_bootstrap.exceptions import ConfigurationError, InstrumentDependencyMissingWarning
+from lite_bootstrap.instruments.healthchecks_instrument import HealthProbe
 from lite_bootstrap.types import UNSET
-from tests.conftest import CustomInstrumentor, SentryTestTransport, emulate_package_missing, warning_source_files
+from tests.conftest import (
+    HEALTH_PROBE_CASES,
+    CustomInstrumentor,
+    SentryTestTransport,
+    capture_probe_warnings,
+    emulate_package_missing,
+    failed_probe_names,
+    warning_source_files,
+)
 
 
 logger = structlog.getLogger(__name__)
@@ -501,3 +510,26 @@ def test_fastapi_otel_honors_excluded_urls_from_environment(
     span_names = _server_span_names_for(fastapi_config, ["/from-env", "/custom-healthy"])
 
     assert span_names == ["GET /custom-healthy"]
+
+
+@pytest.mark.parametrize(("probes", "expected_status", "expected_health_status", "expected_failed"), HEALTH_PROBE_CASES)
+def test_fastapi_health_check_runs_probes(
+    fastapi_config: FastAPIConfig,
+    probes: dict[str, HealthProbe],
+    expected_status: int,
+    expected_health_status: bool,
+    expected_failed: list[str],
+) -> None:
+    config = dataclasses.replace(fastapi_config, health_checks_probes=probes)
+    bootstrapper = FastAPIBootstrapper(bootstrap_config=config)
+    application = bootstrapper.bootstrap()
+    with capture_probe_warnings() as probe_warnings, TestClient(application) as test_client:
+        response = test_client.get(config.health_checks_path)
+
+    assert response.status_code == expected_status
+    assert response.json() == {
+        "health_status": expected_health_status,
+        "service_name": "microservice",
+        "service_version": "2.0.0",
+    }
+    assert failed_probe_names(probe_warnings) == expected_failed

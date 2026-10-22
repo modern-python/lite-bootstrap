@@ -178,8 +178,11 @@ class FastAPIHealthChecksInstrument(HealthChecksInstrument[FastAPIConfig]):
         )
 
         @fastapi_router.get(self.bootstrap_config.health_checks_path)
-        async def health_check_handler() -> HealthCheckTypedDict:
-            return self.render_health_check_data()
+        async def health_check_handler(response: fastapi.Response) -> HealthCheckTypedDict:
+            health_status = await self.define_health_status()
+            if not health_status:
+                response.status_code = fastapi.status.HTTP_500_INTERNAL_SERVER_ERROR
+            return self.render_health_check_data(health_status=health_status)
 
         return fastapi_router
 

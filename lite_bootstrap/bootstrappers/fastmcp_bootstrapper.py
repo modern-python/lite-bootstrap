@@ -22,6 +22,7 @@ if import_checker.is_fastmcp_installed:
     from fastmcp.server.http import StarletteWithLifespan
     from fastmcp.server.middleware import Middleware, MiddlewareContext
     from fastmcp.server.providers import Provider
+    from starlette import status
     from starlette.requests import Request
     from starlette.responses import JSONResponse, Response
 
@@ -210,7 +211,11 @@ class FastMcpHealthChecksInstrument(HealthChecksInstrument[FastMcpConfig]):
             include_in_schema=config.health_checks_include_in_schema,
         )
         async def health_check_handler(_: "Request") -> "JSONResponse":
-            return JSONResponse(dict(self.render_health_check_data()))
+            health_status = await self.define_health_status()
+            return JSONResponse(
+                dict(self.render_health_check_data(health_status=health_status)),
+                status_code=status.HTTP_200_OK if health_status else status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 @dataclasses.dataclass(kw_only=True)
