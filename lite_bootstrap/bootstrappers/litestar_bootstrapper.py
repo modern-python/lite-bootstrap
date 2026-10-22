@@ -28,6 +28,7 @@ from lite_bootstrap.instruments.swagger_instrument import SwaggerConfig, Swagger
 
 if import_checker.is_litestar_installed:
     import litestar
+    from litestar import status_codes
     from litestar.config.app import AppConfig
     from litestar.config.cors import CORSConfig
     from litestar.logging.config import StructLoggingConfig
@@ -149,8 +150,12 @@ class LitestarCorsInstrument(CorsInstrument[LitestarConfig]):
 class LitestarHealthChecksInstrument(HealthChecksInstrument[LitestarConfig]):
     def build_litestar_health_check_router(self) -> "litestar.Router":
         @litestar.get(media_type=litestar.MediaType.JSON)
-        async def health_check_handler() -> HealthCheckTypedDict:
-            return self.render_health_check_data()
+        async def health_check_handler() -> litestar.Response[HealthCheckTypedDict]:
+            health_status = await self.define_health_status()
+            return litestar.Response(
+                self.render_health_check_data(health_status=health_status),
+                status_code=status_codes.HTTP_200_OK if health_status else status_codes.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
         return litestar.Router(
             path=self.bootstrap_config.health_checks_path,

@@ -35,11 +35,15 @@ from lite_bootstrap.bootstrappers.litestar_bootstrapper import (
     build_span_name,
 )
 from lite_bootstrap.exceptions import ConfigurationError
+from lite_bootstrap.instruments.healthchecks_instrument import HealthProbe
 from tests.conftest import (
+    HEALTH_PROBE_CASES,
     CustomInstrumentor,
     SentryTestTransport,
+    capture_probe_warnings,
     emulate_package_missing,
     emulate_package_missing_with_module_reload,
+    failed_probe_names,
 )
 
 
@@ -697,3 +701,26 @@ def test_litestar_otel_is_skipped_without_litestars_opentelemetry_plugin(litesta
         assert "OpenTelemetryPlugin" not in {
             type(plugin).__name__ for plugin in litestar_config.application_config.plugins
         }
+
+
+@pytest.mark.parametrize(("probes", "expected_status", "expected_health_status", "expected_failed"), HEALTH_PROBE_CASES)
+def test_litestar_health_check_runs_probes(
+    litestar_config: LitestarConfig,
+    probes: dict[str, HealthProbe],
+    expected_status: int,
+    expected_health_status: bool,
+    expected_failed: list[str],
+) -> None:
+    config = dataclasses.replace(litestar_config, health_checks_probes=probes)
+    bootstrapper = LitestarBootstrapper(bootstrap_config=config)
+    application = bootstrapper.bootstrap()
+    with capture_probe_warnings() as probe_warnings, TestClient(app=application) as test_client:
+        response = test_client.get(config.health_checks_path)
+
+    assert response.status_code == expected_status
+    assert response.json() == {
+        "health_status": expected_health_status,
+        "service_name": "microservice",
+        "service_version": "2.0.0",
+    }
+    assert failed_probe_names(probe_warnings) == expected_failed

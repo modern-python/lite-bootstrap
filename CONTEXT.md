@@ -46,6 +46,13 @@ signals: not configured is silent and lands in `skipped_instruments`, so it show
 raises `InstrumentDependencyMissingWarning` plus a `logger.warning` and lands in neither list. The
 quiet skip is the one you have to go looking for; the loud one finds you.
 
+**Health probe**:
+One check of something the service depends on, run each time the health check route is requested. A
+single failing probe makes the route report the service unhealthy. The health check is the route;
+health probes are what it runs.
+_Avoid_: health check, for this sense; ping, which is FastStream's broker method and only one
+possible probe.
+
 **Free**:
 Without a web framework: `FreeBootstrapper`, `FreeConfig`, the `free-all` extra. It has no
 application, so nothing to attach teardown to and no double-bootstrap guard.

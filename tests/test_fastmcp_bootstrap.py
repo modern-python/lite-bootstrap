@@ -30,9 +30,13 @@ from lite_bootstrap.bootstrappers.fastmcp_bootstrapper import (
     _postprocess_http_apps,
 )
 from lite_bootstrap.exceptions import ConfigurationError
+from lite_bootstrap.instruments.healthchecks_instrument import HealthProbe
 from tests.conftest import (
+    HEALTH_PROBE_CASES,
+    capture_probe_warnings,
     emulate_package_missing,
     emulate_package_missing_with_module_reload,
+    failed_probe_names,
 )
 
 
@@ -641,3 +645,28 @@ def test_fastmcp_otel_honors_excluded_urls_from_environment(monkeypatch: pytest.
     assert [span.name for span in _server_spans(exporter)] == [
         f"GET {bootstrapper.bootstrap_config.health_checks_path}"
     ]
+
+
+@pytest.mark.parametrize(("probes", "expected_status", "expected_health_status", "expected_failed"), HEALTH_PROBE_CASES)
+def test_fastmcp_health_check_runs_probes(
+    probes: dict[str, HealthProbe],
+    expected_status: int,
+    expected_health_status: bool,
+    expected_failed: list[str],
+) -> None:
+    config = _make_test_config(health_checks_probes=probes)
+    bootstrapper = FastMcpBootstrapper(bootstrap_config=config)
+    application = bootstrapper.bootstrap()
+    try:
+        with capture_probe_warnings() as probe_warnings, TestClient(application.http_app()) as test_client:
+            response = test_client.get(config.health_checks_path)
+    finally:
+        bootstrapper.teardown()
+
+    assert response.status_code == expected_status
+    assert response.json() == {
+        "health_status": expected_health_status,
+        "service_name": "test-mcp",
+        "service_version": "1.2.3",
+    }
+    assert failed_probe_names(probe_warnings) == expected_failed

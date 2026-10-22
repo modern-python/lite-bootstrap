@@ -4,6 +4,7 @@ import typing
 import warnings
 from collections.abc import Generator
 from importlib import reload
+from unittest.mock import MagicMock, patch
 
 import opentelemetry.metrics._internal
 import opentelemetry.trace
@@ -16,6 +17,7 @@ from structlog.typing import EventDict, WrappedLogger
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.exceptions import InstrumentSkippedWarning
+from lite_bootstrap.instruments import healthchecks_instrument
 
 
 def pytest_configure() -> None:
@@ -34,6 +36,40 @@ class CustomInstrumentor(BaseInstrumentor):
 
     def _uninstrument(self, **kwargs: typing.Mapping[str, typing.Any]) -> None:
         pass
+
+
+class ProbeError(RuntimeError):
+    pass
+
+
+async def passing_probe() -> bool:
+    return True
+
+
+async def failing_probe() -> bool:
+    return False
+
+
+async def raising_probe() -> bool:
+    message = "dependency unreachable"
+    raise ProbeError(message)
+
+
+HEALTH_PROBE_CASES: typing.Final = [
+    pytest.param({"db": passing_probe, "cache": passing_probe}, 200, True, [], id="all-pass"),
+    pytest.param({"db": passing_probe, "cache": failing_probe}, 500, False, ["cache"], id="one-returns-false"),
+    pytest.param({"db": passing_probe, "cache": raising_probe}, 500, False, ["cache"], id="one-raises"),
+]
+
+
+@contextlib.contextmanager
+def capture_probe_warnings() -> Generator[MagicMock]:
+    with patch.object(healthchecks_instrument, "logger") as mock_logger:
+        yield mock_logger.warning
+
+
+def failed_probe_names(warning_mock: MagicMock) -> list[str]:
+    return [call.args[1] for call in warning_mock.call_args_list]
 
 
 class SentryTestTransport(sentry_sdk.Transport):
