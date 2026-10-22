@@ -53,6 +53,7 @@ jobs:
           - "3.12"
           - "3.13"
           - "3.14"
+          - "3.15"
     steps:
       - uses: actions/checkout@v6
       - uses: extractions/setup-just@v4
@@ -71,6 +72,8 @@ jobs:
       matrix:
         include:
           - python-version: "3.14t"
+            extras: "logging,sentry,fastapi,litestar,faststream,fastmcp,fastapi-metrics,litestar-metrics,faststream-metrics,fastmcp-metrics,otl-http"
+          - python-version: "3.15t"
             extras: "logging,sentry,fastapi,litestar,faststream,fastmcp,fastapi-metrics,litestar-metrics,faststream-metrics,fastmcp-metrics,otl-http"
     steps:
       - uses: actions/checkout@v6

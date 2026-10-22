@@ -69,7 +69,7 @@ The following intentionally differ:
 
 - Configuration. `lite-bootstrap` uses frozen `dataclass` configs with no `pydantic` / `pydantic-settings` runtime dependency, which is what makes it "lite". `microbootstrap` configures everything through `pydantic-settings` models.
 - Extras. `lite-bootstrap` has one mandatory runtime dependency, the pure-Python `typing-extensions`. Every instrument (`sentry`, `otl`, `logging`, `pyroscope`) and every framework (`fastapi`, `litestar`, `faststream`, `fastmcp`) is its own extra, plus an opt-in `orjson` speedup for logging, per-pair combos (`fastapi-sentry`, `litestar-otl`, `faststream-metrics`, …) and `*-all` rollups. `microbootstrap` bundles the full observability stack (opentelemetry, sentry-sdk, structlog, pyroscope-io, rich, pydantic-settings, …) as base dependencies and only splits framework packages into extras.
-- Free-threading. `lite-bootstrap` runs on free-threaded CPython 3.14t. Every extra whose dependencies are pure Python installs there. The rest are blocked upstream: `orjson` and `pyroscope` have no free-threaded wheels, and `otl` needs `grpcio`, so use `otl-http` instead.
+- Free-threading. `lite-bootstrap` runs on free-threaded CPython 3.14t and 3.15t. Every extra whose dependencies are pure Python installs there. The rest are blocked upstream: `orjson` and `pyroscope` have no free-threaded wheels, and `otl` needs `grpcio`, so use `otl-http` instead.
 - Scope. `lite-bootstrap` only wires instruments. It does not include a Granian server runner or a console writer.
 
 ## Links
