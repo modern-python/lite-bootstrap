@@ -25,6 +25,7 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
     instruments: list[BaseInstrument]
     skipped_instruments: list[tuple[type[BaseInstrument], str]]
     bootstrap_config: BaseConfig
+    _application: ApplicationT
 
     # Marker tagged on a user-supplied app (or its config) once this bootstrapper has
     # attached its teardown to the framework's shutdown lifecycle. Prevents a second
@@ -131,11 +132,12 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
             )
             raise ConfigurationError(msg)
         if self.is_bootstrapped:
-            return self._prepare_application()
+            return self._application
         self.is_bootstrapped = True
         for one_instrument in self.instruments:
             one_instrument.bootstrap()
-        return self._prepare_application()
+        self._application = self._prepare_application()
+        return self._application
 
     def teardown(self) -> None:
         if not self.is_bootstrapped:

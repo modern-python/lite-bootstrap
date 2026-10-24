@@ -118,6 +118,20 @@ def test_litestar_bootstrap(litestar_config: LitestarConfig) -> None:
     assert not bootstrapper.is_bootstrapped
 
 
+def test_litestar_bootstrap_twice_returns_the_same_application() -> None:
+    bootstrapper = LitestarBootstrapper(LitestarConfig(logging_enabled=False))
+    assert bootstrapper.bootstrap() is bootstrapper.bootstrap()
+
+
+def test_litestar_bootstrap_after_teardown_builds_a_new_application() -> None:
+    bootstrapper = LitestarBootstrapper(
+        LitestarConfig(logging_enabled=False, health_checks_enabled=False, prometheus_metrics_path="")
+    )
+    first = bootstrapper.bootstrap()
+    bootstrapper.teardown()
+    assert bootstrapper.bootstrap() is not first
+
+
 def test_litestar_bootstrapper_not_ready() -> None:
     with emulate_package_missing("litestar"), pytest.raises(RuntimeError, match="litestar is not installed"):
         LitestarBootstrapper(bootstrap_config=LitestarConfig())
