@@ -147,8 +147,7 @@ jobs:
           - {python-version: "3.15", target: litestar}
         # These `include` entries name an existing `target`, so each adds `extras` to that
         # target's five combinations rather than creating a job of its own. `free` carries
-        # orjson because it belongs to no *-all extra and its floor is a wheel-availability
-        # one, which only an interpreter matrix can check.
+        # orjson because it belongs to no *-all extra.
         include:
           - {target: free, extras: "--extra free-all --extra orjson"}
           - {target: fastapi, extras: "--extra fastapi-all"}
