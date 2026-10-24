@@ -23,8 +23,10 @@ version = "0"
 dependencies = [
     # Runtime use: `typing_extensions.TypedDict` (healthchecks), required by pydantic/FastAPI on
     # Python < 3.12 (`typing.TypedDict` is rejected there). Pure Python, so ft-friendly.
-    # >=4.6 because 4.4 and 4.5 raise on import under Python >=3.12 (they subclass `typing.TypeVar`).
-    "typing-extensions>=4.6",
+    # >=4.6 because 4.4 and 4.5 raise on import under Python >=3.12 (they subclass `typing.TypeVar`),
+    # and >=4.14 on 3.15, which removed the `typing.no_type_check_decorator` older releases import.
+    "typing-extensions>=4.6; python_version < '3.15'",
+    "typing-extensions>=4.14; python_version >= '3.15'",
 ]
 
 [project.urls]
@@ -37,11 +39,12 @@ Changelog = "https://github.com/modern-python/lite-bootstrap/releases"
 [project.optional-dependencies]
 orjson = [
     # No API forces this floor: only `orjson.dumps(...).decode()` and `orjson.loads`, both original.
-    # >=3.11.1 is the first release with cp314 wheels, and orjson builds from source only with a
-    # Rust toolchain (a nightly one, on 3.14), so anything older is uninstallable on the newest
-    # supported interpreter. 3.11.0 ships none: a machine with cargo installed can still build it,
-    # which is how #218 came to declare >=3.11.
-    "orjson>=3.11.1",
+    # >=3.11.1 is the first release with cp314 wheels and 3.12 the first with cp315 ones, and orjson
+    # builds from source only with a Rust toolchain (a nightly one, on 3.14), so anything older is
+    # uninstallable on the newest supported interpreters. 3.11.0 ships none: a machine with cargo
+    # installed can still build it, which is how #218 came to declare >=3.11.
+    "orjson>=3.11.1; python_version < '3.15'",
+    "orjson>=3.12; python_version >= '3.15'",
 ]
 sentry = [
     # >=1.31 for the `max_value_length` init option; >=2.1 for sentry_sdk.set_tags (plural,
@@ -115,9 +118,11 @@ fastapi-metrics = [
     # The instrumentator requires starlette>=1.0, which fastapi first allows at 0.133.
     "fastapi>=0.133",
     # The lowest typing-extensions a wheel-only resolve accepts with fastapi 0.133: its pydantic
-    # stack needs 4.12, and 4.14.1 on the interpreters whose pydantic-core wheels start later.
+    # stack needs 4.12, and 4.14.1 on the interpreters whose pydantic-core wheels start later. On
+    # 3.15 the first pydantic-core with a wheel comes with pydantic 2.14, which needs 4.16.0.
     "typing-extensions>=4.12; python_version < '3.13'",
-    "typing-extensions>=4.14.1; python_version >= '3.13'",
+    "typing-extensions>=4.14.1; python_version >= '3.13' and python_version < '3.15'",
+    "typing-extensions>=4.16.0; python_version >= '3.15'",
 ]
 fastapi-all = [
     "lite-bootstrap[fastapi-sentry,fastapi-otl,fastapi-logging,fastapi-metrics,pyroscope]",
@@ -163,16 +168,19 @@ faststream = [
     # broker.config.logger.params_storage (FastStreamLoggingInstrument swaps and restores it).
     "faststream>=0.6",
     # Not imported here: faststream pulls pydantic through fast-depends[pydantic], which allows it
-    # back to 1.7.4, and pydantic-core ships no cp314 wheel before pydantic 2.12. Without this the
-    # lowest declared combination has no installable pydantic on 3.14. Marked, because 2.7.4 is fine
-    # everywhere else and there is no reason to raise the floor for older interpreters.
-    "pydantic>=2.12; python_version >= '3.14'",
+    # back to 1.7.4, and pydantic-core ships no cp314 wheel before pydantic 2.12 and no cp315 wheel
+    # before 2.14. Without these the lowest declared combination has no installable pydantic on 3.14
+    # or 3.15. Marked, because 2.7.4 is fine everywhere else and there is no reason to raise the
+    # floor for older interpreters.
+    "pydantic>=2.12; python_version == '3.14'",
+    "pydantic>=2.14; python_version >= '3.15'",
     # pydantic requires typing-extensions>=4.12.2 on 3.13+; without this the lowest declared
     # combination pins typing-extensions at 4.8 and drags pydantic back to a build that has no
     # cp313 wheel either.
     "typing-extensions>=4.12.2",
-    # pydantic 2.12, the 3.14 floor above, requires >=4.14.1.
-    "typing-extensions>=4.14.1; python_version >= '3.14'",
+    # pydantic 2.12 and 2.14, the 3.14 and 3.15 floors above, require >=4.14.1 and >=4.16.0.
+    "typing-extensions>=4.14.1; python_version == '3.14'",
+    "typing-extensions>=4.16.0; python_version >= '3.15'",
 ]
 faststream-sentry = [
     "lite-bootstrap[faststream,sentry]",
