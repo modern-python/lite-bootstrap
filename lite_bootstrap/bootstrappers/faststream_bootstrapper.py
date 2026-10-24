@@ -3,9 +3,11 @@ import dataclasses
 import json
 import logging
 import typing
+from collections.abc import Mapping, Sequence
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
+from lite_bootstrap.helpers.warn import warn_at_caller
 from lite_bootstrap.instruments.healthchecks_instrument import HealthChecksConfig, HealthChecksInstrument
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument
 from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryConfig, OpenTelemetryInstrument
@@ -65,6 +67,34 @@ class FastStreamPrometheusMiddlewareProtocol(typing.Protocol):
     def __call__(self, msg: typing.Any, /, *, context: typing.Any) -> typing.Any: ...  # noqa: ANN401
 
 
+_MiddlewareT = typing.TypeVar("_MiddlewareT")
+
+
+def _middleware_targets(
+    brokers: Sequence[typing.Any],
+    configured: "type[_MiddlewareT] | Mapping[type, type[_MiddlewareT]]",
+    field_name: str,
+) -> list[tuple[typing.Any, "type[_MiddlewareT]"]]:
+    by_broker_type = configured if isinstance(configured, Mapping) else {type(brokers[0]): configured}
+    targets: list[tuple[typing.Any, type[_MiddlewareT]]] = []
+    skipped: dict[str, None] = {}
+    for broker in brokers:
+        middleware_cls = next(
+            (by_broker_type[one] for one in type(broker).__mro__ if one in by_broker_type),
+            None,
+        )
+        if middleware_cls is None:
+            skipped[repr(type(broker).__name__)] = None
+        else:
+            targets.append((broker, middleware_cls))
+    if skipped:
+        warn_at_caller(
+            f"FastStream brokers {', '.join(skipped)} are not instrumented: {field_name} has no middleware "
+            "class for their type. Pass a mapping from broker class to middleware class to cover them."
+        )
+    return targets
+
+
 def _make_asgi_faststream() -> "AsgiFastStream":
     return AsgiFastStream()
 
@@ -74,8 +104,14 @@ class FastStreamConfig(
     HealthChecksConfig, LoggingConfig, OpenTelemetryConfig, PrometheusConfig, PyroscopeConfig, SentryConfig
 ):
     application: "AsgiFastStream" = dataclasses.field(default_factory=_make_asgi_faststream)
-    opentelemetry_middleware_cls: type[FastStreamTelemetryMiddlewareProtocol] | None = None
-    prometheus_middleware_cls: type[FastStreamPrometheusMiddlewareProtocol] | None = None
+    opentelemetry_middleware_cls: (
+        type[FastStreamTelemetryMiddlewareProtocol] | Mapping[type, type[FastStreamTelemetryMiddlewareProtocol]] | None
+    ) = None
+    prometheus_middleware_cls: (
+        type[FastStreamPrometheusMiddlewareProtocol]
+        | Mapping[type, type[FastStreamPrometheusMiddlewareProtocol]]
+        | None
+    ) = None
     prometheus_collector_registry: "prometheus_client.CollectorRegistry | None" = None
     faststream_log_level: int = logging.WARNING
     faststream_health_check_broker_timeout: float = 5.0
@@ -112,27 +148,25 @@ class FastStreamHealthChecksInstrument(HealthChecksInstrument[FastStreamConfig])
 
 @dataclasses.dataclass(kw_only=True)
 class FastStreamLoggingInstrument(LoggingInstrument[FastStreamConfig]):
-    _prior_broker_params_storage: typing.Any = dataclasses.field(default=None, init=False, repr=False, compare=False)
-    _broker_logger_replaced: bool = dataclasses.field(default=False, init=False, repr=False, compare=False)
+    _prior_broker_params_storages: list[tuple[typing.Any, typing.Any]] = dataclasses.field(
+        default_factory=list, init=False, repr=False, compare=False
+    )
 
     def bootstrap(self) -> None:
         super().bootstrap()
-        broker = self.bootstrap_config.application.broker
-        if broker is not None and import_checker.is_structlog_installed and import_checker.is_faststream_installed:
+        brokers = self.bootstrap_config.application.brokers
+        if brokers and import_checker.is_structlog_installed and import_checker.is_faststream_installed:
             logger = structlog.get_logger("faststream")
             logger.setLevel(self.bootstrap_config.faststream_log_level)
-            self._prior_broker_params_storage = broker.config.logger.params_storage
-            broker.config.logger.params_storage = ManualLoggerStorage(logger)
-            self._broker_logger_replaced = True
+            for broker in brokers:
+                self._prior_broker_params_storages.append((broker, broker.config.logger.params_storage))
+                broker.config.logger.params_storage = ManualLoggerStorage(logger)
 
     def teardown(self) -> None:
         try:
-            if self._broker_logger_replaced:
-                broker = self.bootstrap_config.application.broker
-                if broker is not None:
-                    broker.config.logger.params_storage = self._prior_broker_params_storage
-                self._broker_logger_replaced = False
-                self._prior_broker_params_storage = None
+            while self._prior_broker_params_storages:
+                broker, prior_storage = self._prior_broker_params_storages.pop()
+                broker.config.logger.params_storage = prior_storage
         finally:
             super().teardown()
 
@@ -142,12 +176,13 @@ class FastStreamOpenTelemetryInstrument(OpenTelemetryInstrument[FastStreamConfig
     def bootstrap(self) -> None:
         super().bootstrap()
         config = self.bootstrap_config
-        if config.opentelemetry_middleware_cls and config.application.broker:
-            config.application.broker.add_middleware(
-                config.opentelemetry_middleware_cls(
-                    tracer_provider=get_tracer_provider(), meter_provider=get_meter_provider()
+        if config.opentelemetry_middleware_cls and config.application.brokers:
+            for broker, middleware_cls in _middleware_targets(
+                config.application.brokers, config.opentelemetry_middleware_cls, "opentelemetry_middleware_cls"
+            ):
+                broker.add_middleware(
+                    middleware_cls(tracer_provider=get_tracer_provider(), meter_provider=get_meter_provider())
                 )
-            )
 
 
 def _make_collector_registry() -> "prometheus_client.CollectorRegistry":
@@ -183,8 +218,11 @@ class FastStreamPrometheusInstrument(PrometheusInstrument[FastStreamConfig]):
         config.application.mount(
             config.prometheus_metrics_path, prometheus_client.make_asgi_app(self.collector_registry)
         )
-        if config.prometheus_middleware_cls and config.application.broker:
-            config.application.broker.add_middleware(config.prometheus_middleware_cls(registry=self.collector_registry))
+        if config.prometheus_middleware_cls and config.application.brokers:
+            for broker, middleware_cls in _middleware_targets(
+                config.application.brokers, config.prometheus_middleware_cls, "prometheus_middleware_cls"
+            ):
+                broker.add_middleware(middleware_cls(registry=self.collector_registry))
 
 
 class FastStreamBootstrapper(BaseBootstrapper["AsgiFastStream"]):

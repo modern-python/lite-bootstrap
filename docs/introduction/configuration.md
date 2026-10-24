@@ -76,7 +76,9 @@ To bootstrap Prometheus for FastStream, you must provide at least one of:
 
 - `prometheus_middleware_cls` - the broker metrics middleware, e.g.
   `faststream.redis.prometheus.RedisPrometheusMiddleware`. It is constructed with the instrument's
-  registry and added to the broker, when the application has one.
+  registry and added to every broker of the first broker's type. For an application with brokers of
+  different types, pass a mapping from broker class to middleware class instead; see
+  [multiple brokers](../integrations/faststream.md#multiple-brokers).
 - `prometheus_collector_registry` - a `prometheus_client.CollectorRegistry` of your own, used in
   place of the fresh one the instrument would otherwise build.
 
@@ -183,8 +185,9 @@ For FastAPI and Litestar there is additionally:
 For FastStream there is additionally:
 
 - `opentelemetry_middleware_cls` - the broker telemetry middleware, e.g.
-  `faststream.redis.opentelemetry.RedisTelemetryMiddleware`. You must provide it to trace broker
-  messages. Without it the rest of the configuration above still applies: the exporter is built, the
+  `faststream.redis.opentelemetry.RedisTelemetryMiddleware`, or a mapping from broker class to
+  middleware class (see [multiple brokers](../integrations/faststream.md#multiple-brokers)). You must
+  provide it to trace broker messages. Without it the rest of the configuration above still applies: the exporter is built, the
   health-check span is recorded unless `opentelemetry_generate_health_check_spans` is False, and any
   `opentelemetry_instrumentors` are applied.
 

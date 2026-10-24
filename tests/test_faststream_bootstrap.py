@@ -511,3 +511,107 @@ async def test_faststream_health_check_fails_on_broker_ping_despite_passing_prob
 
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     assert response.json()["health_status"] is False
+
+
+class OtherRedisBroker(RedisBroker): ...
+
+
+class OtherTelemetryMiddleware(RedisTelemetryMiddleware): ...
+
+
+class OtherPrometheusMiddleware(RedisPrometheusMiddleware): ...
+
+
+def _middleware_types(broker: BrokerUsecase[typing.Any, typing.Any, typing.Any]) -> list[type]:
+    return [type(middleware) for middleware in broker.config.broker_middlewares]
+
+
+def _bootstrap_with_brokers(
+    brokers: list[BrokerUsecase[typing.Any, typing.Any, typing.Any]], **overrides: object
+) -> FastStreamBootstrapper:
+    config = dataclasses.replace(build_faststream_config(broker=brokers[0]), **overrides)
+    for extra in brokers[1:]:
+        config.application.add_broker(extra)
+    bootstrapper = FastStreamBootstrapper(bootstrap_config=config)
+    bootstrapper.bootstrap()
+    return bootstrapper
+
+
+def test_faststream_middlewares_are_added_to_every_broker(
+    broker: RedisBroker, recwarn: pytest.WarningsRecorder
+) -> None:
+    second_broker = RedisBroker()
+    bootstrapper = _bootstrap_with_brokers([broker, second_broker])
+    try:
+        for one in (broker, second_broker):
+            assert _middleware_types(one) == [RedisTelemetryMiddleware, RedisPrometheusMiddleware]
+        assert not [one for one in recwarn if "not instrumented" in str(one.message)]
+    finally:
+        bootstrapper.teardown()
+
+
+def test_faststream_single_middleware_class_skips_brokers_of_another_type_with_a_warning(broker: RedisBroker) -> None:
+    first_broker = OtherRedisBroker()
+    with pytest.warns(UserWarning, match=r"not instrumented") as recorded:
+        bootstrapper = _bootstrap_with_brokers(
+            [first_broker, broker],
+            opentelemetry_middleware_cls=OtherTelemetryMiddleware,
+            prometheus_middleware_cls=OtherPrometheusMiddleware,
+        )
+    try:
+        assert _middleware_types(first_broker) == [OtherTelemetryMiddleware, OtherPrometheusMiddleware]
+        assert _middleware_types(broker) == []
+        skipped_messages = [str(one.message) for one in recorded if "not instrumented" in str(one.message)]
+        expected_warning_count = 2
+        assert len(skipped_messages) == expected_warning_count
+        assert all("'RedisBroker'" in message for message in skipped_messages)
+    finally:
+        bootstrapper.teardown()
+
+
+def test_faststream_middleware_mapping_picks_the_most_specific_class_per_broker(broker: RedisBroker) -> None:
+    other_broker = OtherRedisBroker()
+    bootstrapper = _bootstrap_with_brokers(
+        [broker, other_broker],
+        opentelemetry_middleware_cls={
+            RedisBroker: RedisTelemetryMiddleware,
+            OtherRedisBroker: OtherTelemetryMiddleware,
+        },
+        prometheus_middleware_cls={
+            RedisBroker: RedisPrometheusMiddleware,
+            OtherRedisBroker: OtherPrometheusMiddleware,
+        },
+    )
+    try:
+        assert _middleware_types(broker) == [RedisTelemetryMiddleware, RedisPrometheusMiddleware]
+        assert _middleware_types(other_broker) == [OtherTelemetryMiddleware, OtherPrometheusMiddleware]
+    finally:
+        bootstrapper.teardown()
+
+
+def test_faststream_middleware_mapping_without_an_entry_skips_the_broker_with_a_warning(broker: RedisBroker) -> None:
+    other_broker = OtherRedisBroker()
+    with pytest.warns(UserWarning, match=r"'RedisBroker'.*not instrumented"):
+        bootstrapper = _bootstrap_with_brokers(
+            [other_broker, broker],
+            opentelemetry_middleware_cls={OtherRedisBroker: OtherTelemetryMiddleware},
+            prometheus_middleware_cls=None,
+        )
+    try:
+        assert _middleware_types(other_broker) == [OtherTelemetryMiddleware]
+        assert _middleware_types(broker) == []
+    finally:
+        bootstrapper.teardown()
+
+
+def test_faststream_logging_covers_every_broker_and_teardown_restores_each(broker: RedisBroker) -> None:
+    second_broker = RedisBroker()
+    original_storages = [broker.config.logger.params_storage, second_broker.config.logger.params_storage]
+    bootstrapper = _bootstrap_with_brokers([broker, second_broker])
+    try:
+        for one in (broker, second_broker):
+            assert isinstance(one.config.logger.params_storage, ManualLoggerStorage)
+    finally:
+        bootstrapper.teardown()
+
+    assert [broker.config.logger.params_storage, second_broker.config.logger.params_storage] == original_storages
