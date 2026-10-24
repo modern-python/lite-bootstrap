@@ -138,8 +138,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.11", "3.12", "3.13", "3.14", "3.15"]
         target: [free, fastapi, litestar, faststream, fastmcp]
+        # PyYAML ships no cp315 wheel yet, and the fastmcp and litestar stacks pull it.
+        exclude:
+          - {python-version: "3.15", target: fastmcp}
+          - {python-version: "3.15", target: litestar}
         # These `include` entries name an existing `target`, so each adds `extras` to that
         # target's five combinations rather than creating a job of its own. `free` carries
         # orjson because it belongs to no *-all extra and its floor is a wheel-availability
@@ -159,7 +163,10 @@ jobs:
       - run: uv python install ${{ matrix.python-version }}
       - run: uv venv --python ${{ matrix.python-version }}
       # Pinned with builds allowed, so a floor with no wheel fails the wheel-only install below.
-      - run: uv pip compile pyproject.toml ${{ matrix.extras }} --no-deps --resolution lowest-direct -o floors.txt
+      - if: matrix.python-version == '3.11'
+        run: uv pip compile pyproject.toml ${{ matrix.extras }} --no-deps --resolution lowest-direct -o floors.txt
+      - if: matrix.python-version != '3.11'
+        run: uv pip compile pyproject.toml ${{ matrix.extras }} --resolution lowest-direct --no-build -o floors.txt
       - run: uv pip install -r pyproject.toml ${{ matrix.extras }} --constraints floors.txt --no-build
       - run: uv pip install --no-deps .
       - name: Bootstrap at the floors
