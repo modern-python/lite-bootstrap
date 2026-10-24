@@ -88,4 +88,9 @@ bootstrapper_config = FastStreamConfig(
 ```
 
 A broker whose type has no middleware class is left uninstrumented, and `bootstrap()` warns with its
-type name. All brokers share one Prometheus registry; each metric's `broker` label tells them apart.
+type name.
+
+All brokers share one Prometheus registry. Each metric's `broker` label holds the messaging system,
+such as `kafka` or `redis`, so it separates a Kafka broker from a Redis broker. Two brokers on the same
+system get the same label, and if both have a handler with the same name, their counts merge into
+one series.
