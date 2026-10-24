@@ -41,6 +41,11 @@ from lite_bootstrap.instruments.logging_factory import StructuredLogPayload, _se
 if import_checker.is_opentelemetry_installed:
     from opentelemetry import trace
 
+if import_checker.is_litestar_installed:
+    import litestar
+    from litestar.config.app import AppConfig
+    from litestar.testing import TestClient
+
 if import_checker.is_sentry_installed:
     import sentry_sdk
 
@@ -142,7 +147,38 @@ def _fastapi() -> None:
     asyncio.run(_drive_lifespan(application))
 
 
+def _litestar_lean_sentry_capture() -> None:
+    """Send one failing request through sentry_lean_error_capture, whose scope and session calls have floors too.
+
+    Runs before the default bootstrap: that one installs Sentry's LitestarIntegration process-wide, and the
+    lean mode can no longer disable it afterwards.
+    """
+
+    @litestar.get("/floor-error")
+    async def floor_error() -> None:
+        message = "floor smoke"
+        raise RuntimeError(message)
+
+    bootstrapper = LitestarBootstrapper(
+        bootstrap_config=LitestarConfig(
+            service_name="floor-smoke",
+            service_version="1.0.0",
+            service_debug=False,
+            logging_buffer_capacity=0,
+            sentry_dsn=SENTRY_DSN,
+            sentry_additional_params=SENTRY_PARAMS,
+            sentry_lean_error_capture=True,
+            application_config=AppConfig(route_handlers=[floor_error]),
+        )
+    )
+    with TestClient(app=bootstrapper.bootstrap(), raise_server_exceptions=False) as test_client:
+        expected_status = 500
+        assert test_client.get("/floor-error").status_code == expected_status
+
+
 def _litestar() -> None:
+    if import_checker.is_sentry_installed:
+        _litestar_lean_sentry_capture()
     bootstrapper = LitestarBootstrapper(
         bootstrap_config=LitestarConfig(
             service_name="floor-smoke",

@@ -26,18 +26,25 @@ from lite_bootstrap.instruments.sentry_instrument import SentryConfig, SentryIns
 from lite_bootstrap.instruments.swagger_instrument import SwaggerConfig, SwaggerInstrument
 
 
+if typing.TYPE_CHECKING:
+    from sentry_sdk import _types as sentry_types
+
 if import_checker.is_litestar_installed:
     import litestar
     from litestar import status_codes
     from litestar.config.app import AppConfig
     from litestar.config.cors import CORSConfig
+    from litestar.enums import ScopeType
+    from litestar.exceptions import HTTPException
     from litestar.logging.config import StructLoggingConfig
+    from litestar.middleware import ASGIMiddleware
     from litestar.middleware.logging import LoggingMiddlewareConfig
     from litestar.openapi import OpenAPIConfig
     from litestar.openapi.plugins import SwaggerRenderPlugin
     from litestar.plugins.structlog import StructlogConfig, StructlogPlugin
     from litestar.static_files import create_static_files_router
     from litestar.types import Empty
+    from litestar.types.asgi_types import ASGIApp, Message, Receive, Scope, Send
 
 if import_checker.is_litestar_installed and import_checker.is_prometheus_client_installed:
     # litestar.plugins.prometheus imports prometheus_client, which the `litestar`
@@ -47,11 +54,21 @@ if import_checker.is_litestar_installed and import_checker.is_prometheus_client_
     from litestar.plugins.prometheus import PrometheusConfig, PrometheusController
 
 if import_checker.is_litestar_opentelemetry_installed:
-    from litestar.middleware import ASGIMiddleware
     from litestar.plugins.opentelemetry import OpenTelemetryConfig as LitestarOpenTelemetryConfig
     from litestar.plugins.opentelemetry import OpenTelemetryPlugin
-    from litestar.types.asgi_types import ASGIApp, Receive, Scope, Send
     from opentelemetry import trace
+
+if import_checker.is_litestar_installed and import_checker.is_sentry_installed:
+    import sentry_sdk
+    from sentry_sdk import sessions
+    from sentry_sdk.integrations.logging import ignore_logger
+    from sentry_sdk.utils import event_from_exception, transaction_from_function
+
+    # sentry-sdk 2.1, the declared floor, has only the older name for the same context manager.
+    track_sentry_session = getattr(sessions, "track_session", None) or sessions.auto_session_tracking_scope
+
+if import_checker.is_sentry_litestar_integration_installed:
+    from sentry_sdk.integrations.litestar import LitestarIntegration
 
 if import_checker.is_opentelemetry_installed:
     from opentelemetry.metrics import get_meter_provider
@@ -110,6 +127,118 @@ if import_checker.is_litestar_opentelemetry_installed:
             await next_app(scope, receive, send)
 
 
+# sentry-sdk's own defaults: the status codes LitestarIntegration reports, and the headers it filters.
+_SENTRY_FAILED_REQUEST_STATUS_CODES: typing.Final = range(500, 600)
+_SENTRY_SENSITIVE_HEADERS: typing.Final = frozenset(
+    {"authorization", "cookie", "proxy-authorization", "set-cookie", "x-api-key", "x-forwarded-for", "x-real-ip"}
+)
+_SENTRY_FILTERED_VALUE: typing.Final = "[Filtered]"
+_SENTRY_PENDING_EXCEPTION_KEY: typing.Final = "_lite_bootstrap_sentry_pending_exception"
+_SENTRY_TRACE_HEADERS: typing.Final = frozenset({b"sentry-trace", b"baggage"})
+
+
+@dataclasses.dataclass(slots=True)
+class _PendingSentryException:
+    exception: Exception | None = None
+
+
+def _build_sentry_request_data(scope: "Scope") -> dict[str, typing.Any]:
+    headers: dict[str, str] = {name.decode("latin-1"): value.decode("latin-1") for name, value in scope["headers"]}
+    if not sentry_sdk.get_client().should_send_default_pii():
+        headers = {
+            name: _SENTRY_FILTERED_VALUE if name in _SENTRY_SENSITIVE_HEADERS else value
+            for name, value in headers.items()
+        }
+    host: typing.Final = headers.get("host")
+    request_data: dict[str, typing.Any] = {
+        "method": scope.get("method"),
+        "url": f"{scope.get('scheme', 'http')}://{host}{scope['path']}" if host else scope["path"],
+        "headers": headers,
+    }
+    if query_string := scope.get("query_string", b"").decode("latin-1"):
+        request_data["query_string"] = query_string
+    return request_data
+
+
+def enrich_sentry_event_from_litestar_scope(event: "sentry_types.Event", scope: "Scope") -> "sentry_types.Event":
+    event["request"] = {**event.get("request", {}), **_build_sentry_request_data(scope)}
+    route_handler: typing.Final = scope.get("route_handler")
+    if route_handler is not None and "transaction" not in event:
+        handler_function: typing.Final = getattr(route_handler.fn, "value", route_handler.fn)
+        event["transaction"] = route_handler.name or transaction_from_function(handler_function) or scope["path"]
+        event["transaction_info"] = {"source": "component"}
+    return event
+
+
+def _capture_litestar_exception(exception: Exception, scope: "Scope") -> None:
+    event, hint = event_from_exception(
+        exception,
+        client_options=sentry_sdk.get_client().options,
+        mechanism={"type": "litestar", "handled": False},
+    )
+    sentry_sdk.capture_event(enrich_sentry_event_from_litestar_scope(event, scope), hint=hint)
+
+
+def capture_litestar_exception_after_handling(exception: Exception, scope: "Scope") -> None:
+    """Report an exception once its response status is known, or now if no capture middleware will see it.
+
+    Litestar calls ``after_exception`` hooks before the exception handler builds the response, so inside
+    ``LitestarSentryCaptureMiddleware`` the exception waits for the status the handler chose. Outside it
+    (routing errors, middleware placed before it) only an ``HTTPException`` carries a status to go by.
+    """
+    pending: typing.Final = typing.cast("dict[str, typing.Any]", scope).get(_SENTRY_PENDING_EXCEPTION_KEY)
+    if pending is not None:
+        pending.exception = exception
+        return
+    if isinstance(exception, HTTPException) and exception.status_code not in _SENTRY_FAILED_REQUEST_STATUS_CODES:
+        return
+    _capture_litestar_exception(exception, scope)
+
+
+if import_checker.is_litestar_installed and import_checker.is_sentry_installed:
+
+    class LitestarSentryCaptureMiddleware(ASGIMiddleware):
+        scopes = (ScopeType.HTTP,)
+
+        async def handle(
+            self,
+            scope: "Scope",
+            receive: "Receive",
+            send: "Send",
+            next_app: "ASGIApp",
+        ) -> None:
+            pending: typing.Final = _PendingSentryException()
+            mutable_scope: typing.Final = typing.cast("dict[str, typing.Any]", scope)
+            mutable_scope[_SENTRY_PENDING_EXCEPTION_KEY] = pending
+
+            async def send_and_capture(message: "Message") -> None:
+                if message["type"] == "http.response.start":
+                    exception, pending.exception = pending.exception, None
+                    if exception is not None and message["status"] in _SENTRY_FAILED_REQUEST_STATUS_CODES:
+                        _capture_litestar_exception(exception, scope)
+                await send(message)
+
+            with (
+                sentry_sdk.isolation_scope() as sentry_scope,
+                track_sentry_session(sentry_scope, session_mode="request"),
+            ):
+                sentry_scope.clear_breadcrumbs()
+                sentry_scope.generate_propagation_context(
+                    {
+                        name.decode("latin-1"): value.decode("latin-1")
+                        for name, value in scope["headers"]
+                        if name in _SENTRY_TRACE_HEADERS
+                    }
+                )
+                sentry_scope.add_event_processor(lambda event, _: enrich_sentry_event_from_litestar_scope(event, scope))
+                try:
+                    await next_app(scope, receive, send_and_capture)
+                finally:
+                    del mutable_scope[_SENTRY_PENDING_EXCEPTION_KEY]
+                    if pending.exception is not None:
+                        _capture_litestar_exception(pending.exception, scope)
+
+
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class LitestarConfig(
     CorsConfig,
@@ -128,15 +257,30 @@ class LitestarConfig(
     prometheus_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     # Bounds path-label cardinality (Litestar defaults False -> raw URLs leak memory). See litestar#4891.
     prometheus_group_path: bool = True
+    sentry_lean_error_capture: bool = False
     swagger_extra_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
 
     def __post_init__(self) -> None:
         # @dataclass(slots=True) replaces the class object, breaking bare super().
         super(LitestarConfig, self).__post_init__()
+        if self.sentry_lean_error_capture:
+            self._warn_about_lean_sentry_capture()
         if self.litestar_logging_middleware_config is not None and not self.litestar_logging_middleware_enabled:
             warn_at_caller(
                 "litestar_logging_middleware_config is ignored while litestar_logging_middleware_enabled is False; "
                 "set litestar_logging_middleware_enabled=True to turn access logging on."
+            )
+
+    def _warn_about_lean_sentry_capture(self) -> None:
+        if self.sentry_traces_sample_rate is not None:
+            warn_at_caller(
+                "sentry_lean_error_capture starts no transaction per request, so sentry_traces_sample_rate "
+                "only samples transactions your code starts itself."
+            )
+        if any(integration.identifier == "litestar" for integration in self.sentry_integrations):
+            warn_at_caller(
+                "sentry_lean_error_capture disables Sentry's LitestarIntegration, so the one in "
+                "sentry_integrations is dropped."
             )
 
 
@@ -277,6 +421,33 @@ class LitestarPrometheusInstrument(PrometheusInstrument[LitestarConfig]):
         config.application_config.middleware.append(litestar_prometheus_config.middleware)
 
 
+@dataclasses.dataclass(kw_only=True, slots=True)
+class LitestarSentryInstrument(SentryInstrument[LitestarConfig]):
+    def _build_init_params(self) -> dict[str, typing.Any]:
+        init_params: typing.Final = super(LitestarSentryInstrument, self)._build_init_params()
+        if self.bootstrap_config.sentry_lean_error_capture and import_checker.is_sentry_litestar_integration_installed:
+            init_params["disabled_integrations"] = [*init_params.get("disabled_integrations", []), LitestarIntegration]
+        return init_params
+
+    def bootstrap(self) -> None:
+        super(LitestarSentryInstrument, self).bootstrap()
+        if not self.bootstrap_config.sentry_lean_error_capture:
+            return
+        if (
+            import_checker.is_sentry_litestar_integration_installed
+            and sentry_sdk.get_client().get_integration(LitestarIntegration) is not None
+        ):
+            warn_at_caller(
+                "Sentry's LitestarIntegration was installed by an earlier sentry_sdk.init in this process and "
+                "sentry_lean_error_capture cannot disable it, so request errors may be reported twice."
+            )
+        # Litestar logs the exceptions it handles; LitestarIntegration ignores this logger for the same reason.
+        ignore_logger("litestar")
+        application_config: typing.Final = self.bootstrap_config.application_config
+        application_config.middleware.insert(0, LitestarSentryCaptureMiddleware())
+        application_config.after_exception.append(capture_litestar_exception_after_handling)
+
+
 @dataclasses.dataclass(kw_only=True)
 class LitestarSwaggerInstrument(SwaggerInstrument[LitestarConfig]):
     not_configured_reason = "swagger_path is empty or not valid"
@@ -320,7 +491,7 @@ class LitestarBootstrapper(BaseBootstrapper["litestar.Litestar"]):
         LitestarCorsInstrument,
         LitestarOpenTelemetryInstrument,
         PyroscopeInstrument,
-        SentryInstrument,
+        LitestarSentryInstrument,
         LitestarHealthChecksInstrument,
         LitestarLoggingInstrument,
         LitestarPrometheusInstrument,

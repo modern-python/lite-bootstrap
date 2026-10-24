@@ -36,6 +36,11 @@ is_litestar_opentelemetry_installed = (
     and _safe_find_spec("opentelemetry.instrumentation.asgi")
     and _safe_find_spec("litestar.plugins.opentelemetry")
 )
+# sentry-sdk added its Litestar integration in 2.13, after `disabled_integrations` (2.11), so this
+# also tells whether the option that disables the integration exists.
+is_sentry_litestar_integration_installed = (
+    is_sentry_installed and is_litestar_installed and _safe_find_spec("sentry_sdk.integrations.litestar")
+)
 is_otlp_grpc_exporter_installed = _safe_find_spec("opentelemetry.exporter.otlp.proto.grpc.trace_exporter")
 is_otlp_http_exporter_installed = _safe_find_spec("opentelemetry.exporter.otlp.proto.http.trace_exporter")
 is_pyroscope_installed = find_spec("pyroscope") is not None

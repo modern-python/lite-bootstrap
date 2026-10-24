@@ -119,6 +119,52 @@ LitestarConfig(
 )
 ```
 
+## Sentry
+
+By default, request errors reach Sentry through sentry-sdk's own `LitestarIntegration`. Even with
+`sentry_traces_sample_rate` unset, it builds a transaction and a span per middleware for every request
+and then discards them, and that is most of what Sentry costs per request
+([getsentry/sentry-python#7400](https://github.com/getsentry/sentry-python/issues/7400)).
+
+`sentry_lean_error_capture=True` replaces it with a smaller error path:
+
+```python
+LitestarConfig(
+    service_name="microservice",
+    sentry_dsn="https://testdsn@localhost/1",
+    sentry_lean_error_capture=True,
+)
+```
+
+lite-bootstrap then passes `LitestarIntegration` in `disabled_integrations` and adds a middleware and an
+`after_exception` hook of its own. The middleware gives each request its own Sentry scope and
+release-health session, continues an incoming `sentry-trace` header, and attaches the method, URL, query
+string and headers to every event sent during the request. Without `send_default_pii`, it masks the same
+headers sentry-sdk masks. The hook reports an exception only when its response is a 5xx, so an exception
+that your `exception_handlers` answer with a 404 is not reported. `LitestarIntegration` reports every
+exception that is not an `HTTPException` below 500. Sentry's other default integrations stay on.
+
+You lose Sentry performance monitoring for requests, because no transaction is started, and the user
+details `LitestarIntegration` adds when `send_default_pii` is on.
+
+Measured on [litestar-sqlalchemy-template](https://github.com/modern-python/litestar-sqlalchemy-template)
+with one Granian worker on two CPUs and two read endpoints, against the same app without Sentry:
+
+| Sentry setup | added per request |
+|---|---:|
+| `LitestarIntegration` (default) | 320-345 µs |
+| `sentry_lean_error_capture=True` | about 157 µs |
+| the same with `sentry_default_integrations=False` | 32-83 µs |
+
+Most of what lean capture still costs comes from Sentry's other default integrations, such as the
+SQLAlchemy and asyncpg breadcrumbs. `sentry_default_integrations=False` also drops the
+`LoggingIntegration` lite-bootstrap would otherwise add, so logged errors stop becoming events. Supply
+your own `LoggingIntegration` in `sentry_integrations` if you want them.
+
+sentry-sdk records installed integrations for the whole process, and `disabled_integrations` cannot
+remove one that an earlier `sentry_sdk.init` installed. If that happened, lite-bootstrap warns that
+errors may be reported twice.
+
 ## Request body size limit
 
 `LitestarBootstrapper` builds its app with `Litestar.from_config()`, which,
