@@ -5,6 +5,9 @@ most people expect. This page is the short version of
 [the benchmark write-up](https://github.com/modern-python/lite-bootstrap/blob/main/benchmarks/README.md),
 which has the method, the full ablations and the commands to reproduce everything here.
 
+The first sections measure FastAPI on macOS. From [FastAPI on Linux](#fastapi-on-linux) on, the
+numbers come from a 2-CPU Linux container on the same machine and cover all four frameworks.
+
 ## The short answer
 
 Measured on a trivial `async def` endpoint returning `{"ok": True}`, uvicorn with a single worker,
@@ -77,6 +80,63 @@ The row that needs a decision is `http_methods_to_capture=()`: the error event g
 `trace_id` and no `parent_span_id`, so errors stop correlating across services in Sentry. Take it
 when OpenTelemetry owns distributed tracing and Sentry is only an error sink, which is the case in
 any service running `OpenTelemetryInstrument`. Do not take it otherwise.
+
+## FastAPI on Linux
+
+The same instruments one at a time, in-process, in the Linux container:
+
+--8<-- "benchmarks/README.md:fastapilinux"
+
+The ordering matches macOS: OpenTelemetry first, then Sentry, then Prometheus, with logging free
+until something logs.
+
+## Litestar
+
+In-process, one setting at a time:
+
+--8<-- "benchmarks/README.md:litestarinprocess"
+
+The same app on Granian, over real sockets:
+
+--8<-- "benchmarks/README.md:litestargranian"
+
+**Sentry costs more on Litestar than on FastAPI**, and all of it is `LitestarIntegration`: turning
+off auto-enabling integrations removes the cost and, with it, request error capture. The access log
+([`litestar_logging_middleware_enabled`](../integrations/litestar.md#logging)) is the other large opt-in
+item, at about 70 µs per request in-process.
+
+## FastStream
+
+Per consumed message:
+
+--8<-- "benchmarks/README.md:faststreamconsume"
+
+Per publish:
+
+--8<-- "benchmarks/README.md:faststreampublish"
+
+At the default `faststream_log_level=WARNING` the happy path logs nothing, which is why lite-bootstrap's
+logging is cheaper than FastStream's own. Lowering it to INFO costs about 35 µs per message.
+
+## FastMCP
+
+Per tool call, through the stateless JSON HTTP app:
+
+--8<-- "benchmarks/README.md:fastmcp"
+
+The baseline is large, so the instruments are a smaller share here than on the HTTP frameworks.
+OpenTelemetry is still the largest item.
+
+## Unsampled OpenTelemetry is not free
+
+--8<-- "benchmarks/README.md:otelfloor"
+
+If you sample down to save CPU, this floor is what you keep paying. Excluding the `receive` and `send`
+spans lowers it: Litestar's 1% row with them excluded sits below its 0% row with them kept.
+
+## Reproducing on macOS
+
+--8<-- "benchmarks/README.md:macos"
 
 ## The caveat that matters most
 

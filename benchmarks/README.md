@@ -1,4 +1,7 @@
-# What the observability stack costs a lite-bootstrap FastAPI service
+# What the observability stack costs a lite-bootstrap service
+
+Sections 1 to 7 measure FastAPI on macOS. Section 4d and section 8 add Linux measurements for
+FastAPI, Litestar, FastStream and FastMCP, and section 8h explains why a Mac misranks some of them.
 
 ## 1. The short answer
 
@@ -91,6 +94,9 @@ Costs are roughly additive, with the combination 17% dearer than the parts
 twice Sentry**, which was not the expected ordering, and structlog's instrument costs nothing
 until you actually log.
 
+A re-run on 2026-10-24 at 705d8a3, same machine and command, gave bare 16.4 µs, Prometheus +17.3,
+Sentry +57.1, OpenTelemetry +122.4 and all four +228.2. The table holds.
+
 ### 4a. OpenTelemetry: the two knobs that pay
 
 | scenario | RPS | µs/req | gain |
@@ -180,6 +186,43 @@ This hits lite-bootstrap directly because `LoggingInstrument` wires structlog th
 `structlog.stdlib.BoundLogger`, so every structlog call goes through the patched
 `logging.Logger.callHandlers` and pays both handlers.
 
+### 4d. FastAPI on Linux, in-process
+
+The same suite shape on Linux (section 8a has the method), from `frameworks/fastapi_suite.py`.
+Each row is one setting on top of everything off, compared with that baseline.
+
+<!-- --8<-- [start:fastapilinux] -->
+Linux, a 2-CPU container on the same Apple M2 under OrbStack, CPython 3.14.9, fastapi 0.141.1,
+starlette 1.6.0, sentry-sdk 2.67.1, opentelemetry-sdk 1.44.0,
+opentelemetry-instrumentation-fastapi 0.65b0, prometheus-fastapi-instrumentator 8.1.0,
+structlog 26.1.0. In-process, baseline 17.7 µs per request. The handler does nothing, so read the µs column: it is what a real service adds to its own work.
+
+| scenario | +µs/req | note |
+|---|---:|---|
+| logging configured, no records | +0.1 | |
+| `fastapi_logging_middleware_enabled=True` | +18.3 | one access-log record per request, about 10 µs of it the record |
+| Prometheus | +19.1 | |
+| OpenTelemetry, 100% sampling | +147.9 | |
+| OpenTelemetry, `opentelemetry_exclude_spans=["receive", "send"]` | +101.6 | -46.3 |
+| OpenTelemetry, 10% ratio sampler | +79.0 | |
+| 10% and exclude receive/send | +54.0 | |
+| OpenTelemetry, 0% ratio sampler | +66.6 | the unsampled floor |
+| OTel 0% + OTel HTTP metrics (`opentelemetry_metrics_endpoint`) | +78.9 | +12.3 over OTel 0% |
+| OTel 0% + Prometheus | +91.5 | +24.9 over OTel 0% |
+| OTel 0% + OTel HTTP metrics + Prometheus | +104.9 | +38.3 over OTel 0% |
+| Sentry, lite-bootstrap defaults (tracing off) | +59.0 to +59.7 | two runs |
+| Sentry, `sentry_auto_session_tracking=False` | +51.8 | |
+| Sentry, `auto_enabling_integrations=False` | +0.1 | the Starlette and FastAPI integrations are auto-enabling, so nothing captures request errors |
+| health check `/health/` | +22.6 | noisy, 16% spread |
+| health check with OpenTelemetry, spans on (default) / off | +162.3 / +28.9 | noisy, 32 to 50% spread |
+| CORS, request with a matching Origin | +3.8 | |
+| full: OTel + Prometheus + logging + Sentry + health, defaults | +259.6 | |
+<!-- --8<-- [end:fastapilinux] -->
+
+FastAPI real-server runs under uvicorn in the container were unstable (bare repeat medians of 8235
+and 6341 RPS, over 100% spread on the full stack), so the Linux real-server numbers below are
+Litestar on Granian only.
+
 ## 5. What each saving actually costs you
 
 Measured by capturing a real error event with an incoming `sentry-trace` header and inspecting the
@@ -260,7 +303,260 @@ sentry-python:
 Related existing reports: [#2303](https://github.com/getsentry/sentry-python/issues/2303),
 [#668](https://github.com/getsentry/sentry-python/issues/668).
 
-## 8. Reproducing
+## 8. Litestar, FastStream and FastMCP on Linux
+
+### 8a. Environment and method
+
+Linux runs used an OrbStack container (Debian 13, kernel 7.2.12) limited to 2 CPUs with `--cpus 2`,
+on the same Apple M2 as the macOS runs, with CPython 3.14.9. lite-bootstrap was at 705d8a3; `lite_bootstrap/` is
+unchanged from there to 33b503e. Dependency versions: litestar 2.24.0, fastapi 0.141.1,
+starlette 1.6.0, faststream 0.7.4, fastmcp 3.4.6, mcp 1.29.0, sentry-sdk 2.67.1,
+opentelemetry-sdk 1.44.0, opentelemetry-instrumentation-asgi and -fastapi 0.65b0,
+prometheus-client 0.26.0, prometheus-fastapi-instrumentator 8.1.0, structlog 26.1.0, orjson 3.11.9,
+redis 8.1.0, granian 2.8.5, uvicorn 0.52.1.
+
+The harness lives in `frameworks/`, one `<suite>_suite.py` per framework plus `logging_suite.py`.
+It keeps the rules of section 2: one process per scenario, Sentry into the null transport from
+`driver.py`, OTLP into `stub_otlp.py` in a separate process.
+
+- In-process (`frameworks/bench.py`, which runs `frameworks/one.py` per scenario): the ASGI app is
+  awaited directly with a fresh scope per request, after a real lifespan startup. 4000 operations per
+  round, 5 rounds, 500 warm-up; the figure is the median round, and the scenario list is run 2 to 4
+  times interleaved (`--repeat`), reporting the median of the repeat medians.
+- Real server (`frameworks/run_http.py`): Granian, 1 worker, 1 runtime thread, the asyncio loop
+  (uvloop was not installed), access log off, loaded with `ab -k -c 16 -n 20000`, 3 rounds after a
+  3000-request warm-up, 2 repeats. ab runs in the same 2-CPU container as the server.
+- FastStream: a real `RedisBroker` started against Redis 8, then the subscriber's own
+  `process_message` on a prebuilt raw pub/sub message, in a loop. That is the call the consume loop
+  makes for every message, so parsing, decoding, the middleware chain, the handler and FastStream's
+  per-message log calls all run, and Redis is not touched inside the loop. `TestRedisBroker` is not
+  used because it replaces the broker's logger with a `MagicMock`, which hides those log calls. The
+  publish rows are `broker.publish` to Redis, one round trip each.
+- FastMCP: a JSON-RPC `tools/call` POSTed in-process to
+  `http_app(stateless_http=True, json_response=True)`. Stateless JSON mode makes one tool call one
+  HTTP request with no session handshake. The tool adds two ints.
+
+Other work shared the machine for part of the session. Treat differences under
+about 3 µs in-process, and under about 10 µs on the real server, as noise; FastMCP is noisier still
+(section 8e).
+
+Every endpoint, message handler and tool does nothing. Read the µs columns: the absolute cost is
+what a real service pays, and the percentages are large only because the handler is empty.
+
+### 8b. Litestar, in-process
+
+<!-- --8<-- [start:litestarinprocess] -->
+Linux, a 2-CPU container on the same Apple M2 under OrbStack, CPython 3.14.9, litestar 2.24.0,
+sentry-sdk 2.67.1, opentelemetry-sdk 1.44.0, opentelemetry-instrumentation-asgi 0.65b0,
+prometheus-client 0.26.0, structlog 26.1.0. In-process, baseline 12.1 µs per request, everything off. The handler does nothing, so read the µs column: it is what a real service adds to its own work.
+
+| scenario | +µs/req | note |
+|---|---:|---|
+| logging configured, no records | -0.1 | free until something logs |
+| logging, 3 structlog records in the handler | +33.8 | 11.3 µs per record |
+| `litestar_logging_middleware_enabled=True` | +70.7 | 2 records per request, each written twice; a second run gave +74.4 |
+| Prometheus | +11.6 | |
+| Prometheus, `prometheus_group_path=False` | +11.8 | |
+| OpenTelemetry, 100% sampling | +145.4 | a second run gave +131.8 |
+| OpenTelemetry, `opentelemetry_exclude_spans=["receive", "send"]` | +92.4 | a second run gave +90.8 |
+| OpenTelemetry, 10% ratio sampler | +66.8 | |
+| 10% and exclude receive/send | +46.7 | |
+| 1% and exclude receive/send | +39.2 | |
+| OpenTelemetry, 0% ratio sampler | +56.8 | a second run gave +60.7 |
+| OTel 100% + OTel HTTP metrics (`opentelemetry_metrics_endpoint`) | +157.0 | +11.6 over OTel |
+| OTel 0% + OTel HTTP metrics | +73.6 | +12.9 over OTel 0%, second run |
+| OTel 0% + Prometheus | +76.5 | +15.8 over OTel 0%, second run |
+| OTel 0% + OTel HTTP metrics + Prometheus | +90.2 | +29.5 over OTel 0%, second run |
+| Sentry, lite-bootstrap defaults (tracing off) | +70.9 | LitestarIntegration |
+| Sentry, `sentry_auto_session_tracking=False` | +63.7 | sessions cost 7.2 |
+| Sentry, `auto_enabling_integrations=False` | -0.1 | LitestarIntegration is auto-enabling, so nothing captures request errors |
+| Sentry, `sentry_default_integrations=False` | -0.2 | same reason |
+| Sentry, LitestarIntegration disabled | -0.2 | lower bound: no Sentry work per request |
+| CORS, request without Origin | +2.4 | |
+| CORS, simple request with a matching Origin | +7.2 | against bare with the same header |
+| Swagger (`/docs`), online or offline | -0.2 | registers routes only |
+| health check `/health/`, against an equivalent `/ping` handler | +7.1 | `asyncio.gather` of one coroutine |
+| health check with OpenTelemetry, spans on (default) | +134.0 | against health without OpenTelemetry |
+| health check with OpenTelemetry, `opentelemetry_generate_health_check_spans=False` | +9.2 | |
+| full: OTel + Prometheus + logging + Sentry + health, defaults | +297.7 | |
+| full, 3 structlog records per request | +377.8 | |
+<!-- --8<-- [end:litestarinprocess] -->
+
+The "second run" rows come from a noisier re-check (spread between rounds up to 67% per row). The
+first run's OTel 0% row is +56.8, the re-check's +60.7, and the deltas in the notes are against the
+re-check.
+lite-bootstrap's Litestar defaults with no endpoint configured (Prometheus, health, logging and
+Swagger on) cost +11.7 µs on `/ping`, all of it Prometheus. The access-log middleware writes each record
+twice because Litestar's own stdlib logging config is applied at startup next to lite-bootstrap's.
+
+### 8c. Litestar, real server
+
+<!-- --8<-- [start:litestargranian] -->
+Linux, a 2-CPU container on the same Apple M2 under OrbStack, CPython 3.14.9, litestar 2.24.0,
+granian 2.8.5 (1 worker, 1 runtime thread, asyncio loop), `ab -k -c 16 -n 20000` in the same
+container, sentry-sdk 2.67.1, opentelemetry-sdk 1.44.0, opentelemetry-instrumentation-asgi 0.65b0,
+prometheus-client 0.26.0, structlog 26.1.0. Baseline 33350 RPS, 30.0 µs per request. The handler does nothing, so read the µs column: it is what a real service adds to its own work.
+
+| scenario | RPS | +µs/req |
+|---|---:|---:|
+| bare | 33350 | 0 |
+| OpenTelemetry, 100% | 5028 | +168.9 |
+| OpenTelemetry, 100%, exclude receive/send | 7537 | +102.7 |
+| OpenTelemetry, 10% | 8815 | +83.5 |
+| OpenTelemetry, 10%, exclude receive/send | 11258 | +58.8 |
+| Prometheus | 18823 | +23.1 |
+| Litestar access log on | 6879 | +115.4 |
+| Sentry, defaults | 8119 | +93.2 |
+| Sentry, sessions off | 9184 | +78.9 |
+| CORS (ab sends no Origin) | 30942 | +2.3 |
+| health check | 28337 | +5.3 |
+| health check with OpenTelemetry spans | 4600 | +187.4 |
+| full, defaults | 2181 | +428.6 |
+<!-- --8<-- [end:litestargranian] -->
+
+Spread between rounds ran up to 20% on this table (access log 16%, CORS 20%), so differences under
+about 10 µs are noise.
+
+### 8d. FastStream
+
+<!-- --8<-- [start:faststreamconsume] -->
+Linux, a 2-CPU container on the same Apple M2 under OrbStack, CPython 3.14.9, faststream 0.7.4 on a
+`RedisBroker` against Redis 8 (redis 8.1.0), sentry-sdk 2.67.1, opentelemetry-sdk 1.44.0,
+prometheus-client 0.26.0, structlog 26.1.0. Per consumed message, baseline 37.4 µs with
+lite-bootstrap logging on (its default) and nothing else; every row except the first keeps logging on. The handler does nothing, so read the µs column: it is what a real service adds to its own work.
+
+| scenario | +µs/msg | note |
+|---|---:|---|
+| lite-bootstrap logging off | +18.9 | FastStream's default logger writes "Received" and "Processed" at INFO, 2 records per message |
+| `faststream_log_level=logging.INFO` | +35.2 | the same 2 records through lite-bootstrap, each written twice |
+| 3 structlog records in the handler | +42.2 | 14 per record |
+| Prometheus middleware | +19.5 | |
+| OpenTelemetry middleware, 100% | +60.0 | |
+| OpenTelemetry, 10% | +40.6 | |
+| OpenTelemetry, 0% | +25.4 | the unsampled floor |
+| OTel 100% + OTel metrics | +66.4 | +6.4 |
+| OTel 0% + OTel metrics | +30.6 | +5.2 |
+| OTel 0% + Prometheus | +44.4 | +19.0 |
+| OTel 100% + Prometheus | +80.4 | +20.4 |
+| OTel 100% + OTel metrics + Prometheus | +86.7 | +26.7 over OTel |
+| Sentry | -0.1 | no FastStream integration, and FastStream's log lines are filtered at WARNING |
+| Sentry with lite-bootstrap logging off | +18.0 over logging off | breadcrumbs for FastStream's 2 INFO records |
+| Sentry with `faststream_log_level=logging.INFO` | +17.6 over the INFO row | 8.8 per record |
+| Sentry with 3 handler records | +25.2 over the 3-record row | 8.4 per record |
+| Sentry, `auto_enabling_integrations=False` | -0.5 | |
+| full: OTel + Prometheus + logging + Sentry | +78.9 | |
+<!-- --8<-- [end:faststreamconsume] -->
+
+FastStream's own `StreamHandler(stderr)` stays on the `faststream` logger next to lite-bootstrap's
+handler, so a service that lowers `faststream_log_level` gets every FastStream line twice and pays
+for both. At the default level of WARNING the happy path logs nothing.
+
+<!-- --8<-- [start:faststreampublish] -->
+Same environment, per `broker.publish` to Redis (one round trip each), baseline 42.3 µs with
+lite-bootstrap logging on. The message triggers no work, so read the µs column: it is what a real service adds to its own work.
+
+| scenario | +µs/publish | note |
+|---|---:|---|
+| Prometheus | +11.6 | |
+| OpenTelemetry, 100% | +73.0 | producer span plus context injection |
+| OpenTelemetry, 10% | +30.6 | |
+| Sentry | +28.8 | RedisIntegration (auto-enabling) on the redis client |
+| Sentry, `auto_enabling_integrations=False` | +0.0 | |
+<!-- --8<-- [end:faststreampublish] -->
+
+### 8e. FastMCP
+
+<!-- --8<-- [start:fastmcp] -->
+Linux, a 2-CPU container on the same Apple M2 under OrbStack, CPython 3.14.9, fastmcp 3.4.6,
+mcp 1.29.0, starlette 1.6.0, sentry-sdk 2.67.1, opentelemetry-sdk 1.44.0,
+opentelemetry-instrumentation-asgi 0.65b0, prometheus-client 0.26.0,
+prometheus-fastapi-instrumentator 8.1.0, structlog 26.1.0. Per tool call, baseline 517 µs, most of
+it FastMCP and the MCP SDK. Noise on this suite is about ±30 µs even with 3 repeats, so rows under
+30 µs are unresolved. The tool does nothing, so read the µs column: it is what a real service adds to its own work.
+
+| scenario | +µs/call | note |
+|---|---:|---|
+| logging configured | +15 | noise |
+| `fastmcp_logging_middleware_enabled=True` | +51 | one record per MCP message |
+| Prometheus (HTTP instrumentator and tool-call middleware) | +35 | the split between the two is within noise |
+| OpenTelemetry, 100% | +272 | 3 ASGI spans plus FastMCP's own server span |
+| OpenTelemetry, 100%, FastMCP's own spans replaced by a no-op tracer | +226 | FastMCP's spans cost 46 |
+| OpenTelemetry, 10% | +120 | |
+| Sentry, defaults | +100 | the Starlette integration |
+| Sentry, MCPIntegration disabled | +99 | MCPIntegration costs nothing measurable with tracing off |
+| Sentry, `auto_enabling_integrations=False` | +3 | no Starlette integration, so no request capture |
+| full: OTel + Prometheus + logging + Sentry + health | +521 | |
+<!-- --8<-- [end:fastmcp] -->
+
+The no-op tracer row patches FastMCP to attribute the cost; it is not a configuration.
+
+### 8f. Logging, per call
+
+The per-call chain is the same on every framework: structlog's stdlib `BoundLogger`, lite-bootstrap's
+processors, `JSONRenderer` with orjson, stdlib `Logger.info`, `MemoryHandler(capacity=10)` and a
+`StreamHandler`. What differs per framework is who logs per request: FastAPI's opt-in access log (1
+record), Litestar's opt-in `LoggingMiddleware` (2 records), FastMCP's opt-in logging middleware (1
+record per MCP message), FastStream's own "Received" and "Processed" (filtered at the default
+`faststream_log_level=WARNING`).
+
+Linux, a 2-CPU container on the same Apple M2 under OrbStack, CPython 3.14.9, structlog 26.1.0,
+orjson 3.11.9, sentry-sdk 2.67.1, opentelemetry-sdk 1.44.0. Output to a real `/dev/null` file,
+50000 calls per round, loop overhead (0.06 µs) subtracted.
+
+| call | µs/call |
+|---|---:|
+| `log.info("did a thing", a=1)` through lite-bootstrap's chain | 9.5 |
+| same with 5 keyword values | 10.4 |
+| `log.debug(...)` at INFO, filtered | 1.1 |
+| info, JSON through stdlib `json` (the fallback without orjson) | 11.5 |
+| info, `logging_buffer_capacity=1` | 10.5 |
+| info inside a recording OpenTelemetry span | 10.7 |
+| info with Sentry's LoggingIntegration, breadcrumb level INFO (default) | 15.7 |
+| info with Sentry, `sentry_logging_breadcrumb_level=None` | 10.5 |
+| debug filtered, with Sentry | 1.1 |
+| stdlib `logging.getLogger("lib").info(...)` through the root handler | 13.2 |
+| same with Sentry | 19.7 |
+| stdlib debug, filtered | 0.08 |
+| structlog's own path: `make_filtering_bound_logger`, `BytesLoggerFactory`, orjson bytes (not lite-bootstrap) | 2.6 |
+| same, filtered | 0.2 |
+
+The log call does nothing else, so these are per-record costs a service pays on top of its own work.
+Sentry's breadcrumb handler is the largest optional item at 6.2 µs per INFO record. The last two rows
+are a reference point: the stdlib bridge is most of the gap, and it is also what lets Sentry see
+structlog records.
+
+### 8g. Unsampled OpenTelemetry is not free
+
+<!-- --8<-- [start:otelfloor] -->
+Lowering the sampling ratio does not take OpenTelemetry's cost to zero. Linux, in-process, with a
+`ParentBased(TraceIdRatioBased(...))` sampler:
+
+| framework | setting | +µs per request or message |
+|---|---|---:|
+| Litestar | 0% ratio, receive/send spans kept | +56.8 and +60.7 (two runs) |
+| FastAPI | 0% ratio, receive/send spans kept | +66.6 |
+| Litestar | 1% ratio, `opentelemetry_exclude_spans=["receive", "send"]` | +39.2 |
+| FastStream | 0% ratio | +25.4 per message |
+
+Against 100% sampling (Litestar +145.4, FastAPI +147.9, FastStream +60.0), sampling down buys the
+difference and no more. lite-bootstrap leaves the sampler to the OpenTelemetry SDK
+([ADR-0008](https://github.com/modern-python/lite-bootstrap/blob/main/docs/adr/0008-otel-sampling-is-a-sampler-object.md)), whose default records every root
+trace unless `OTEL_TRACES_SAMPLER` says otherwise.
+<!-- --8<-- [end:otelfloor] -->
+
+### 8h. Reproducing on macOS
+
+<!-- --8<-- [start:macos] -->
+macOS inflates anything that yields to the event loop. One asyncio loop iteration costs about 12 µs
+there, because `KqueueSelector.select(0)` is a 12.2 µs syscall, against 0.31 µs for
+`EpollSelector.select(0)` in the Linux container. `asyncio.gather` on one coroutine costs 42 µs on
+macOS and 5.0 µs on Linux. The health check pays for one `gather` per probe, and FastMCP's anyio task
+groups also yield to the loop on every tool call: FastMCP's baseline is 670 µs per tool call on macOS against
+517 µs on Linux. A Mac misranks those two items; run `frameworks/loop_cost.py` to see the numbers on
+the machine at hand.
+<!-- --8<-- [end:macos] -->
+
+## 9. Reproducing
 
 Everything runs from this directory against an interpreter that has `lite_bootstrap`, `fastapi`,
 `uvicorn`, `structlog`, `sentry-sdk`, the OpenTelemetry SDK and
@@ -307,3 +603,47 @@ from this directory.
 Numbers are machine-specific and move a few percent run to run; the ratios and the ordering are
 the durable part. Everything here was measured in one session on one idle machine, which is the
 only way the columns are comparable to each other.
+
+### The framework suites (sections 4d and 8)
+
+These run from `frameworks/`. Each suite is a `<suite>_suite.py` whose `SCENARIOS` keys are the
+scenario names, and the first scenario in a list is the baseline the rest are compared against.
+`frameworks/common.py` loads `driver.py` from this directory by path, and the runners start
+`stub_otlp.py` themselves.
+
+The Linux numbers came from a container rather than the Mac, for the reason in section 8h. To build
+an equivalent, start a Debian container with `--cpus 2`, install Python 3.14 and `ab` (Debian's
+`apache2-utils`), copy the repository in and run `uv sync --all-extras` there. Granian is not a
+project dependency, so add it to that environment with `uv pip install granian`; uvicorn already
+comes in with the extras, through fastmcp. The FastStream suite needs a Redis 8 the container can reach, for example
+a `redis:8` container on the same Docker network, and reads its address from `REDIS_URL` (default
+`redis://127.0.0.1:6379`).
+
+```bash
+cd benchmarks/frameworks
+
+# FastAPI and Litestar, in-process (sections 4d and 8b)
+../../.venv/bin/python bench.py fastapi bare,log_mw,prom,otel,otel_excl,otel_0,sentry,health,full --repeat 2
+../../.venv/bin/python bench.py litestar bare,log_log3,log_mw,prom,otel,otel_excl,otel_1_excl,otel_0,sentry,full --repeat 2
+../../.venv/bin/python bench.py litestar health_ping,health,health_otel,health_otel_nospan --repeat 2
+
+# Litestar on Granian, over real sockets (section 8c); needs granian in the environment and `ab` on PATH
+../../.venv/bin/python run_http.py litestar bare,otel,otel_excl,prom,log_mw,sentry,health,full --repeat 2
+
+# FastStream per consumed message, then per publish (section 8d)
+REDIS_URL=redis://redis:6379 ../../.venv/bin/python bench.py faststream log,bare,prom,otel,otel_0,sentry,full --repeat 3
+REDIS_URL=redis://redis:6379 ../../.venv/bin/python bench.py faststream log@pub,prom@pub,otel@pub,sentry@pub --repeat 3
+
+# FastMCP per tool call (section 8e): fewer ops, each call is about half a millisecond
+../../.venv/bin/python bench.py fastmcp bare,log_mw,prom,otel,otel_10,sentry,full --repeat 3 --ops 1500 --warmup 300
+
+# cost per log call (section 8f); subtract the noop row
+../../.venv/bin/python bench.py logging noop,info,debug_filtered,info_sentry,stdlib_info,native_bytes --repeat 2 --ops 50000
+
+# the loop-iteration cost behind section 8h, and a cProfile of one scenario
+../../.venv/bin/python loop_cost.py
+../../.venv/bin/python one.py --suite litestar --scenario full --ops 3000 --profile
+```
+
+`bench.py` prints the median and the minimum of the repeat medians and the worst spread between
+rounds; rerun a scenario whose spread is above about 20%.
