@@ -239,6 +239,10 @@ lint = [
 requires = ["uv_build>=0.11,<1.0"]
 build-backend = "uv_build"
 
+[tool.uv]
+# multidict 7.2.0 rejects the raw header list Litestar's Headers passes to CIMultiDictProxy
+constraint-dependencies = ["multidict<7.2"]
+
 [tool.uv.build-backend]
 module-name = "lite_bootstrap"
 module-root = ""
