@@ -125,7 +125,8 @@ jobs:
 
   floors:
     # Every other job resolves newest, so a declared floor is a claim nothing checks. This one
-    # pins each direct dependency to the floor pyproject.toml declares and bootstraps against it.
+    # installs the declared floors exactly on the floor Python, and the lowest versions with a
+    # wheel on every other entry (CI10), then bootstraps against them.
     # Per framework rather than all-extras at once: a floor declared in one extra pulls the shared
     # stack up for the others, so a combined resolution tests a set no user installs.
     # Runtime smoke only, by design (#236): pytest cannot run here because conftest.py hard-imports
