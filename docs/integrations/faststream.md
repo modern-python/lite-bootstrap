@@ -51,3 +51,41 @@ application = bootstrapper.bootstrap()
 ```
 
 Read more about available configuration options [here](../introduction/configuration.md).
+
+## Multiple brokers
+
+Tracing, metrics and logging cover every broker the application has when `bootstrap()` runs. Add
+brokers with `add_broker` before calling `bootstrap()`: a broker added later is not instrumented.
+
+Each FastStream middleware class handles one broker type. A single class in
+`opentelemetry_middleware_cls` or `prometheus_middleware_cls` goes on every broker of the first
+broker's type. For an application with brokers of different types, pass a mapping from broker class
+to middleware class:
+
+```python
+from faststream.kafka import KafkaBroker
+from faststream.kafka.opentelemetry import KafkaTelemetryMiddleware
+from faststream.kafka.prometheus import KafkaPrometheusMiddleware
+from faststream.redis import RedisBroker
+from faststream.redis.opentelemetry import RedisTelemetryMiddleware
+from faststream.redis.prometheus import RedisPrometheusMiddleware
+
+
+application = AsgiFastStream(KafkaBroker(), RedisBroker())
+bootstrapper_config = FastStreamConfig(
+    service_name="microservice",
+    opentelemetry_endpoint="otl",
+    opentelemetry_middleware_cls={
+        KafkaBroker: KafkaTelemetryMiddleware,
+        RedisBroker: RedisTelemetryMiddleware,
+    },
+    prometheus_middleware_cls={
+        KafkaBroker: KafkaPrometheusMiddleware,
+        RedisBroker: RedisPrometheusMiddleware,
+    },
+    application=application,
+)
+```
+
+A broker whose type has no middleware class is left uninstrumented, and `bootstrap()` warns with its
+type name. All brokers share one Prometheus registry; each metric's `broker` label tells them apart.
