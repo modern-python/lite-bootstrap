@@ -31,6 +31,7 @@ if import_checker.is_litestar_installed:
     from litestar import status_codes
     from litestar.config.app import AppConfig
     from litestar.config.cors import CORSConfig
+    from litestar.logging.config import LoggingConfig as LitestarStandardLoggingConfig
     from litestar.logging.config import StructLoggingConfig
     from litestar.middleware.logging import LoggingMiddlewareConfig
     from litestar.openapi import OpenAPIConfig
@@ -187,6 +188,16 @@ class LitestarLoggingInstrument(LoggingInstrument[LitestarConfig]):
             exclude=excluded_paths or None,
         )
 
+    def _build_standard_lib_logging_config(self) -> "LitestarStandardLoggingConfig":
+        """Leave stdlib output to lite-bootstrap: Litestar's default config replaces the root handler."""
+        return LitestarStandardLoggingConfig(
+            configure_root_logger=False,
+            handlers={"console": {"class": "logging.NullHandler"}, "queue_listener": {"class": "logging.NullHandler"}},
+            loggers={
+                "litestar": {"level": self.bootstrap_config.logging_log_level, "handlers": [], "propagate": False}
+            },
+        )
+
     def _configure_structlog_loggers(self) -> None:
         """Register Litestar's StructlogPlugin instead of calling ``structlog.configure`` directly."""
         self.bootstrap_config.application_config.plugins.append(
@@ -198,7 +209,7 @@ class LitestarLoggingInstrument(LoggingInstrument[LitestarConfig]):
                         wrapper_class=structlog.stdlib.BoundLogger,
                         cache_logger_on_first_use=True,
                         pretty_print_tty=False,
-                        standard_lib_logging_config=None,
+                        standard_lib_logging_config=self._build_standard_lib_logging_config(),
                     ),
                     # Litestar defaults this to True, which logs full request/response bodies.
                     enable_middleware_logging=self.bootstrap_config.litestar_logging_middleware_enabled,
