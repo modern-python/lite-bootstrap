@@ -3,6 +3,7 @@ import dataclasses
 import inspect
 import json
 import logging
+import logging.handlers
 import sys
 import typing
 import warnings
@@ -307,6 +308,31 @@ def _post_password(config: LitestarConfig) -> list[str]:
         response = client.post("/login", json={"username": "user", "password": "hunter2"})
         assert response.status_code == status_codes.HTTP_201_CREATED
     return log_lines
+
+
+def test_litestar_logging_keeps_lite_bootstrap_root_handler(litestar_config: LitestarConfig) -> None:
+    application = LitestarBootstrapper(bootstrap_config=litestar_config).bootstrap()
+    with TestClient(app=application):
+        root_handlers = logging.getLogger().handlers
+        assert not any(isinstance(handler, logging.handlers.QueueHandler) for handler in root_handlers)
+        assert any(isinstance(handler.formatter, structlog.stdlib.ProcessorFormatter) for handler in root_handlers)
+
+
+def test_litestar_access_log_has_one_handler(litestar_config: LitestarConfig) -> None:
+    @litestar.get("/ping")
+    async def _ping_handler() -> dict[str, bool]:
+        return {"ok": True}
+
+    config = dataclasses.replace(
+        litestar_config,
+        litestar_logging_middleware_enabled=True,
+        application_config=AppConfig(route_handlers=[_ping_handler]),
+    )
+    application = LitestarBootstrapper(bootstrap_config=config).bootstrap()
+    with TestClient(app=application) as client:
+        assert client.get("/ping").status_code == status_codes.HTTP_200_OK
+        litestar_handlers = logging.getLogger("litestar").handlers
+        assert [type(handler) for handler in litestar_handlers] == [logging.handlers.MemoryHandler]
 
 
 def test_litestar_access_logging_disabled_by_default(litestar_config: LitestarConfig) -> None:
