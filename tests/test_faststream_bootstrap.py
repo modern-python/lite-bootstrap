@@ -1,5 +1,7 @@
 import dataclasses
 import logging
+import logging.handlers
+import sys
 import typing
 import uuid
 import warnings
@@ -150,6 +152,26 @@ def test_faststream_logging_instrument_injects_structlog_logger(broker: RedisBro
         assert logging.getLogger("faststream").level == logging.WARNING
     finally:
         bootstrapper.teardown()
+
+
+def test_faststream_logging_replaces_faststream_stderr_handler(broker: RedisBroker) -> None:
+    faststream_logger = logging.getLogger("faststream")
+    original_handlers = faststream_logger.handlers[:]
+    bootstrapper = FastStreamBootstrapper(
+        bootstrap_config=FastStreamConfig(
+            logging_buffer_capacity=0,
+            faststream_log_level=logging.INFO,
+            application=faststream.asgi.AsgiFastStream(broker),
+        )
+    )
+    bootstrapper.bootstrap()
+    try:
+        assert not [one for one in faststream_logger.handlers if getattr(one, "stream", None) is sys.stderr]
+        assert [type(one) for one in faststream_logger.handlers].count(logging.handlers.MemoryHandler) == 1
+    finally:
+        bootstrapper.teardown()
+
+    assert faststream_logger.handlers == original_handlers
 
 
 def test_faststream_config_default_application() -> None:
