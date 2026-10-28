@@ -126,12 +126,16 @@ if import_checker.is_structlog_installed:
             config: "_MemoryLoggerFactoryConfig",
             **kwargs: typing.Any,  # noqa: ANN401
         ) -> None:
+            kwargs["ignore_frame_names"] = [*(kwargs.get("ignore_frame_names") or ()), __name__]
             super().__init__(*args, **kwargs)
             self.config = config
-            self._created_handlers: list[tuple[logging.Logger, logging.handlers.MemoryHandler]] = []
+            self._created_handlers: dict[logging.Logger, logging.handlers.MemoryHandler] = {}
+            self._leveled_loggers: set[logging.Logger] = set()
 
         def __call__(self, *args: typing.Any) -> logging.Logger:  # noqa: ANN401
             logger: typing.Final = super().__call__(*args)
+            if logger in self._created_handlers:
+                return logger
             stream_handler: typing.Final = logging.StreamHandler(stream=self.config.log_stream)
             stream_handler.setFormatter(_RenderedLineFormatter())
             handler: typing.Final = logging.handlers.MemoryHandler(
@@ -140,20 +144,25 @@ if import_checker.is_structlog_installed:
                 target=stream_handler,
             )
             logger.addHandler(handler)
-            logger.setLevel(self.config.logging_log_level)
+            if logger.level == logging.NOTSET:
+                logger.setLevel(self.config.logging_log_level)
+                self._leveled_loggers.add(logger)
             logger.propagate = False
-            self._created_handlers.append((logger, handler))
+            self._created_handlers[logger] = handler
             return logger
 
         def close_handlers(self) -> None:
-            for created_logger, handler in self._created_handlers:
+            for created_logger, handler in self._created_handlers.items():
                 created_logger.removeHandler(handler)
                 created_logger.propagate = True
+                if created_logger in self._leveled_loggers:
+                    created_logger.setLevel(logging.NOTSET)
                 target = handler.target
                 handler.close()
                 if target is not None:
                     target.close()
             self._created_handlers.clear()
+            self._leveled_loggers.clear()
 
 
 __getattr__ = deprecated_module_getattr(__name__, _DEPRECATED_PROTOCOLS)

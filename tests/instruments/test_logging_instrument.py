@@ -129,6 +129,63 @@ def test_memory_logger_factory_error() -> None:
     assert error_message in test_stream.getvalue()
 
 
+def _unbuffered_factory(stream: StringIO) -> MemoryLoggerFactory:
+    return MemoryLoggerFactory(
+        config=_MemoryLoggerFactoryConfig(
+            logging_buffer_capacity=0,
+            logging_flush_level=logging.ERROR,
+            logging_log_level=logging.INFO,
+            log_stream=stream,
+        ),
+    )
+
+
+def test_memory_logger_factory_configures_each_logger_once() -> None:
+    test_stream = StringIO()
+    logger_factory = _unbuffered_factory(test_stream)
+    try:
+        first = logger_factory("configured_once")
+        second = logger_factory("configured_once")
+        second.info("one line")
+
+        assert first is second
+        assert len(first.handlers) == 1
+        assert test_stream.getvalue().splitlines() == ["one line"]
+    finally:
+        logger_factory.close_handlers()
+
+    assert logging.getLogger("configured_once").handlers == []
+
+
+def test_memory_logger_factory_names_unnamed_logger_after_caller() -> None:
+    logger_factory = _unbuffered_factory(StringIO())
+    try:
+        assert logger_factory().name == __name__
+    finally:
+        logger_factory.close_handlers()
+
+
+def test_memory_logger_factory_keeps_a_level_set_beforehand() -> None:
+    preset_logger = logging.getLogger("preset_level")
+    preset_logger.setLevel(logging.DEBUG)
+    logger_factory = _unbuffered_factory(StringIO())
+    try:
+        assert logger_factory("preset_level").level == logging.DEBUG
+        assert logger_factory("unset_level").level == logging.INFO
+    finally:
+        logger_factory.close_handlers()
+        preset_logger.setLevel(logging.NOTSET)
+        logging.getLogger("unset_level").setLevel(logging.NOTSET)
+
+
+def test_memory_logger_factory_close_handlers_restores_the_level_it_set() -> None:
+    logger_factory = _unbuffered_factory(StringIO())
+    logger_factory("restored_level")
+    logger_factory.close_handlers()
+
+    assert logging.getLogger("restored_level").level == logging.NOTSET
+
+
 def test_logging_instrument_lifecycle_replay(logging_mock: LoggingMock) -> None:
     instrument = LoggingInstrument(
         bootstrap_config=LoggingConfig(
