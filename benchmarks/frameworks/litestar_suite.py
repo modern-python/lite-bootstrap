@@ -16,6 +16,7 @@ from common import (
     OTEL,
     OTEL_METRICS,
     PROM,
+    SAMPLED_SENTRY_TRACE,
     ASGIApp,
     Cleanup,
     Op,
@@ -38,7 +39,6 @@ log = structlog.get_logger("bench")
 HEALTH: typing.Final = {"health_checks_enabled": True}
 LITESTAR_DEFAULTS: typing.Final = {**PROM, **HEALTH, **LOG, "swagger_path": "/docs"}
 FULL: typing.Final = {**OTEL, **PROM, **LOG, **sentry(), **HEALTH}
-SAMPLED_SENTRY_TRACE: typing.Final = ((b"sentry-trace", b"771a43a4192642f0b136d5159a501700-1234567890abcdef-1"),)
 
 SCENARIOS: typing.Final = {
     "bare": Scenario(config=base_config()),
@@ -63,7 +63,9 @@ SCENARIOS: typing.Final = {
     "sentry_nosess": Scenario(config=base_config(**sentry(), sentry_auto_session_tracking=False)),
     "sentry_noauto": Scenario(config=base_config(**sentry(auto_enabling_integrations=False))),
     "sentry_nodefault": Scenario(config=base_config(**sentry(), sentry_default_integrations=False)),
-    "sentry_nointegration": Scenario(config=base_config(**sentry(disabled_integrations=[LitestarIntegration]))),
+    "sentry_nointegration": Scenario(
+        config=base_config(**sentry(disabled_integrations=[LitestarIntegration]), sentry_lean_error_capture=False)
+    ),
     "sentry_integration": Scenario(config=base_config(**sentry(), sentry_lean_error_capture=False)),
     "sentry_sampled_trace": Scenario(config=base_config(**sentry()), headers=SAMPLED_SENTRY_TRACE),
     "sentry_integration_sampled_trace": Scenario(

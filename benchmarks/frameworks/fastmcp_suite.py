@@ -12,6 +12,7 @@ from common import (
     LOG,
     OTEL,
     PROM,
+    SAMPLED_SENTRY_TRACE,
     Cleanup,
     Op,
     Scenario,
@@ -25,6 +26,7 @@ from common import (
 from fastmcp import FastMCP
 from opentelemetry.trace import NoOpTracer, Tracer
 from sentry_sdk.integrations.mcp import MCPIntegration
+from sentry_sdk.integrations.starlette import StarletteIntegration
 
 from lite_bootstrap import FastMcpBootstrapper, FastMcpConfig
 
@@ -49,6 +51,14 @@ SCENARIOS: typing.Final = {
     "sentry": Scenario(config=base_config(**sentry())),
     "sentry_nomcp": Scenario(config=base_config(**sentry(disabled_integrations=[MCPIntegration]))),
     "sentry_noauto": Scenario(config=base_config(**sentry(auto_enabling_integrations=False))),
+    "sentry_nointegration": Scenario(
+        config=base_config(**sentry(disabled_integrations=[StarletteIntegration]), sentry_lean_error_capture=False)
+    ),
+    "sentry_integration": Scenario(config=base_config(**sentry(), sentry_lean_error_capture=False)),
+    "sentry_sampled_trace": Scenario(config=base_config(**sentry()), headers=SAMPLED_SENTRY_TRACE),
+    "sentry_integration_sampled_trace": Scenario(
+        config=base_config(**sentry(), sentry_lean_error_capture=False), headers=SAMPLED_SENTRY_TRACE
+    ),
     "full": Scenario(config=base_config(**OTEL, **PROM, **LOG, **sentry(), health_checks_enabled=True)),
 }
 
@@ -75,5 +85,5 @@ async def make(name: str) -> tuple[Op, Cleanup]:
     application = FastMcpBootstrapper(FastMcpConfig(application=mcp, **scenario.config)).bootstrap()
     http_app = application.http_app(stateless_http=True, json_response=True)
     stop = await start_lifespan(http_app)
-    scope = http_scope("/mcp", method="POST", extra_headers=HEADERS)
+    scope = http_scope("/mcp", method="POST", extra_headers=(*HEADERS, *scenario.headers))
     return asgi_op(http_app, scope, body=CALL_BODY), stop

@@ -1,7 +1,7 @@
 import logging
 import typing
 import warnings
-from collections.abc import Iterator, Mapping
+from collections.abc import Mapping
 from unittest.mock import AsyncMock
 
 import litestar
@@ -27,27 +27,6 @@ from tests.conftest import SentryTestTransport
 
 
 std_logger = logging.getLogger(__name__)
-
-
-@pytest.fixture(autouse=True)
-def _litestar_integration_not_yet_installed() -> Iterator[None]:
-    """Start each test as a fresh process would, with Sentry's LitestarIntegration not installed.
-
-    sentry-sdk records installed integrations process-wide, and ``disabled_integrations`` cannot remove one
-    that an earlier ``sentry_sdk.init`` installed. Any test that bootstraps Sentry with Litestar importable
-    installs it, because it is one of sentry-sdk's auto-enabling integrations.
-    """
-    identifier: typing.Final = LitestarIntegration.identifier
-    registries: typing.Final = (
-        sentry_integrations._processed_integrations,  # noqa: SLF001
-        sentry_integrations._installed_integrations,  # noqa: SLF001
-    )
-    was_in: typing.Final = [identifier in registry for registry in registries]
-    for registry in registries:
-        registry.discard(identifier)
-    yield
-    for registry, was_there in zip(registries, was_in, strict=True):
-        (registry.add if was_there else registry.discard)(identifier)
 
 
 class MappedToNotFoundError(Exception):

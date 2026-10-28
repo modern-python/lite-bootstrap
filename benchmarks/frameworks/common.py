@@ -167,3 +167,6 @@ PROM: typing.Final = {"prometheus_metrics_path": "/metrics"}
 LOG: typing.Final = {"logging_enabled": True}
 CORS: typing.Final = {"cors_allowed_origins": ["https://example.com"], "cors_allowed_methods": ["GET"]}
 ORIGIN: typing.Final[Headers] = ((b"origin", b"https://example.com"),)
+SAMPLED_SENTRY_TRACE: typing.Final[Headers] = (
+    (b"sentry-trace", b"771a43a4192642f0b136d5159a501700-1234567890abcdef-1"),
+)

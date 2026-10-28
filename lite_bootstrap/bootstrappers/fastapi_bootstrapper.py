@@ -19,7 +19,12 @@ from lite_bootstrap.instruments.logging_instrument import LoggingConfig, Logging
 from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryConfig, OpenTelemetryInstrument
 from lite_bootstrap.instruments.prometheus_instrument import PrometheusConfig, PrometheusInstrument
 from lite_bootstrap.instruments.pyroscope_instrument import PyroscopeConfig, PyroscopeInstrument
-from lite_bootstrap.instruments.sentry_instrument import SentryConfig, SentryInstrument
+from lite_bootstrap.instruments.sentry_instrument import (
+    SentryInstrument,
+    SentryLeanCaptureConfig,
+    disable_sentry_integrations,
+    warn_about_sentry_integrations_installed_earlier,
+)
 from lite_bootstrap.instruments.swagger_instrument import SwaggerConfig, SwaggerInstrument
 from lite_bootstrap.types import UNSET, UnsetType
 
@@ -31,6 +36,12 @@ if import_checker.is_fastapi_installed:
     import fastapi
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.routing import _merge_lifespan_context
+
+if import_checker.is_fastapi_installed and import_checker.is_sentry_installed:
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from sentry_sdk.integrations.starlette import StarletteIntegration
+
+    from lite_bootstrap.helpers.starlette_sentry import StarletteSentryCaptureMiddleware
 
 if import_checker.is_structlog_installed:
     import structlog
@@ -56,7 +67,7 @@ class FastAPIConfig(
     OpenTelemetryConfig,
     PrometheusConfig,
     PyroscopeConfig,
-    SentryConfig,
+    SentryLeanCaptureConfig,
     SwaggerConfig,
 ):
     application: "fastapi.FastAPI | UnsetType" = UNSET
@@ -67,6 +78,10 @@ class FastAPIConfig(
     prometheus_instrument_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     prometheus_expose_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     logging_access_log_enabled: bool = False
+    _sentry_lean_replaced_integrations: typing.ClassVar[Mapping[str, str]] = {
+        "starlette": "StarletteIntegration",
+        "fastapi": "FastApiIntegration",
+    }
     # Deprecated names, removed in 2.0.
     _renamed_fields: typing.ClassVar[Mapping[str, str]] = {
         "prometheus_instrumentator_params": "prometheus_instrumentator_additional_params",
@@ -246,6 +261,22 @@ class FastAPIPrometheusInstrument(PrometheusInstrument[FastAPIConfig]):
         )
 
 
+@dataclasses.dataclass(kw_only=True, slots=True)
+class FastAPISentryInstrument(SentryInstrument[FastAPIConfig]):
+    def _build_init_params(self) -> dict[str, typing.Any]:
+        init_params: typing.Final = super(FastAPISentryInstrument, self)._build_init_params()
+        if self.bootstrap_config.is_sentry_lean_error_capture_on():
+            disable_sentry_integrations(init_params, [StarletteIntegration, FastApiIntegration])
+        return init_params
+
+    def bootstrap(self) -> None:
+        super(FastAPISentryInstrument, self).bootstrap()
+        if not self.bootstrap_config.is_sentry_lean_error_capture_on():
+            return
+        warn_about_sentry_integrations_installed_earlier([StarletteIntegration, FastApiIntegration])
+        self.bootstrap_config.app.add_middleware(StarletteSentryCaptureMiddleware)
+
+
 @dataclasses.dataclass(kw_only=True)
 class FastAPISwaggerInstrument(SwaggerInstrument[FastAPIConfig]):
     def bootstrap(self) -> None:
@@ -264,7 +295,7 @@ class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI"]):
         FastAPICorsInstrument,
         FastAPIOpenTelemetryInstrument,
         PyroscopeInstrument,
-        SentryInstrument,
+        FastAPISentryInstrument,
         FastAPIHealthChecksInstrument,
         FastAPILoggingInstrument,
         FastAPIPrometheusInstrument,

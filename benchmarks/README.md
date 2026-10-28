@@ -210,7 +210,7 @@ structlog 26.1.0. In-process, baseline 17.7 µs per request. The handler does no
 | OTel 0% + OTel HTTP metrics (`opentelemetry_metrics_endpoint`) | +78.9 | +12.3 over OTel 0% |
 | OTel 0% + Prometheus | +91.5 | +24.9 over OTel 0% |
 | OTel 0% + OTel HTTP metrics + Prometheus | +104.9 | +38.3 over OTel 0% |
-| Sentry, lite-bootstrap defaults (tracing off) | +59.0 to +59.7 | two runs |
+| Sentry, lite-bootstrap 1.x defaults (tracing off) | +59.0 to +59.7 | two runs |
 | Sentry, `sentry_auto_session_tracking=False` | +51.8 | |
 | Sentry, `auto_enabling_integrations=False` | +0.1 | the Starlette and FastAPI integrations are auto-enabling, so nothing captures request errors |
 | health check `/health/` | +22.6 | noisy, 16% spread |
@@ -218,6 +218,23 @@ structlog 26.1.0. In-process, baseline 17.7 µs per request. The handler does no
 | CORS, request with a matching Origin | +3.8 | |
 | full: OTel + Prometheus + logging + Sentry + health, defaults | +259.6 | |
 <!-- --8<-- [end:fastapilinux] -->
+
+Since 2.0, lite-bootstrap reports FastAPI request errors itself while Sentry tracing is off, without
+`StarletteIntegration` and `FastApiIntegration`. Rerun in-process on the M2 host (macOS, CPython
+3.14.7, fastapi 0.162.0, starlette 1.10.0,
+`bench.py fastapi bare,sentry,sentry_sampled_trace,sentry_nointegration,sentry_integration,sentry_integration_sampled_trace --repeat 2`):
+
+| scenario | sentry-sdk 2.73.0 | 3.0.0b2 |
+|---|---:|---:|
+| `sentry`: lean capture, the 2.0 default | +6.1 | +5.1 |
+| `sentry_sampled_trace`: the same, request carries a sampled `sentry-trace` | +11.5 | +10.9 |
+| `sentry_nointegration`: both integrations disabled, no request capture at all | +0.1 | -0.2 |
+| `sentry_integration`: `sentry_lean_error_capture=False` | +57.1 | +47.0 |
+| `sentry_integration_sampled_trace` | +59.2 | +113.2 |
+
+The last row on 3.0.0b2 varied by 40% between rounds. The table above was measured before 2.0. Its
+`sentry_nosess` row now has the same config as `sentry`, and `sentry_noauto` no longer stops request
+capture, because lean capture needs no auto-enabling integration.
 
 FastAPI real-server runs under uvicorn in the container were unstable (bare repeat medians of 8235
 and 6341 RPS, over 100% spread on the full stack), so the Linux real-server numbers below are
@@ -398,7 +415,9 @@ Since 2.0, lite-bootstrap reports Litestar request errors itself while Sentry tr
 | `sentry_integration_sampled_trace` | +74.4 | +147.4 |
 
 On 3.0 an incoming sampled `sentry-trace` makes `LitestarIntegration` record a real span even with
-tracing off. The table above was measured before 2.0. Its `sentry_nosess` scenario now has the same
+tracing off. `sentry_nointegration`, which disables `LitestarIntegration` and turns lean capture off,
+so nothing captures request errors, measured +0.3 and +0.0 in a later run that put `sentry` at
++6.7 and +6.8. The table above was measured before 2.0. Its `sentry_nosess` scenario now has the same
 config as `sentry`, because sessions are off by default since 2.0.
 
 lite-bootstrap's Litestar defaults with no endpoint configured (Prometheus, health, logging and
@@ -498,13 +517,29 @@ it FastMCP and the MCP SDK. Noise on this suite is about ±30 µs even with 3 re
 | OpenTelemetry, 100% | +272 | 3 ASGI spans plus FastMCP's own server span |
 | OpenTelemetry, 100%, FastMCP's own spans replaced by a no-op tracer | +226 | FastMCP's spans cost 46 |
 | OpenTelemetry, 10% | +120 | |
-| Sentry, defaults | +100 | the Starlette integration |
+| Sentry, 1.x defaults | +100 | the Starlette integration |
 | Sentry, MCPIntegration disabled | +99 | MCPIntegration costs nothing measurable with tracing off |
 | Sentry, `auto_enabling_integrations=False` | +3 | no Starlette integration, so no request capture |
 | full: OTel + Prometheus + logging + Sentry + health | +521 | |
 <!-- --8<-- [end:fastmcp] -->
 
 The no-op tracer row patches FastMCP to attribute the cost; it is not a configuration.
+
+Since 2.0, lite-bootstrap reports errors in every application `http_app()` builds itself while
+Sentry tracing is off, without `StarletteIntegration`. Rerun in-process on the M2 host (macOS,
+CPython 3.14.7, fastmcp 4.1.4, starlette 1.10.0,
+`bench.py fastmcp bare,sentry,sentry_sampled_trace,sentry_nointegration,sentry_integration,sentry_integration_sampled_trace --repeat 3 --ops 1500 --warmup 300`),
+over a baseline of about 620 µs per tool call:
+
+| scenario | sentry-sdk 2.73.0 | 3.0.0b2 |
+|---|---:|---:|
+| `sentry`: lean capture, the 2.0 default | +20.6 | +15.9 |
+| `sentry_sampled_trace` | +16.1 | +18.9 |
+| `sentry_nointegration`: `StarletteIntegration` disabled, no request capture at all | -0.3 | +1.8 |
+| `sentry_integration`: `sentry_lean_error_capture=False` | +82.2 | +65.0 |
+| `sentry_integration_sampled_trace` | +82.3 | +216.4 |
+
+Rounds differed by up to 15%, so the lean rows are not resolved from each other.
 
 ### 8f. Logging, per call
 

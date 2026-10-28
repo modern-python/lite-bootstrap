@@ -17,6 +17,7 @@ which most of these targets do not install.
 """
 
 import asyncio
+import contextlib
 import sys
 import typing
 import warnings
@@ -40,6 +41,13 @@ from lite_bootstrap.instruments.logging_factory import StructuredLogPayload, _se
 
 if import_checker.is_opentelemetry_installed:
     from opentelemetry import trace
+
+if import_checker.is_fastapi_installed:
+    import fastapi
+
+if import_checker.is_fastmcp_installed:
+    from starlette.requests import Request
+    from starlette.responses import Response
 
 if import_checker.is_litestar_installed:
     import litestar
@@ -93,6 +101,37 @@ async def _drive_lifespan(application: typing.Any) -> None:  # noqa: ANN401
     await application({"type": "lifespan", "state": {}}, receive, send)
 
 
+async def _request_status(application: typing.Any, path: str) -> int:  # noqa: ANN401
+    """Send one GET through an ASGI application without a test client, which would need httpx."""
+    statuses: list[int] = []
+
+    async def receive() -> dict:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message: dict) -> None:
+        if message["type"] == "http.response.start":
+            statuses.append(message["status"])
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": path,
+        "raw_path": path.encode(),
+        "root_path": "",
+        "query_string": b"",
+        "headers": [(b"host", b"floor-smoke")],
+        "client": ("127.0.0.1", 1),
+        "server": ("floor-smoke", 80),
+        "state": {},
+    }
+    with contextlib.suppress(RuntimeError):
+        await application(scope, receive, send)
+    return statuses[0]
+
+
 def _free() -> None:
     bootstrapper = FreeBootstrapper(
         bootstrap_config=FreeConfig(
@@ -118,7 +157,33 @@ def _free() -> None:
         bootstrapper.teardown()
 
 
+def _fastapi_lean_sentry_capture() -> None:
+    """Send one failing request through lean error capture, whose scope and session calls have floors too."""
+    application = fastapi.FastAPI()
+
+    @application.get("/floor-error")
+    async def floor_error() -> None:
+        message = "floor smoke"
+        raise RuntimeError(message)
+
+    bootstrapper = FastAPIBootstrapper(
+        bootstrap_config=FastAPIConfig(
+            service_name="floor-smoke",
+            service_version="1.0.0",
+            logging_buffer_capacity=0,
+            sentry_dsn=SENTRY_DSN,
+            sentry_additional_params=SENTRY_PARAMS,
+            application=application,
+        )
+    )
+    expected_status = 500
+    assert asyncio.run(_request_status(bootstrapper.bootstrap(), "/floor-error")) == expected_status
+    bootstrapper.teardown()
+
+
 def _fastapi() -> None:
+    if import_checker.is_sentry_installed:
+        _fastapi_lean_sentry_capture()
     bootstrapper = FastAPIBootstrapper(
         bootstrap_config=FastAPIConfig(
             service_name="floor-smoke",
@@ -219,7 +284,32 @@ def _faststream() -> None:
         bootstrapper.teardown()
 
 
+def _fastmcp_lean_sentry_capture() -> None:
+    """Send one failing request through lean error capture, whose scope and session calls have floors too."""
+    bootstrapper = FastMcpBootstrapper(
+        bootstrap_config=FastMcpConfig(
+            service_name="floor-smoke",
+            service_version="1.0.0",
+            logging_buffer_capacity=0,
+            sentry_dsn=SENTRY_DSN,
+            sentry_additional_params=SENTRY_PARAMS,
+        )
+    )
+    application = bootstrapper.bootstrap()
+
+    async def floor_error(_: "Request") -> "Response":
+        message = "floor smoke"
+        raise RuntimeError(message)
+
+    application.custom_route("/floor-error", methods=["GET"])(floor_error)
+    expected_status = 500
+    assert asyncio.run(_request_status(application.http_app(), "/floor-error")) == expected_status
+    bootstrapper.teardown()
+
+
 def _fastmcp() -> None:
+    if import_checker.is_sentry_installed:
+        _fastmcp_lean_sentry_capture()
     bootstrapper = FastMcpBootstrapper(
         bootstrap_config=FastMcpConfig(
             service_name="floor-smoke",

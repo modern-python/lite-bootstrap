@@ -23,7 +23,15 @@ from lite_bootstrap.instruments.prometheus_instrument import (
     PrometheusInstrument,
 )
 from lite_bootstrap.instruments.pyroscope_instrument import PyroscopeConfig, PyroscopeInstrument
-from lite_bootstrap.instruments.sentry_instrument import SentryConfig, SentryInstrument
+from lite_bootstrap.instruments.sentry_instrument import (
+    SENTRY_FAILED_REQUEST_STATUS_CODES,
+    SentryInstrument,
+    SentryLeanCaptureConfig,
+    capture_request_exception,
+    disable_sentry_integrations,
+    read_sentry_trace_headers,
+    warn_about_sentry_integrations_installed_earlier,
+)
 from lite_bootstrap.instruments.swagger_instrument import SwaggerConfig, SwaggerInstrument
 from lite_bootstrap.types import UNSET, UnsetType
 
@@ -70,9 +78,7 @@ if import_checker.is_litestar_installed and import_checker.is_sentry_installed:
     from sentry_sdk.integrations import logging as sentry_logging
     from sentry_sdk.integrations._asgi_common import _get_request_data, _RootPathInPath
     from sentry_sdk.integrations.litestar import LitestarIntegration, retrieve_user_from_scope
-    from sentry_sdk.utils import event_from_exception, transaction_from_function
-
-    from lite_bootstrap.instruments.sentry_instrument import IS_SENTRY_SDK_2
+    from sentry_sdk.utils import transaction_from_function
 
     # 3.x narrowed ignore_logger to Sentry Logs and moved its 2.x meaning to ignore_logger_for_events.
     ignore_logger_for_events = getattr(sentry_logging, "ignore_logger_for_events", sentry_logging.ignore_logger)
@@ -134,9 +140,7 @@ if import_checker.is_litestar_opentelemetry_installed:
             await next_app(scope, receive, send)
 
 
-_SENTRY_FAILED_REQUEST_STATUS_CODES: typing.Final = range(500, 600)
 _SENTRY_PENDING_EXCEPTION_KEY: typing.Final = "_lite_bootstrap_sentry_pending_exception"
-_SENTRY_TRACE_HEADERS: typing.Final = frozenset({b"sentry-trace", b"baggage"})
 
 
 @dataclasses.dataclass(slots=True)
@@ -183,11 +187,12 @@ def enrich_sentry_event_from_litestar_scope(event: "sentry_types.Event", scope: 
 
 
 def _capture_litestar_exception(exception: Exception, scope: "Scope") -> None:
-    client_options: typing.Final = {"client_options": sentry_sdk.get_client().options} if IS_SENTRY_SDK_2 else {}
-    event, hint = event_from_exception(
-        exception, mechanism={"type": LitestarIntegration.identifier, "handled": False}, **client_options
+    capture_request_exception(
+        exception,
+        mechanism_type=LitestarIntegration.identifier,
+        handled=False,
+        enrich=lambda event: enrich_sentry_event_from_litestar_scope(event, scope),
     )
-    sentry_sdk.capture_event(enrich_sentry_event_from_litestar_scope(event, scope), hint=hint)
 
 
 def capture_litestar_exception_after_handling(exception: Exception, scope: "Scope") -> None:
@@ -201,7 +206,7 @@ def capture_litestar_exception_after_handling(exception: Exception, scope: "Scop
     if pending is not None:
         pending.exception = exception
         return
-    if isinstance(exception, HTTPException) and exception.status_code not in _SENTRY_FAILED_REQUEST_STATUS_CODES:
+    if isinstance(exception, HTTPException) and exception.status_code not in SENTRY_FAILED_REQUEST_STATUS_CODES:
         return
     _capture_litestar_exception(exception, scope)
 
@@ -225,7 +230,7 @@ if import_checker.is_litestar_installed and import_checker.is_sentry_installed:
             async def send_and_capture(message: "Message") -> None:
                 if message["type"] == "http.response.start":
                     exception, pending.exception = pending.exception, None
-                    if exception is not None and message["status"] in _SENTRY_FAILED_REQUEST_STATUS_CODES:
+                    if exception is not None and message["status"] in SENTRY_FAILED_REQUEST_STATUS_CODES:
                         _capture_litestar_exception(exception, scope)
                 await send(message)
 
@@ -234,13 +239,7 @@ if import_checker.is_litestar_installed and import_checker.is_sentry_installed:
                 sessions.track_session(sentry_scope, session_mode="request"),
             ):
                 sentry_scope.clear_breadcrumbs()
-                sentry_scope.generate_propagation_context(
-                    {
-                        name.decode("latin-1"): value.decode("latin-1")
-                        for name, value in scope["headers"]
-                        if name in _SENTRY_TRACE_HEADERS
-                    }
-                )
+                sentry_scope.generate_propagation_context(read_sentry_trace_headers(scope["headers"]))
                 sentry_scope.add_event_processor(lambda event, _: enrich_sentry_event_from_litestar_scope(event, scope))
                 try:
                     await next_app(scope, receive, send_and_capture)
@@ -258,7 +257,7 @@ class LitestarConfig(
     OpenTelemetryConfig,
     PrometheusBootstrapperConfig,
     PyroscopeConfig,
-    SentryConfig,
+    SentryLeanCaptureConfig,
     SwaggerConfig,
 ):
     application_config: "AppConfig" = dataclasses.field(default_factory=lambda: AppConfig())  # noqa: PLW0108
@@ -268,9 +267,9 @@ class LitestarConfig(
     prometheus_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     # Bounds path-label cardinality (Litestar defaults False -> raw URLs leak memory). See litestar#4891.
     prometheus_group_path: bool = True
-    sentry_lean_error_capture: bool | None = None
     swagger_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     # Deprecated names, removed in 2.0.
+    _sentry_lean_replaced_integrations: typing.ClassVar[Mapping[str, str]] = {"litestar": "LitestarIntegration"}
     _renamed_fields: typing.ClassVar[Mapping[str, str]] = {
         "litestar_logging_middleware_enabled": "logging_access_log_enabled",
         "swagger_extra_params": "swagger_additional_params",
@@ -283,32 +282,10 @@ class LitestarConfig(
     def __post_init__(self) -> None:
         # @dataclass(slots=True) replaces the class object, breaking bare super().
         super(LitestarConfig, self).__post_init__()
-        if self.sentry_lean_error_capture:
-            self._warn_about_forced_lean_sentry_capture()
         if self.litestar_logging_middleware_config is not None and not self.logging_access_log_enabled:
             warn_at_caller(
                 "litestar_logging_middleware_config is ignored while logging_access_log_enabled is False; "
                 "set logging_access_log_enabled=True to turn access logging on."
-            )
-
-    def _supplies_sentry_litestar_integration(self) -> bool:
-        return any(integration.identifier == "litestar" for integration in self.sentry_integrations)
-
-    def is_sentry_lean_error_capture_on(self) -> bool:
-        if self.sentry_lean_error_capture is not None:
-            return self.sentry_lean_error_capture
-        return not self.is_sentry_tracing_requested() and not self._supplies_sentry_litestar_integration()
-
-    def _warn_about_forced_lean_sentry_capture(self) -> None:
-        if self.is_sentry_tracing_requested():
-            warn_at_caller(
-                "sentry_lean_error_capture starts no transaction per request, so Sentry tracing "
-                "only samples transactions your code starts itself."
-            )
-        if self._supplies_sentry_litestar_integration():
-            warn_at_caller(
-                "sentry_lean_error_capture disables Sentry's LitestarIntegration, so the one in "
-                "sentry_integrations is dropped."
             )
 
 
@@ -464,18 +441,14 @@ class LitestarSentryInstrument(SentryInstrument[LitestarConfig]):
     def _build_init_params(self) -> dict[str, typing.Any]:
         init_params: typing.Final = super(LitestarSentryInstrument, self)._build_init_params()
         if self.bootstrap_config.is_sentry_lean_error_capture_on():
-            init_params["disabled_integrations"] = [*init_params.get("disabled_integrations", []), LitestarIntegration]
+            disable_sentry_integrations(init_params, [LitestarIntegration])
         return init_params
 
     def bootstrap(self) -> None:
         super(LitestarSentryInstrument, self).bootstrap()
         if not self.bootstrap_config.is_sentry_lean_error_capture_on():
             return
-        if sentry_sdk.get_client().get_integration(LitestarIntegration) is not None:
-            warn_at_caller(
-                "Sentry's LitestarIntegration was installed by an earlier sentry_sdk.init in this process and "
-                "sentry_lean_error_capture cannot disable it, so request errors may be reported twice."
-            )
+        warn_about_sentry_integrations_installed_earlier([LitestarIntegration])
         # LitestarIntegration ignores this logger too: Litestar logs every exception it handles.
         ignore_logger_for_events("litestar")
         application_config: typing.Final = self.bootstrap_config.application_config

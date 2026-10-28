@@ -297,6 +297,19 @@ def test_fastmcp_bootstrapper_with_missing_instrument_dependency(
         FastMcpBootstrapper(bootstrap_config=FastMcpConfig(**extra_config))
 
 
+def test_fastmcp_bootstrapper_runs_without_sentry_sdk() -> None:
+    with emulate_package_missing_with_module_reload(
+        "sentry_sdk",
+        ["lite_bootstrap.instruments.sentry_instrument", "lite_bootstrap.bootstrappers.fastmcp_bootstrapper"],
+    ):
+        with pytest.warns(UserWarning, match="sentry_sdk"):
+            bootstrapper = fastmcp_bootstrapper.FastMcpBootstrapper(
+                bootstrap_config=fastmcp_bootstrapper.FastMcpConfig(sentry_dsn="https://testdsn@localhost/1")
+            )
+        bootstrapper.bootstrap()
+        bootstrapper.teardown()
+
+
 def test_fastmcp_bootstrap_without_prometheus_client() -> None:
     # Regression guard mirroring the FastStream prometheus-missing test: ensures
     # FastMcpPrometheusInstrument.dependencies_installed() prevents construction-time

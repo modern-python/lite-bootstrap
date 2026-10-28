@@ -47,6 +47,64 @@ application = bootstrapper.bootstrap()
 
 Read more about available configuration options [here](../introduction/configuration.md).
 
+## Sentry
+
+While Sentry tracing is off, lite-bootstrap reports request errors itself instead of through
+sentry-sdk's `StarletteIntegration` and `FastApiIntegration`. Tracing counts as off when
+`sentry_traces_sample_rate` is unset and `sentry_additional_params` sets none of
+`traces_sample_rate`, `traces_sampler` and `enable_tracing`. With tracing off, the integrations
+still build a transaction for every request and then discard it
+([getsentry/sentry-python#7400](https://github.com/getsentry/sentry-python/issues/7400)).
+
+`sentry_lean_error_capture` picks the path:
+
+- `None`, the default: lean capture while tracing is off and `sentry_integrations` holds neither
+  integration, the integrations otherwise.
+- `True`: lean capture always. lite-bootstrap warns when tracing is on, since no request starts a
+  transaction, and when `sentry_integrations` holds either integration, which gets dropped.
+- `False`: the integrations always.
+
+Lean capture passes both integrations in `disabled_integrations` and adds one pure-ASGI middleware.
+It gives each HTTP and WebSocket request its own Sentry scope, and its own release-health session
+when `sentry_auto_session_tracking` is on. It continues an incoming `sentry-trace` and `baggage`,
+and attaches the request to every event sent while the request runs.
+
+The request data follows the same [`data_collection`](../introduction/configuration.md#sentry-data-collection)
+settings the integrations read. Method, URL, query string, headers and cookies are filtered by
+their denylists. The event's transaction is the route template, such as `/items/{item_id}`. The
+client address and the user that Starlette's `AuthenticationMiddleware` sets are attached only
+when `user_info` is on. A body is attached only when `http_bodies` includes `"incoming_request"`
+and the handler has read all of it: lean capture copies what the application reads and never
+reads the stream itself. JSON and URL-encoded form bodies are attached parsed, a multipart body is
+replaced by a placeholder, and any other body is attached as text. On sentry-sdk 2.x the
+integrations read the body before the handler runs.
+
+What is reported matches the integrations. An exception that escapes the application is reported.
+An exception that an exception handler answers is reported only when it carries a `status_code`
+from 500 to 599, as `HTTPException(503)` does, whatever the handler responds. So a 404 from
+`HTTPException` is not reported, and neither is a custom exception your handler turns into a 503
+unless the exception itself has a 5xx `status_code`. To find those handlers, lean capture looks
+through the middleware below it for Starlette's `ExceptionMiddleware`. A middleware added before
+bootstrap that keeps its inner application anywhere but `.app` hides it, and then only escaping
+exceptions are reported.
+
+uvicorn and Granian log an exception that escapes the application. sentry-sdk's dedupe integration
+drops that log event, because it carries the same exception, so each failing request sends one
+event either way.
+
+Measured in-process on a do-nothing handler, over the same app without Sentry:
+
+| Sentry setup | sentry-sdk 2.73.0 | 3.0.0b2 |
+|---|---:|---:|
+| lean capture, the default | +6.1 µs | +5.1 µs |
+| the same, request carries a sampled `sentry-trace` | +11.5 µs | +10.9 µs |
+| `sentry_lean_error_capture=False` | +57.1 µs | +47.0 µs |
+| the same, request carries a sampled `sentry-trace` | +59.2 µs | +113.2 µs |
+
+sentry-sdk records installed integrations for the whole process, and `disabled_integrations`
+cannot remove one that an earlier `sentry_sdk.init` installed. If that happened, lite-bootstrap
+warns that errors may be reported twice.
+
 ## Logging
 
 Structlog is configured process-wide, so `structlog.get_logger()` works in any route handler.

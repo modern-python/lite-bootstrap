@@ -14,7 +14,12 @@ from lite_bootstrap.instruments.logging_instrument import LoggingConfig, Logging
 from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryConfig, OpenTelemetryInstrument
 from lite_bootstrap.instruments.prometheus_instrument import PrometheusConfig, PrometheusInstrument
 from lite_bootstrap.instruments.pyroscope_instrument import PyroscopeConfig, PyroscopeInstrument
-from lite_bootstrap.instruments.sentry_instrument import SentryConfig, SentryInstrument
+from lite_bootstrap.instruments.sentry_instrument import (
+    SentryInstrument,
+    SentryLeanCaptureConfig,
+    disable_sentry_integrations,
+    warn_about_sentry_integrations_installed_earlier,
+)
 from lite_bootstrap.types import UNSET, UnsetType
 
 
@@ -34,6 +39,11 @@ if import_checker.is_fastmcp_opentelemetry_installed:
     from opentelemetry.util.http import parse_excluded_urls
     from starlette.routing import BaseRoute, Match, Mount, Route
     from starlette.types import Scope
+
+if import_checker.is_fastmcp_installed and import_checker.is_sentry_installed:
+    from sentry_sdk.integrations.starlette import StarletteIntegration
+
+    from lite_bootstrap.helpers.starlette_sentry import StarletteSentryCaptureMiddleware
 
 if import_checker.is_structlog_installed:
     import structlog
@@ -191,13 +201,14 @@ if import_checker.is_fastmcp_installed:
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class FastMcpConfig(
-    HealthChecksConfig, LoggingConfig, OpenTelemetryConfig, PrometheusConfig, PyroscopeConfig, SentryConfig
+    HealthChecksConfig, LoggingConfig, OpenTelemetryConfig, PrometheusConfig, PyroscopeConfig, SentryLeanCaptureConfig
 ):
     application: "FastMCP[typing.Any]" = dataclasses.field(default_factory=_make_fastmcp)
     logging_access_log_enabled: bool = False
     fastmcp_prometheus_tool_metrics_enabled: bool = True
     prometheus_instrumentator_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     prometheus_instrument_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
+    _sentry_lean_replaced_integrations: typing.ClassVar[Mapping[str, str]] = {"starlette": "StarletteIntegration"}
     # Deprecated names, removed in 2.0.
     _renamed_fields: typing.ClassVar[Mapping[str, str]] = {
         "fastmcp_logging_middleware_enabled": "logging_access_log_enabled",
@@ -334,6 +345,41 @@ class FastMcpPrometheusInstrument(PrometheusInstrument[FastMcpConfig]):
 
 
 @dataclasses.dataclass(kw_only=True)
+class FastMcpSentryInstrument(SentryInstrument[FastMcpConfig]):
+    _restore_http_app: typing.Callable[[], None] | None = dataclasses.field(
+        default=None, init=False, repr=False, compare=False
+    )
+
+    def _build_init_params(self) -> dict[str, typing.Any]:
+        init_params: typing.Final = super()._build_init_params()
+        if self.bootstrap_config.is_sentry_lean_error_capture_on():
+            disable_sentry_integrations(init_params, [StarletteIntegration])
+        return init_params
+
+    @staticmethod
+    def _capture_errors_of_http_app(http_application: "StarletteWithLifespan") -> "StarletteWithLifespan":
+        http_application.add_middleware(StarletteSentryCaptureMiddleware)
+        return http_application
+
+    def bootstrap(self) -> None:
+        super().bootstrap()
+        if not self.bootstrap_config.is_sentry_lean_error_capture_on():
+            return
+        warn_about_sentry_integrations_installed_earlier([StarletteIntegration])
+        self._restore_http_app = _postprocess_http_apps(
+            self.bootstrap_config.application, self._capture_errors_of_http_app
+        )
+
+    def teardown(self) -> None:
+        try:
+            super().teardown()
+        finally:
+            if self._restore_http_app is not None:
+                self._restore_http_app()
+                self._restore_http_app = None
+
+
+@dataclasses.dataclass(kw_only=True)
 class FastMcpLoggingInstrument(LoggingInstrument[FastMcpConfig]):
     def bootstrap(self) -> None:
         super().bootstrap()
@@ -348,7 +394,7 @@ class FastMcpBootstrapper(BaseBootstrapper["FastMCP[typing.Any]"]):
     instruments_types: typing.ClassVar = [
         FastMcpOpenTelemetryInstrument,
         PyroscopeInstrument,
-        SentryInstrument,
+        FastMcpSentryInstrument,
         FastMcpHealthChecksInstrument,
         FastMcpLoggingInstrument,
         FastMcpPrometheusInstrument,

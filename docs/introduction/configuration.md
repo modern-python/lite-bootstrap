@@ -22,12 +22,13 @@ Additional parameters can also be supplied through the settings object:
 - `sentry_additional_params` - additional params, which will be passed to `sentry_sdk.init`, overriding any of the above that map to the same keyword
 - `sentry_default_integrations` - whether to use sentry's default integrations (default: `True`)
 - `sentry_before_send` - optional callback chained after the built-in structlog enricher, passed to `sentry_sdk.init(before_send=...)`
-- `sentry_lean_error_capture` - Litestar only: report request errors without Sentry's `LitestarIntegration` (default: `None`, meaning on while Sentry tracing is off). See [Litestar](../integrations/litestar.md#sentry).
+- `sentry_lean_error_capture` - Litestar, FastAPI and FastMCP: report request errors without sentry-sdk's framework integration (default: `None`, meaning on while Sentry tracing is off). See [Litestar](../integrations/litestar.md#sentry), [FastAPI](../integrations/fastapi.md#sentry) and [FastMCP](../integrations/fastmcp.md#sentry).
 
 Read more about sentry_sdk params [here](https://docs.sentry.io/platforms/python/configuration/options/).
 
-Sentry is the second most expensive instrument in the stack. Its cost comes almost entirely from the ASGI
-integration; see [Performance](performance.md).
+Before 2.0, Sentry was the second most expensive instrument in the stack, and its cost came almost
+entirely from sentry-sdk's framework integration. Since 2.0, lite-bootstrap replaces that integration on
+Litestar, FastAPI and FastMCP while Sentry tracing is off; see [Performance](performance.md).
 
 ### Sentry logging integration
 
