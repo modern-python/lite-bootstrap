@@ -383,7 +383,7 @@ To bootstrap swagger, you have the following parameters:
 - `swagger_static_path` - path for offline docs static
 - `swagger_path`
 - `swagger_offline_docs` - option to turn on offline docs.
-- `swagger_additional_params` - Litestar only: passed to `litestar.openapi.OpenAPIConfig`, overriding the built-in arguments.
+- `swagger_additional_params` - Litestar only: extra keyword arguments for `litestar.openapi.OpenAPIConfig`. It cannot repeat `path`, `title`, `version`, `description` or `render_plugins`, which lite-bootstrap already passes.
 
 Swagger is on by default at `swagger_path` (default: `/docs`). For Litestar, set `swagger_path` to an empty string to disable it.
 
