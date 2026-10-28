@@ -151,11 +151,17 @@ class FastStreamLoggingInstrument(LoggingInstrument[FastStreamConfig]):
     _prior_broker_params_storages: list[tuple[typing.Any, typing.Any]] = dataclasses.field(
         default_factory=list, init=False, repr=False, compare=False
     )
+    _prior_faststream_handlers: list[logging.Handler] | None = dataclasses.field(
+        default=None, init=False, repr=False, compare=False
+    )
 
     def bootstrap(self) -> None:
         super().bootstrap()
         brokers = self.bootstrap_config.application.brokers
         if brokers and import_checker.is_structlog_installed and import_checker.is_faststream_installed:
+            faststream_stdlib_logger = logging.getLogger("faststream")
+            self._prior_faststream_handlers = faststream_stdlib_logger.handlers
+            faststream_stdlib_logger.handlers = []
             logger = structlog.get_logger("faststream")
             logger.setLevel(self.bootstrap_config.faststream_log_level)
             for broker in brokers:
@@ -168,7 +174,12 @@ class FastStreamLoggingInstrument(LoggingInstrument[FastStreamConfig]):
                 broker, prior_storage = self._prior_broker_params_storages.pop()
                 broker.config.logger.params_storage = prior_storage
         finally:
-            super().teardown()
+            try:
+                super().teardown()
+            finally:
+                if self._prior_faststream_handlers is not None:
+                    logging.getLogger("faststream").handlers = self._prior_faststream_handlers
+                    self._prior_faststream_handlers = None
 
 
 @dataclasses.dataclass(kw_only=True)
