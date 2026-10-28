@@ -231,6 +231,13 @@ def test_opentelemetry_config_no_warning_for_local_endpoints(endpoint: str) -> N
         OpenTelemetryConfig(opentelemetry_endpoint=endpoint, opentelemetry_insecure=True)
 
 
+@pytest.mark.parametrize("endpoint", ["https://collector.example.com:4317", "HTTPS://collector.example.com:4317"])
+def test_opentelemetry_config_no_warning_for_https_endpoints(endpoint: str) -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        OpenTelemetryConfig(opentelemetry_endpoint=endpoint, opentelemetry_metrics_endpoint=endpoint)
+
+
 @pytest.mark.parametrize(
     "endpoint",
     [
