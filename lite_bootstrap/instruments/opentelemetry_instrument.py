@@ -243,6 +243,7 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfigT]):
             resources.SERVICE_NAMESPACE: config.opentelemetry_namespace,
             resources.SERVICE_VERSION: config.service_version,
             resources.CONTAINER_NAME: config.opentelemetry_container_name,
+            "deployment.environment.name": config.service_environment,
         }
         return resources.Resource.create(attributes={k: v for k, v in attributes.items() if v})
 

@@ -205,7 +205,7 @@ OTEL_EXPERIMENTAL_RESOURCE_DETECTORS=process,os
 `OTEL_RESOURCE_ATTRIBUTES` is honoured as well.
 
 The attributes lite-bootstrap sets (`service.name`, `service.namespace`, `service.version`,
-`container.name`) are merged last and override anything a detector or environment variable supplies.
+`container.name`, and `deployment.environment.name` from `service_environment`) are merged last and override anything a detector or environment variable supplies.
 `service_name` defaults to `"micro-service"`, so `OTEL_SERVICE_NAME` is overridden unless `service_name`
 is empty: set `opentelemetry_service_name` or `service_name` instead.
 

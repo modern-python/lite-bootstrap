@@ -149,6 +149,21 @@ def test_opentelemetry_configured_service_name_wins_over_env(
         instrument.teardown()
 
 
+@pytest.mark.parametrize(("service_environment", "expected"), [("prod", "prod"), (None, None)])
+def test_opentelemetry_resource_carries_deployment_environment(
+    service_environment: str | None, expected: str | None
+) -> None:
+    instrument = OpenTelemetryInstrument(
+        bootstrap_config=OpenTelemetryConfig(service_environment=service_environment, opentelemetry_log_traces=True)
+    )
+    try:
+        instrument.bootstrap()
+        assert instrument._tracer_provider is not None  # noqa: SLF001
+        assert instrument._tracer_provider.resource.attributes.get("deployment.environment.name") == expected  # noqa: SLF001
+    finally:
+        instrument.teardown()
+
+
 def test_opentelemetry_resource_detectors_enrich_resource(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OTEL_EXPERIMENTAL_RESOURCE_DETECTORS", "process")
     monkeypatch.setenv("OTEL_RESOURCE_ATTRIBUTES", "deployment.environment=from-env")
@@ -504,7 +519,9 @@ def test_metrics_endpoint_installs_a_meter_provider_carrying_the_resource() -> N
     """The metrics pipeline is opt-in through its own endpoint and shares the trace resource."""
     instrument = OpenTelemetryInstrument(
         bootstrap_config=OpenTelemetryConfig(
-            service_name="metrics-svc", opentelemetry_metrics_endpoint="localhost:4317"
+            service_name="metrics-svc",
+            service_environment="prod",
+            opentelemetry_metrics_endpoint="localhost:4317",
         )
     )
     try:
@@ -514,6 +531,7 @@ def test_metrics_endpoint_installs_a_meter_provider_carrying_the_resource() -> N
         assert isinstance(meter_provider, SDKMeterProvider)
         assert meter_provider is instrument._meter_provider  # noqa: SLF001
         assert meter_provider._sdk_config.resource.attributes["service.name"] == "metrics-svc"  # noqa: SLF001
+        assert meter_provider._sdk_config.resource.attributes["deployment.environment.name"] == "prod"  # noqa: SLF001
         (reader,) = meter_provider._metric_readers  # noqa: SLF001
         assert isinstance(reader, PeriodicExportingMetricReader)
         assert isinstance(reader._exporter, OTLPGrpcMetricExporter)  # noqa: SLF001
