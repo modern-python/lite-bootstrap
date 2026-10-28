@@ -44,9 +44,9 @@ class SentryConfig(BaseConfig):
     sentry_max_breadcrumbs: int = 15
     sentry_max_value_length: int = 16384
     sentry_attach_stacktrace: bool = True
-    sentry_auto_session_tracking: bool = True
+    sentry_auto_session_tracking: bool = False
     sentry_integrations: list["Integration"] = dataclasses.field(default_factory=list)
-    sentry_logging_breadcrumb_level: int | None = logging.INFO
+    sentry_logging_breadcrumb_level: int | None = logging.WARNING
     sentry_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     sentry_tags: dict[str, str] | None = None
     sentry_default_integrations: bool = True
@@ -112,7 +112,7 @@ class SentryInstrument(BaseInstrument[SentryConfig]):
         return import_checker.is_sentry_installed
 
     def _warn_breadcrumb_level_ignored(self, reason: str) -> None:
-        if self.bootstrap_config.sentry_logging_breadcrumb_level != logging.INFO:
+        if self.bootstrap_config.sentry_logging_breadcrumb_level != logging.WARNING:
             warn_at_caller(f"sentry_logging_breadcrumb_level is ignored, {reason}")
 
     def _build_integrations(self) -> list["Integration"]:

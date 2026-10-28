@@ -249,7 +249,7 @@ def test_sentry_bootstrap_adds_no_logging_integration_without_default_integratio
         instrument.teardown()
 
 
-@pytest.mark.parametrize("breadcrumb_level", [logging.INFO, None], ids=["info", "disabled"])
+@pytest.mark.parametrize("breadcrumb_level", [logging.INFO, logging.WARNING, None], ids=["info", "warning", "disabled"])
 def test_sentry_logging_breadcrumb_level_controls_the_breadcrumb_handler(
     minimal_sentry_config: SentryConfig, breadcrumb_level: int | None
 ) -> None:
@@ -260,6 +260,50 @@ def test_sentry_logging_breadcrumb_level_controls_the_breadcrumb_handler(
     try:
         integration = installed_logging_integration()
         assert (integration._breadcrumb_handler is None) is (breadcrumb_level is None)  # noqa: SLF001
+    finally:
+        instrument.teardown()
+
+
+def test_sentry_breadcrumbs_start_at_warning_by_default(minimal_sentry_config: SentryConfig) -> None:
+    instrument = SentryInstrument(bootstrap_config=minimal_sentry_config)
+    instrument.bootstrap()
+
+    try:
+        breadcrumb_handler = installed_logging_integration()._breadcrumb_handler  # noqa: SLF001
+        assert breadcrumb_handler is not None
+        assert breadcrumb_handler.level == logging.WARNING
+    finally:
+        instrument.teardown()
+
+
+def test_sentry_error_event_carries_no_info_breadcrumbs_by_default(
+    minimal_sentry_config: SentryConfig, sentry_mock: SentryTestTransport, caplog: pytest.LogCaptureFixture
+) -> None:
+    probe_logger = logging.getLogger("breadcrumb_probe")
+    caplog.set_level(logging.INFO, logger=probe_logger.name)
+    instrument = SentryInstrument(bootstrap_config=minimal_sentry_config)
+    instrument.bootstrap()
+
+    try:
+        probe_logger.info("an info record")
+        probe_logger.warning("a warning record")
+        probe_logger.error("some error")
+        event = sentry_mock.mock_envelopes[0].get_event()
+        assert event is not None
+        breadcrumbs = event["breadcrumbs"]
+        assert isinstance(breadcrumbs, dict)
+        probe_crumbs = [crumb for crumb in breadcrumbs["values"] if crumb.get("category") == probe_logger.name]
+        assert [crumb["message"] for crumb in probe_crumbs] == ["a warning record"]
+    finally:
+        instrument.teardown()
+
+
+def test_sentry_does_not_track_sessions_by_default(minimal_sentry_config: SentryConfig) -> None:
+    instrument = SentryInstrument(bootstrap_config=minimal_sentry_config)
+    instrument.bootstrap()
+
+    try:
+        assert sentry_sdk.get_client().options["auto_session_tracking"] is False
     finally:
         instrument.teardown()
 
@@ -311,6 +355,17 @@ def test_sentry_warns_when_the_breadcrumb_level_is_ignored(
     instrument = SentryInstrument(bootstrap_config=bootstrap_config)
 
     with pytest.warns(UserWarning, match=expected_reason):
+        instrument.bootstrap()
+    instrument.teardown()
+
+
+def test_sentry_warns_when_a_non_default_info_breadcrumb_level_is_ignored(minimal_sentry_config: SentryConfig) -> None:
+    bootstrap_config = dataclasses.replace(
+        minimal_sentry_config, sentry_logging_breadcrumb_level=logging.INFO, sentry_default_integrations=False
+    )
+    instrument = SentryInstrument(bootstrap_config=bootstrap_config)
+
+    with pytest.warns(UserWarning, match="sentry_default_integrations is False"):
         instrument.bootstrap()
     instrument.teardown()
 

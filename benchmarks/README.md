@@ -263,13 +263,14 @@ FastAPIConfig(
         FastApiIntegration(http_methods_to_capture=()),
     ],
     sentry_logging_breadcrumb_level=None,
-    sentry_auto_session_tracking=False,
     # OpenTelemetry: sampling is the single biggest saving here
     opentelemetry_exclude_spans=["receive", "send"],
     opentelemetry_sampler=ParentBased(TraceIdRatioBased(0.01)),
 )
 ```
 <!-- --8<-- [end:tuned] -->
+
+The tuned runs also set `sentry_auto_session_tracking=False`, which is the default since 2.0.
 
 Trade-offs, in order of what you give up: log breadcrumbs on Sentry errors, Sentry release health,
 Sentry-side trace correlation, 99% of OTel traces, ASGI event spans.
