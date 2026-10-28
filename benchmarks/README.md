@@ -600,6 +600,12 @@ scenario there, `full_all_tuned` included, is reachable through `FastAPIConfig`.
 [sentry-python#7400](https://github.com/getsentry/sentry-python/issues/7400) and imports nothing
 from this directory.
 
+Every number here was measured on sentry-sdk 2.67.1. The scripts also run on 3.x, which builds no
+transaction while tracing is off, so the patched scenarios, `errors_only_txn_endpoint_style` and
+`repro_sentry_txn.py --patched` exist only on 2.x. On 3.x, `micro.py` times `continue_trace` and
+the root `start_span` in place of the `Transaction` calls. 3.x also leaves `LoggingIntegration` out
+of its default integrations, so its `errors_only` records no log breadcrumbs.
+
 Numbers are machine-specific and move a few percent run to run; the ratios and the ordering are
 the durable part. Everything here was measured in one session on one idle machine, which is the
 only way the columns are comparable to each other.

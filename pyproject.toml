@@ -44,18 +44,9 @@ orjson = [
     "orjson>=3.8.0",
 ]
 sentry = [
-    # >=1.31 for the `max_value_length` init option; >=2.1 for sentry_sdk.set_tags (plural,
-    # SentryInstrument.bootstrap) -- the higher floor wins.
-    # 2.1 predates Python 3.13's FrameLocalsProxy, which the SDK fails to pickle when capturing a
-    # request, and 3.14 needs later fixes again. Marked rather than raised, so 3.11-3.12 keep 2.1.
-    # 2.69.0 signs `sentry-trace`/`baggage` into SigV4 SignedHeaders and then rewrites them after
-    # signing, so every aiobotocore AWS call inside a transaction fails with SignatureDoesNotMatch
-    # (getsentry/sentry-python#7426, fixed in 2.69.1).
-    # <3 because 3.0 gives LoggingIntegration an `event_level` that defaults to None, so the
-    # `level`-only integration SentryInstrument builds would stop turning logged errors into events.
-    "sentry-sdk>=2.1,!=2.69.0,<3; python_version < '3.13'",
-    "sentry-sdk>=2.11,!=2.69.0,<3; python_version == '3.13'",
-    "sentry-sdk>=2.59,!=2.69.0,<3; python_version >= '3.14'",
+    # >=2.70 for the top-level `data_collection` option, which 3.x keeps and SentryInstrument
+    # passes on both majors. 3.x is supported: LoggingIntegration's arguments are chosen per major.
+    "sentry-sdk>=2.70,<4",
 ]
 pyroscope = [
     # >=0.7.2 for pyroscope.shutdown() (PyroscopeInstrument.teardown); 0.7.1 and below carry

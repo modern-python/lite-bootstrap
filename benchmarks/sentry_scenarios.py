@@ -4,15 +4,17 @@ Every scenario runs in its own process: `init()` monkeypatches `Starlette.__call
 `starlette.middleware.Middleware.__init__` and `logging.Logger.callHandlers`, and none of it
 can be undone.
 
-The `*_patch` scenarios are not configurations a user can reach - they simulate an upstream
-fix so its value can be measured before proposing it.
+The patched scenarios are not configurations a user can reach - they simulate an upstream
+fix so its value can be measured before proposing it. They, and `errors_only_txn_endpoint_style`,
+exist only on sentry-sdk 2.x: 3.x builds no transaction while tracing is off and has no
+`transaction_style`.
 """
 
+import importlib
 import logging
 import typing
 
 import sentry_sdk
-import sentry_sdk.tracing
 from driver import DSN, TRANSPORT
 from fastapi import FastAPI
 from sentry_sdk.integrations.dedupe import DedupeIntegration
@@ -25,6 +27,10 @@ from sentry_sdk.integrations.stdlib import StdlibIntegration
 from sentry_sdk.integrations.threading import ThreadingIntegration
 from sentry_sdk.scope import Scope
 
+from lite_bootstrap.instruments.sentry_instrument import IS_SENTRY_SDK_2
+
+
+SDK2_TRACING: typing.Final = importlib.import_module("sentry_sdk.tracing") if IS_SENTRY_SDK_2 else None
 
 logger = logging.getLogger("bench")
 
@@ -57,6 +63,17 @@ def _no_transaction_integrations() -> list[typing.Any]:
         StarletteIntegration(http_methods_to_capture=()),
         FastApiIntegration(http_methods_to_capture=()),
     ]
+
+
+def _errors_and_breadcrumbs_only(*, breadcrumbs: bool) -> LoggingIntegration:
+    """Errors become events and nothing goes to Sentry Logs; 3.0 renamed the arguments for that."""
+    breadcrumb_level = logging.INFO if breadcrumbs else None
+    kwargs: dict[str, typing.Any] = (
+        {"level": breadcrumb_level, "sentry_logs_level": None}
+        if IS_SENTRY_SDK_2
+        else {"breadcrumb_level": breadcrumb_level, "event_level": logging.ERROR, "level": None}
+    )
+    return LoggingIntegration(**kwargs)
 
 
 SCENARIOS: dict[str, typing.Callable[[], dict[str, typing.Any]] | None] = {
@@ -113,24 +130,16 @@ SCENARIOS: dict[str, typing.Callable[[], dict[str, typing.Any]] | None] = {
         auto_enabling_integrations=False,
         integrations=[StarletteIntegration()],
     ),
-    "errors_only_txn_endpoint_style": lambda: base_kwargs(
-        max_breadcrumbs=15,
-        attach_stacktrace=True,
-        integrations=[
-            StarletteIntegration(transaction_style="endpoint"),
-            FastApiIntegration(transaction_style="endpoint"),
-        ],
-    ),
     # --- logging integration knobs ---
     "errors_only_no_sentry_logs": lambda: base_kwargs(
         max_breadcrumbs=15,
         attach_stacktrace=True,
-        integrations=[LoggingIntegration(sentry_logs_level=None)],
+        integrations=[_errors_and_breadcrumbs_only(breadcrumbs=True)],
     ),
     "errors_only_logging_lean": lambda: base_kwargs(
         max_breadcrumbs=15,
         attach_stacktrace=True,
-        integrations=[LoggingIntegration(level=None, sentry_logs_level=None)],
+        integrations=[_errors_and_breadcrumbs_only(breadcrumbs=False)],
     ),
     # --- tracing on ---
     "traces_0": lambda: base_kwargs(traces_sample_rate=0.0, attach_stacktrace=True),
@@ -146,7 +155,7 @@ SCENARIOS: dict[str, typing.Callable[[], dict[str, typing.Any]] | None] = {
 
 def _patch_lazy_sample_rand() -> None:
     """`Transaction.__init__` derives sample_rand from the trace id even when tracing is off."""
-    sentry_sdk.tracing._generate_sample_rand = lambda trace_id, **kwargs: 0.5  # ty: ignore[invalid-assignment]  # noqa: ARG005
+    setattr(SDK2_TRACING, "_generate_sample_rand", lambda trace_id, **kwargs: 0.5)  # noqa: ARG005, B010
 
 
 def _patch_skip_transaction() -> None:
@@ -157,20 +166,30 @@ def _patch_skip_transaction() -> None:
     ) -> None:
         self.generate_propagation_context(environ_or_headers)
 
-    Scope.continue_trace = continue_trace  # ty: ignore[invalid-assignment]
+    setattr(Scope, "continue_trace", continue_trace)  # noqa: B010
 
 
-PATCHES: dict[str, list[typing.Callable[[], None]]] = {
-    "errors_only_lazy_sample_rand": [_patch_lazy_sample_rand],
-    "errors_only_skip_txn": [_patch_skip_transaction],
-    "errors_only_skip_txn_no_sessions": [_patch_skip_transaction],
-    "errors_only_logging_lean_skip_txn": [_patch_skip_transaction],
-}
+PATCHES: dict[str, list[typing.Callable[[], None]]] = {}
 
-SCENARIOS["errors_only_lazy_sample_rand"] = SCENARIOS["errors_only"]
-SCENARIOS["errors_only_skip_txn"] = SCENARIOS["errors_only"]
-SCENARIOS["errors_only_skip_txn_no_sessions"] = SCENARIOS["errors_only_no_sessions"]
-SCENARIOS["errors_only_logging_lean_skip_txn"] = SCENARIOS["errors_only_logging_lean"]
+if IS_SENTRY_SDK_2:
+    endpoint_style: dict[str, typing.Any] = {"transaction_style": "endpoint"}
+    SCENARIOS["errors_only_txn_endpoint_style"] = lambda: base_kwargs(
+        max_breadcrumbs=15,
+        attach_stacktrace=True,
+        integrations=[StarletteIntegration(**endpoint_style), FastApiIntegration(**endpoint_style)],
+    )
+    PATCHES.update(
+        {
+            "errors_only_lazy_sample_rand": [_patch_lazy_sample_rand],
+            "errors_only_skip_txn": [_patch_skip_transaction],
+            "errors_only_skip_txn_no_sessions": [_patch_skip_transaction],
+            "errors_only_logging_lean_skip_txn": [_patch_skip_transaction],
+        }
+    )
+    SCENARIOS["errors_only_lazy_sample_rand"] = SCENARIOS["errors_only"]
+    SCENARIOS["errors_only_skip_txn"] = SCENARIOS["errors_only"]
+    SCENARIOS["errors_only_skip_txn_no_sessions"] = SCENARIOS["errors_only_no_sessions"]
+    SCENARIOS["errors_only_logging_lean_skip_txn"] = SCENARIOS["errors_only_logging_lean"]
 
 
 def setup(scenario: str) -> None:

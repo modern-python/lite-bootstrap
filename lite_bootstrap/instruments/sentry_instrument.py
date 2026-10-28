@@ -1,5 +1,4 @@
 import dataclasses
-import inspect
 import logging
 import typing
 
@@ -18,11 +17,23 @@ if import_checker.is_sentry_installed:
     import sentry_sdk
     from sentry_sdk.integrations.logging import LoggingIntegration
 
-    # sentry-sdk 2.25 added the parameter along with Sentry Logs; the declared floor is 2.1,
-    # where passing it raises TypeError and there is no logs handler to disable anyway.
-    SENTRY_LOGS_LEVEL_SUPPORTED: typing.Final = (
-        "sentry_logs_level" in inspect.signature(LoggingIntegration.__init__).parameters
-    )
+    IS_SENTRY_SDK_2: typing.Final = sentry_sdk.VERSION.startswith("2.")
+
+
+_PII_KEY_DENYLIST: typing.Final = {"mode": "denylist", "terms": ["forwarded", "-ip", "remote-", "via", "-user"]}
+DEFAULT_DATA_COLLECTION: typing.Final[dict[str, typing.Any]] = {
+    "user_info": False,
+    "http_bodies": [],
+    "graphql": {"document": False, "variables": False},
+    "gen_ai": {"inputs": False, "outputs": False},
+    "mcp": {"inputs": False, "outputs": False},
+    "database_query_data": False,
+    "queues": False,
+    "http_headers": {"request": _PII_KEY_DENYLIST},
+    "cookies": _PII_KEY_DENYLIST,
+    "url_query_params": _PII_KEY_DENYLIST,
+    "stack_frame_variables": {"mode": "denylist"},
+}
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
@@ -45,12 +56,9 @@ class SentryConfig(BaseConfig):
 def enrich_sentry_event_from_structlog_log(
     event: "sentry_types.Event", _: "sentry_types.Hint"
 ) -> typing.Optional["sentry_types.Event"]:
-    # sentry-sdk fills "formatted" on newer versions and "message" at the declared floor of 2.1,
-    # so read whichever is present and write the rewritten text back to that same key.
     logentry = event.get("logentry") or {}
-    message_key = "formatted" if logentry.get("formatted") else "message"
     if not (
-        (formatted_message := logentry.get(message_key))
+        (formatted_message := logentry.get("formatted"))
         and isinstance(formatted_message, str)
         and isinstance(event.get("contexts"), dict)
     ):
@@ -64,7 +72,7 @@ def enrich_sentry_event_from_structlog_log(
     if not payload.message:
         return event
 
-    event["logentry"][message_key] = payload.message  # ty: ignore[invalid-assignment]
+    event["logentry"]["formatted"] = payload.message  # ty: ignore[invalid-assignment]
     if payload.extra:
         event["contexts"]["structlog"] = payload.extra
     return event
@@ -115,9 +123,12 @@ class SentryInstrument(BaseInstrument[SentryConfig]):
         if not config.sentry_default_integrations:
             self._warn_breadcrumb_level_ignored("sentry_default_integrations is False")
             return config.sentry_integrations
-        logging_integration_kwargs: dict[str, typing.Any] = {"level": config.sentry_logging_breadcrumb_level}
-        if SENTRY_LOGS_LEVEL_SUPPORTED:
-            logging_integration_kwargs["sentry_logs_level"] = None
+        breadcrumb_level = config.sentry_logging_breadcrumb_level
+        logging_integration_kwargs: dict[str, typing.Any] = (
+            {"level": breadcrumb_level, "sentry_logs_level": None}
+            if IS_SENTRY_SDK_2
+            else {"breadcrumb_level": breadcrumb_level, "event_level": logging.ERROR, "level": None}
+        )
         return [*config.sentry_integrations, LoggingIntegration(**logging_integration_kwargs)]
 
     def bootstrap(self) -> None:
@@ -133,6 +144,7 @@ class SentryInstrument(BaseInstrument[SentryConfig]):
             "auto_session_tracking": config.sentry_auto_session_tracking,
             "integrations": self._build_integrations(),
             "default_integrations": config.sentry_default_integrations,
+            "data_collection": DEFAULT_DATA_COLLECTION,
             "before_send": wrap_before_send_callbacks(
                 enrich_sentry_event_from_structlog_log, config.sentry_before_send
             ),

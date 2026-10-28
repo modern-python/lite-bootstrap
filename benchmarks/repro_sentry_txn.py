@@ -7,6 +7,8 @@ nothing - only `init()` does - so `--off` is a genuine no-SDK baseline.
     python repro_sentry_txn.py --off      # SDK never initialised
     python repro_sentry_txn.py            # SDK as shipped
     python repro_sentry_txn.py --patched  # skip the Transaction, keep trace propagation
+
+`--patched` runs on sentry-sdk 2.x only: 3.x builds no transaction while tracing is off.
 """
 
 import asyncio
@@ -55,7 +57,7 @@ def setup(*, patched: bool) -> None:
     # tracing is DISABLED: traces_sample_rate and traces_sampler are both unset
     sentry_sdk.init(dsn="https://public@o0.ingest.sentry.io/0", transport=NullTransport)
     if patched:
-        Scope.continue_trace = continue_trace_without_transaction  # ty: ignore[invalid-assignment]
+        setattr(Scope, "continue_trace", continue_trace_without_transaction)  # noqa: B010
 
 
 async def drive(app: typing.Callable[..., typing.Awaitable[None]], requests: int) -> float:
@@ -76,6 +78,8 @@ async def drive(app: typing.Callable[..., typing.Awaitable[None]], requests: int
 
 def main() -> None:
     if "--patched" in sys.argv:
+        if not sentry_sdk.VERSION.startswith("2."):
+            sys.exit(f"--patched needs sentry-sdk 2.x; {sentry_sdk.VERSION} builds no transaction to skip")
         mode = "patched"
     elif "--off" in sys.argv:
         mode = "off"
