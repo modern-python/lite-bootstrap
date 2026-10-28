@@ -70,11 +70,14 @@ While Sentry tracing is off, lite-bootstrap reports errors in every application
 `application.http_app()` builds itself, instead of through sentry-sdk's `StarletteIntegration`.
 FastMCP's HTTP application is a Starlette application, so it works as it does
 [on FastAPI](fastapi.md#sentry): the same `sentry_lean_error_capture` rule, the same middleware and
-the same request data. `MCPIntegration` is left alone.
+the same request data. Lean capture also leaves
+[auto-enabling integrations](../introduction/configuration.md#sentry-auto-enabling-integrations) off,
+which drops `MCPIntegration` too. With tracing off it measured no cost per tool call, and the only
+difference it made to a tool error's event was a `parent_span_id` from its unsampled span.
 
 A tool that raises does not fail the request: FastMCP answers with an error result and logs the
 exception, and the logging integration turns that record into one event with the `/mcp` request
-attached, with lean capture on or off.
+attached, with lean capture on or off and with `MCPIntegration` on or off.
 
 Measured in-process per `tools/call` over stateless JSON HTTP, over the same app without Sentry:
 

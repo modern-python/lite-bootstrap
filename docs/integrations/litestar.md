@@ -150,8 +150,10 @@ Measured in-process on a do-nothing handler, over the same app without Sentry:
 | the same, request carries a sampled `sentry-trace` | +74.4 µs | +147.4 µs |
 
 sentry-sdk records installed integrations for the whole process, and `disabled_integrations`
-cannot remove one that an earlier `sentry_sdk.init` installed. If that happened, lite-bootstrap
-warns that errors may be reported twice.
+cannot remove one that an earlier `sentry_sdk.init` installed. That matters only with
+[`sentry_auto_enabling_integrations`](../introduction/configuration.md#sentry-auto-enabling-integrations)
+on, since lean capture otherwise leaves auto-enabling off and sentry-sdk never enables the framework
+integration. With it on, lite-bootstrap warns that errors may be reported twice.
 
 ## Prometheus
 

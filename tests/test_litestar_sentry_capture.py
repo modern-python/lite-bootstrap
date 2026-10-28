@@ -419,6 +419,26 @@ def test_lean_capture_reports_once_when_litestar_logs_the_exception(
     assert _exception_types(sentry_mock) == ["RuntimeError"]
 
 
+_AUTO_ENABLED_IN_THE_TEST_ENVIRONMENT: typing.Final = frozenset({"aiohttp", "httpx", "redis"})
+
+
+def test_lean_capture_leaves_auto_enabling_integrations_off_and_still_reports(sentry_mock: SentryTestTransport) -> None:
+    application = LitestarBootstrapper(bootstrap_config=_build_config(sentry_mock)).bootstrap()
+    with TestClient(app=application, raise_server_exceptions=False) as test_client:
+        active = test_client.get("/integrations").json()
+        test_client.get("/boom")
+
+    assert not _AUTO_ENABLED_IN_THE_TEST_ENVIRONMENT & set(active)
+    [event] = _error_events(sentry_mock)
+    assert event["request"]["url"] == "http://testserver.local/boom"
+
+
+def test_integration_capture_keeps_auto_enabling_integrations(sentry_mock: SentryTestTransport) -> None:
+    active = _active_integrations(sentry_mock, sentry_lean_error_capture=False)
+
+    assert set(active) >= _AUTO_ENABLED_IN_THE_TEST_ENVIRONMENT
+
+
 def test_lean_capture_replaces_the_litestar_integration(sentry_mock: SentryTestTransport) -> None:
     active = _active_integrations(sentry_mock, sentry_lean_error_capture=True)
 
@@ -441,11 +461,25 @@ def test_lean_capture_warns_when_an_earlier_init_installed_the_litestar_integrat
     sentry_mock: SentryTestTransport,
 ) -> None:
     sentry_integrations._installed_integrations.add(LitestarIntegration.identifier)  # noqa: SLF001
-    bootstrapper = LitestarBootstrapper(bootstrap_config=_build_config(sentry_mock))
+    bootstrapper = LitestarBootstrapper(
+        bootstrap_config=_build_config(sentry_mock, sentry_auto_enabling_integrations=True)
+    )
 
     with pytest.warns(UserWarning, match="installed by an earlier sentry_sdk.init"):
         bootstrapper.bootstrap()
     bootstrapper.teardown()
+
+
+def test_lean_capture_ignores_an_earlier_installed_litestar_integration_while_auto_enabling_is_off(
+    sentry_mock: SentryTestTransport,
+) -> None:
+    sentry_integrations._installed_integrations.add(LitestarIntegration.identifier)  # noqa: SLF001
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        active = _active_integrations(sentry_mock)
+
+    assert LitestarIntegration.identifier not in active
 
 
 def test_forced_lean_capture_warns_that_traces_sample_rate_gets_no_request_transactions(

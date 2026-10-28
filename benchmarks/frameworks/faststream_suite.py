@@ -50,6 +50,7 @@ _BASE: typing.Final = {
     "sentry_log_info": Scenario(config=base_config(**LOG, **sentry(), **INFO)),
     "sentry_log_handler3": Scenario(config=base_config(**LOG, **sentry()), kind="structlog"),
     "sentry_noauto": Scenario(config=base_config(**LOG, **sentry(auto_enabling_integrations=False))),
+    "sentry_auto": Scenario(config=base_config(**LOG, **sentry(), sentry_auto_enabling_integrations=True)),
     "full": Scenario(config=base_config(**OTEL_MW, **PROM_MW, **LOG, **sentry())),
 }
 SCENARIOS: typing.Final = {**_BASE, **{f"{name}@pub": scenario for name, scenario in _BASE.items()}}

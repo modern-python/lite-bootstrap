@@ -68,15 +68,18 @@ request, every request then pays the per-record cost measured here:
 
 --8<-- "benchmarks/README.md:logging"
 
-lite-bootstrap already applies four savings for you. It turns Sentry Logs off in the logging
+lite-bootstrap already applies five savings for you. It turns Sentry Logs off in the logging
 integration, because it never enables them and on 2.x the handler formats every record before
 checking whether they are enabled; that one costs nothing. Since 2.0 it also leaves release-health
 sessions off and starts breadcrumbs at `WARNING`, so an `INFO` record skips the breadcrumb handler.
 Those two cost you release health and `INFO` breadcrumbs on error events; set
 `sentry_auto_session_tracking=True` or `sentry_logging_breadcrumb_level=logging.INFO` to get them
 back. And while Sentry tracing is off it reports request errors without sentry-sdk's framework
-integration, which costs you request transactions and bodies the handler never read; set `sentry_lean_error_capture=False` to keep the integration. The numbers on this page were
-measured before 2.0, against the old defaults.
+integration, which costs you request transactions and bodies the handler never read; set `sentry_lean_error_capture=False` to keep the integration. With tracing off it also turns
+sentry-sdk's [auto-enabling integrations](configuration.md#sentry-auto-enabling-integrations) off,
+which costs you their SQL, Redis and outgoing-HTTP breadcrumbs; set
+`sentry_auto_enabling_integrations=True` to keep them. The numbers on this page were measured
+before 2.0, against the old defaults.
 
 ## What each saving costs you
 
