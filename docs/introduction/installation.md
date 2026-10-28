@@ -40,3 +40,8 @@ For example, if you want to bootstrap litestar with structlog and opentelemetry 
       ```bash
       poetry add "lite-bootstrap[litestar-logging,litestar-otl]"
       ```
+
+On a GIL-enabled interpreter, add the `orjson` extra next to any logging extra, for example
+`lite-bootstrap[fastapi-all,orjson]`: it cuts about 2 µs off each structlog call. No extra installs
+it for you, because orjson has no free-threaded wheels and no environment marker can skip it on a
+free-threaded build.
