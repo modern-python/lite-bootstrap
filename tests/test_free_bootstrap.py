@@ -8,6 +8,7 @@ import structlog
 from opentelemetry.sdk.trace import sampling
 
 from lite_bootstrap import (
+    ConfigurationError,
     FreeBootstrapper,
     FreeConfig,
     InstrumentDependencyMissingWarning,
@@ -33,6 +34,14 @@ def free_bootstrapper_config() -> FreeConfig:
         sentry_dsn="https://testdsn@localhost/1",
         logging_buffer_capacity=0,
     )
+
+
+def test_free_bootstrap_after_teardown_raises() -> None:
+    bootstrapper = FreeBootstrapper(bootstrap_config=FreeConfig())
+    bootstrapper.bootstrap()
+    bootstrapper.teardown()
+    with pytest.raises(ConfigurationError, match="construct a new FreeBootstrapper"):
+        bootstrapper.bootstrap()
 
 
 def test_free_bootstrap(free_bootstrapper_config: FreeConfig) -> None:

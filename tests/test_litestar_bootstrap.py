@@ -124,13 +124,12 @@ def test_litestar_bootstrap_twice_returns_the_same_application() -> None:
     assert bootstrapper.bootstrap() is bootstrapper.bootstrap()
 
 
-def test_litestar_bootstrap_after_teardown_builds_a_new_application() -> None:
-    bootstrapper = LitestarBootstrapper(
-        LitestarConfig(logging_enabled=False, health_checks_enabled=False, prometheus_metrics_path="")
-    )
-    first = bootstrapper.bootstrap()
+def test_litestar_bootstrap_after_teardown_raises() -> None:
+    bootstrapper = LitestarBootstrapper(bootstrap_config=LitestarConfig())
+    bootstrapper.bootstrap()
     bootstrapper.teardown()
-    assert bootstrapper.bootstrap() is not first
+    with pytest.raises(ConfigurationError, match="construct a new LitestarBootstrapper"):
+        bootstrapper.bootstrap()
 
 
 def test_litestar_bootstrapper_not_ready() -> None:

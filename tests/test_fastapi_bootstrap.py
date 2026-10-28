@@ -214,6 +214,14 @@ def test_fastapi_config_inherits_otel_insecure_warning() -> None:
     assert matching, [str(w.message) for w in caught]
 
 
+def test_fastapi_bootstrap_after_teardown_raises() -> None:
+    bootstrapper = FastAPIBootstrapper(bootstrap_config=FastAPIConfig())
+    bootstrapper.bootstrap()
+    bootstrapper.teardown()
+    with pytest.raises(ConfigurationError, match="construct a new FastAPIBootstrapper"):
+        bootstrapper.bootstrap()
+
+
 def test_second_fastapi_bootstrapper_bootstrap_raises(fastapi_config: FastAPIConfig) -> None:
     application = fastapi.FastAPI()
     first = FastAPIBootstrapper(bootstrap_config=dataclasses.replace(fastapi_config, application=application))

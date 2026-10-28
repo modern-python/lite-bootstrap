@@ -34,6 +34,7 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
 
     def __init__(self, bootstrap_config: BaseConfig) -> None:
         self.is_bootstrapped = False
+        self._torn_down = False
         # Set when another bootstrapper already owns this application; bootstrap() then refuses.
         self._attach_skipped = False
         if not self.is_ready():
@@ -131,6 +132,13 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
                 f"{type(self).__name__} per application."
             )
             raise ConfigurationError(msg)
+        if self._torn_down:
+            msg = (
+                f"{type(self).__name__} was torn down and cannot bootstrap again: its instruments "
+                f"already changed the application. To bootstrap again, construct a new "
+                f"{type(self).__name__} on a new application."
+            )
+            raise ConfigurationError(msg)
         if self.is_bootstrapped:
             return self._application
         self.is_bootstrapped = True
@@ -143,6 +151,7 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
         if not self.is_bootstrapped:
             return
         self.is_bootstrapped = False
+        self._torn_down = True
         with collect_teardown_errors(logger) as teardown_errors:
             for one_instrument in reversed(self.instruments):
                 with teardown_errors.capture(type(one_instrument).__name__):
