@@ -45,6 +45,11 @@ bootstrapper = LitestarBootstrapper(bootstrapper_config)
 application = bootstrapper.bootstrap()
 ```
 
+The bootstrapper builds the `Litestar` app itself with `Litestar.from_config`, so app-level settings
+go into `application_config=AppConfig(...)` instead of an `application` argument
+([ADR-0007](https://github.com/modern-python/lite-bootstrap/blob/main/docs/adr/0007-no-django-bootstrapper.md)
+records why).
+
 Read more about available configuration options [here](../introduction/configuration.md).
 
 ## Logging
