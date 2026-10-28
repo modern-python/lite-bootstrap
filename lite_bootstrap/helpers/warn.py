@@ -34,3 +34,27 @@ def warn_at_caller(message: str, category: type[Warning] = UserWarning) -> None:
         stacklevel += 1
         frame = frame.f_back
     warnings.warn(message, category=category, stacklevel=stacklevel)
+
+
+def deprecated_module_getattr(
+    module_name: str,
+    aliases: typing.Mapping[str, tuple[object, str | None]],
+) -> typing.Callable[[str], object]:
+    """Build a module `__getattr__` that resolves each old name to its target with a `DeprecationWarning`.
+
+    `aliases` maps an old name to its target and the name that replaces it, or None if nothing does.
+    """
+
+    def __getattr__(name: str) -> object:  # noqa: N807
+        if name not in aliases:
+            msg = f"module {module_name!r} has no attribute {name!r}"
+            raise AttributeError(msg)
+        target, replacement = aliases[name]
+        advice = f"use {replacement} instead" if replacement else "nothing replaces it"
+        warn_at_caller(
+            f"{name} is deprecated and will be removed in lite-bootstrap 2.0; {advice}.",
+            category=DeprecationWarning,
+        )
+        return target
+
+    return __getattr__

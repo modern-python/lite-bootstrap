@@ -137,6 +137,11 @@ def emulate_package_missing(package_name: str) -> Generator[None]:
         reload(import_checker)
 
 
+def _is_module_state(key: str) -> bool:
+    # A module __getattr__ holds the module's own objects, so it is restored along with them.
+    return not key.startswith("__") or key == "__getattr__"
+
+
 @contextlib.contextmanager
 def emulate_package_missing_with_module_reload(
     package_name: str, module_names: typing.Iterable[str]
@@ -156,7 +161,7 @@ def emulate_package_missing_with_module_reload(
         for name in module_names:
             if name in sys.modules:
                 mod_dict = sys.modules[name].__dict__
-                for key in [k for k in mod_dict if not k.startswith("__")]:
+                for key in [k for k in mod_dict if _is_module_state(k)]:
                     del mod_dict[key]
                 reload(sys.modules[name])
 
@@ -168,6 +173,6 @@ def emulate_package_missing_with_module_reload(
             for name, snap in snapshots.items():
                 if name in sys.modules:
                     mod_dict = sys.modules[name].__dict__
-                    for key in [k for k in mod_dict if not k.startswith("__")]:
+                    for key in [k for k in mod_dict if _is_module_state(k)]:
                         del mod_dict[key]
-                    mod_dict.update({k: v for k, v in snap.items() if not k.startswith("__")})
+                    mod_dict.update({k: v for k, v in snap.items() if _is_module_state(k)})

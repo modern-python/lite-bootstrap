@@ -1,6 +1,8 @@
 import dataclasses
 import typing
 
+from lite_bootstrap.helpers.warn import warn_at_caller
+
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class BaseConfig:
@@ -53,6 +55,11 @@ class BaseInstrument(typing.Generic[ConfigT]):
         super(BaseInstrument, cls).__init_subclass__(**kwargs)
         for legacy_name, current_name in _RENAMED_ATTRIBUTES.items():
             if legacy_name in cls.__dict__ and current_name not in cls.__dict__:
+                warn_at_caller(
+                    f"{cls.__name__}.{legacy_name} is deprecated and will be removed in lite-bootstrap 2.0; "
+                    f"use {current_name} instead.",
+                    category=DeprecationWarning,
+                )
                 setattr(cls, current_name, cls.__dict__[legacy_name])
 
     def bootstrap(self) -> None: ...

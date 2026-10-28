@@ -4,7 +4,7 @@ import logging
 import typing
 
 from lite_bootstrap import import_checker
-from lite_bootstrap.helpers.warn import warn_at_caller
+from lite_bootstrap.helpers.warn import deprecated_module_getattr, warn_at_caller
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 from lite_bootstrap.instruments.logging_factory import STRUCTLOG_META_KEYS, StructuredLogPayload
 
@@ -23,11 +23,6 @@ if import_checker.is_sentry_installed:
     SENTRY_LOGS_LEVEL_SUPPORTED: typing.Final = (
         "sentry_logs_level" in inspect.signature(LoggingIntegration.__init__).parameters
     )
-
-
-# Back-compat alias: this vocabulary moved to logging_factory and was renamed
-# STRUCTLOG_META_KEYS. Preserved here for external importers of the old name.
-IGNORED_STRUCTLOG_ATTRIBUTES: typing.Final = STRUCTLOG_META_KEYS
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
@@ -158,3 +153,12 @@ class SentryInstrument(BaseInstrument[SentryConfig]):
             sentry_sdk.flush(timeout=2)
         finally:
             sentry_sdk.init()
+
+
+if typing.TYPE_CHECKING:
+    IGNORED_STRUCTLOG_ATTRIBUTES: typing.Final = STRUCTLOG_META_KEYS
+
+__getattr__ = deprecated_module_getattr(
+    __name__,
+    {"IGNORED_STRUCTLOG_ATTRIBUTES": (STRUCTLOG_META_KEYS, "STRUCTLOG_META_KEYS")},
+)
