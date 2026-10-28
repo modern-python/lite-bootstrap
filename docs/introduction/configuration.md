@@ -15,9 +15,9 @@ Additional parameters can also be supplied through the settings object:
 - `sentry_max_breadcrumbs` - the total amount of breadcrumbs
 - `sentry_max_value_length` - the max event payload length
 - `sentry_attach_stacktrace` - if True, stack traces are automatically attached to all messages logged
-- `sentry_auto_session_tracking` - whether every request opens and closes a Sentry release-health `Session` (default: `True`), measured at ~7.7 µs per request. Set it to `False` if you do not use Sentry release health.
+- `sentry_auto_session_tracking` - whether every request opens and closes a Sentry release-health `Session` (default: `False`), measured at ~7.7 µs per request. Set it to `True` if you use Sentry release health: crash-free session and user rates need it.
 - `sentry_integrations` - list of integrations to enable
-- `sentry_logging_breadcrumb_level` - the minimum standard-library log level recorded as a breadcrumb (default: `logging.INFO`). See below for how it reaches `LoggingIntegration`.
+- `sentry_logging_breadcrumb_level` - the minimum standard-library log level recorded as a breadcrumb (default: `logging.WARNING`). See below for how it reaches `LoggingIntegration`.
 - `sentry_tags` - key/value string pairs that are both indexed and searchable
 - `sentry_additional_params` - additional params, which will be passed to `sentry_sdk.init`, overriding any of the above that map to the same keyword
 - `sentry_default_integrations` - whether to use sentry's default integrations (default: `True`)
@@ -44,9 +44,12 @@ Sentry Logs. 3.0 renamed the integration's arguments, so the call differs per ma
 On 2.x, turning `sentry_logs_level` off is free. lite-bootstrap never sets `enable_logs`, so Sentry
 Logs is off, but `SentryLogsHandler.emit` formats the record *before* it checks whether logs are
 enabled ([getsentry/sentry-python#7402](https://github.com/getsentry/sentry-python/issues/7402)) - it
-formats every `INFO`+ record and discards the result. Dropping breadcrumbs as well, with
-`sentry_logging_breadcrumb_level=None`, saves more but costs you log breadcrumbs on error events, so
-it stays on by default. Both are measured on the [performance page](performance.md#where-the-time-goes).
+formats every `INFO`+ record and discards the result.
+
+Breadcrumbs start at `WARNING`, so an `INFO` record skips the breadcrumb handler. Recording it would
+cost about 6 µs per record. Set `sentry_logging_breadcrumb_level=logging.INFO` to get `INFO` records
+back as breadcrumbs on error events, or `None` to drop log breadcrumbs altogether. Both are measured
+on the [performance page](performance.md#where-the-time-goes).
 
 Two ways to opt out of the appended integration: supply your own `LoggingIntegration` in
 `sentry_integrations`, which lite-bootstrap leaves untouched, or set

@@ -50,7 +50,7 @@ In rough order of what they return:
 | [`opentelemetry_sampler`](configuration.md#opentelemetry), 1% ratio | ~55 µs/req | 99% of your traces |
 | `http_methods_to_capture=()` on the Sentry ASGI integrations | ~35 µs/req | Sentry-side trace correlation |
 | [`opentelemetry_exclude_spans`](configuration.md#opentelemetry), FastAPI and Litestar | ~34 µs/req | the two ASGI event spans |
-| [`sentry_auto_session_tracking=False`](configuration.md#sentry) | ~7.7 µs/req | Sentry release health |
+| [`sentry_auto_session_tracking=False`](configuration.md#sentry), the default since 2.0 | ~7.7 µs/req | Sentry release health |
 | [`sentry_logging_breadcrumb_level=None`](configuration.md#sentry-logging-integration) | ~7 µs per log record | log breadcrumbs on errors |
 
 Together those are worth ~132 µs per request against the ~136 µs the tuned row actually recovers,
@@ -65,9 +65,13 @@ request, every request then pays the per-record cost measured here:
 
 --8<-- "benchmarks/README.md:logging"
 
-lite-bootstrap already applies one saving for you: it passes `sentry_logs_level=None` by default,
-because it never enables Sentry Logs and the handler formats every record before checking whether
-they are enabled. That one costs nothing, which is why it is a default rather than a knob.
+lite-bootstrap already applies three savings for you. It turns Sentry Logs off in the logging
+integration, because it never enables them and on 2.x the handler formats every record before
+checking whether they are enabled; that one costs nothing. Since 2.0 it also leaves release-health
+sessions off and starts breadcrumbs at `WARNING`, so an `INFO` record skips the breadcrumb handler.
+Those two cost you release health and `INFO` breadcrumbs on error events; set
+`sentry_auto_session_tracking=True` or `sentry_logging_breadcrumb_level=logging.INFO` to get them
+back. The numbers on this page were measured before 2.0, against the old defaults.
 
 ## What each saving costs you
 

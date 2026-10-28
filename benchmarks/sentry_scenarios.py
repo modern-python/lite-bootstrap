@@ -78,7 +78,7 @@ def _errors_and_breadcrumbs_only(*, breadcrumbs: bool) -> LoggingIntegration:
 
 SCENARIOS: dict[str, typing.Callable[[], dict[str, typing.Any]] | None] = {
     "off": None,
-    # lite-bootstrap's own defaults: tracing off, all default and auto integrations on.
+    # lite-bootstrap 1.x's defaults: tracing off, sessions on, all default and auto integrations on.
     "errors_only": lambda: base_kwargs(
         max_breadcrumbs=15,
         max_value_length=16384,
