@@ -136,7 +136,7 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
             msg = (
                 f"{type(self).__name__} was torn down and cannot bootstrap again: its instruments "
                 f"already changed the application. To bootstrap again, construct a new "
-                f"{type(self).__name__} on a new application."
+                f"{type(self).__name__}, with a new application if it takes one."
             )
             raise ConfigurationError(msg)
         if self.is_bootstrapped:
