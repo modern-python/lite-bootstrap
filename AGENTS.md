@@ -28,6 +28,22 @@ Before pushing a raised dependency floor, run the `floors` steps from
 [`_checks.yml`](.github/workflows/_checks.yml) locally. If resolution fails, raise the direct floor
 it names.
 
+## Versioning
+
+- **A change is breaking when a user's working code or deployed behaviour changes without them
+  editing anything:** a new default, a removed or renamed public name or config field, a changed
+  HTTP surface (path, status code, response body), or a raised dependency floor that the previous
+  floor ran correctly with. Correcting a floor the code never worked with is a fix.
+- **A breaking change ships only in a major release.** One exception: dropping a Python version past
+  its end of life ships in a minor, as 1.11.0 did for 3.10. Installers skip a release whose
+  `requires-python` excludes the running interpreter, so no deployed service breaks.
+- **A rename keeps the old name working, with a `DeprecationWarning`, for at least one minor, and
+  the next major deletes it.** The warning names that major. A module-level name goes through
+  `deprecated_module_getattr` plus a `typing.TYPE_CHECKING` alias so type checkers still see it; a
+  config field goes through `BaseConfig._renamed_fields`.
+- **Every breaking change gets a line in a "Breaking changes" section of the release notes**, as
+  [1.12.0](https://github.com/modern-python/lite-bootstrap/releases/tag/1.12.0) has.
+
 ## Agent skills
 
 ### Issue tracker
@@ -44,13 +60,10 @@ Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/
 
 ## Code style
 
-Four rules that are not visible in the code that follows them:
+Three rules that are not visible in the code that follows them:
 
 - **No `# noqa: PLR2004`.** Extract the magic value to a named local instead:
   `expected_max_age = 600; assert config.cors_max_age == expected_max_age`.
-- **A public rename ships a silent alias.** `OldName = NewName` at the end of the module, re-exported
-  from `__init__.py` if the old name was. A class assignment, not a subclass, so `isinstance` still
-  holds; `OpentelemetryConfig` is the worked example.
 - **A warning reached from config construction or an instrument's `bootstrap()` goes through
   `warn_at_caller`.** Neither depth is constant: a `__post_init__` cascade runs as deep as that
   config's MRO, and `bootstrap()` sits a frame deeper whenever it calls `super().bootstrap()`. So
