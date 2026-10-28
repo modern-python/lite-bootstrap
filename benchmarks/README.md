@@ -368,7 +368,7 @@ prometheus-client 0.26.0, structlog 26.1.0. In-process, baseline 12.1 µs per re
 | OTel 0% + OTel HTTP metrics | +73.6 | +12.9 over OTel 0%, second run |
 | OTel 0% + Prometheus | +76.5 | +15.8 over OTel 0%, second run |
 | OTel 0% + OTel HTTP metrics + Prometheus | +90.2 | +29.5 over OTel 0%, second run |
-| Sentry, lite-bootstrap defaults (tracing off) | +70.9 | LitestarIntegration |
+| Sentry, lite-bootstrap 1.x defaults (tracing off) | +70.9 | LitestarIntegration |
 | Sentry, `sentry_auto_session_tracking=False` | +63.7 | sessions cost 7.2 |
 | Sentry, `auto_enabling_integrations=False` | -0.1 | LitestarIntegration is auto-enabling, so nothing captures request errors |
 | Sentry, `sentry_default_integrations=False` | -0.2 | same reason |
@@ -386,6 +386,21 @@ prometheus-client 0.26.0, structlog 26.1.0. In-process, baseline 12.1 µs per re
 The "second run" rows come from a noisier re-check (spread between rounds up to 67% per row). The
 first run's OTel 0% row is +56.8, the re-check's +60.7, and the deltas in the notes are against the
 re-check.
+Since 2.0, lite-bootstrap reports Litestar request errors itself while Sentry tracing is off, without
+`LitestarIntegration`. Rerun in-process on the M2 host (macOS, CPython 3.14.7, litestar 2.25.0,
+`bench.py litestar bare,sentry,sentry_sampled_trace,sentry_integration,sentry_integration_sampled_trace --repeat 2`):
+
+| scenario | sentry-sdk 2.73.0 | 3.0.0b2 |
+|---|---:|---:|
+| `sentry`: lean capture, the 2.0 default | +7.3 | +8.3 |
+| `sentry_sampled_trace`: the same, request carries a sampled `sentry-trace` | +9.7 | +10.1 |
+| `sentry_integration`: `sentry_lean_error_capture=False` | +70.7 | +59.5 |
+| `sentry_integration_sampled_trace` | +74.4 | +147.4 |
+
+On 3.0 an incoming sampled `sentry-trace` makes `LitestarIntegration` record a real span even with
+tracing off. The table above was measured before 2.0. Its `sentry_nosess` scenario now has the same
+config as `sentry`, because sessions are off by default since 2.0.
+
 lite-bootstrap's Litestar defaults with no endpoint configured (Prometheus, health, logging and
 Swagger on) cost +11.7 µs on `/ping`, all of it Prometheus. The access-log middleware writes each record
 twice because Litestar's own stdlib logging config is applied at startup next to lite-bootstrap's.
@@ -407,8 +422,8 @@ prometheus-client 0.26.0, structlog 26.1.0. Baseline 33350 RPS, 30.0 µs per req
 | OpenTelemetry, 10%, exclude receive/send | 11258 | +58.8 |
 | Prometheus | 18823 | +23.1 |
 | Litestar access log on | 6879 | +115.4 |
-| Sentry, defaults | 8119 | +93.2 |
-| Sentry, sessions off | 9184 | +78.9 |
+| Sentry, 1.x defaults | 8119 | +93.2 |
+| Sentry, 1.x defaults, sessions off | 9184 | +78.9 |
 | CORS (ab sends no Origin) | 30942 | +2.3 |
 | health check | 28337 | +5.3 |
 | health check with OpenTelemetry spans | 4600 | +187.4 |

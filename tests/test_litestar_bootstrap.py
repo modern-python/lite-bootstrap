@@ -262,6 +262,17 @@ def test_litestar_bootstrap_without_prometheus_client() -> None:
         sys.modules.update(saved)
 
 
+def test_litestar_bootstrapper_runs_without_sentry_sdk(litestar_config: LitestarConfig) -> None:
+    with emulate_package_missing_with_module_reload(
+        "sentry_sdk",
+        ["lite_bootstrap.instruments.sentry_instrument", "lite_bootstrap.bootstrappers.litestar_bootstrapper"],
+    ):
+        with pytest.warns(UserWarning, match="sentry_sdk"):
+            bootstrapper = litestar_bootstrapper.LitestarBootstrapper(bootstrap_config=litestar_config)
+        bootstrapper.bootstrap()
+        bootstrapper.teardown()
+
+
 class _RecordingHandler(logging.Handler):
     def __init__(self) -> None:
         super().__init__()

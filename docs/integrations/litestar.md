@@ -106,6 +106,53 @@ A bare `LoggingMiddlewareConfig()` restores all of Litestar's own defaults,
 including full request/response body logging, so pass explicit
 `request_log_fields` / `response_log_fields`.
 
+## Sentry
+
+While Sentry tracing is off, lite-bootstrap reports request errors itself instead of through
+sentry-sdk's `LitestarIntegration`. Tracing counts as off when `sentry_traces_sample_rate` is unset
+and `sentry_additional_params` sets none of `traces_sample_rate`, `traces_sampler` and
+`enable_tracing`. With tracing off, the integration still builds a transaction and a span per
+middleware for every request and then discards them
+([getsentry/sentry-python#7400](https://github.com/getsentry/sentry-python/issues/7400)). On
+sentry-sdk 3.0, an incoming `sentry-trace` header marked as sampled makes it record a real span.
+
+`sentry_lean_error_capture` picks the path:
+
+- `None`, the default: lean capture while tracing is off and `sentry_integrations` holds no
+  `LitestarIntegration`, the integration otherwise.
+- `True`: lean capture always. lite-bootstrap warns when tracing is on, since no request starts a
+  transaction, and when `sentry_integrations` holds a `LitestarIntegration`, which gets dropped.
+- `False`: the integration always.
+
+Lean capture passes `LitestarIntegration` in `disabled_integrations` and adds a middleware and an
+`after_exception` hook. The middleware gives each request its own Sentry scope, and its own
+release-health session when `sentry_auto_session_tracking` is on. It continues an incoming
+`sentry-trace` and `baggage`, and attaches the request to every event sent while the request runs.
+
+The request data follows the same [`data_collection`](../introduction/configuration.md#sentry-data-collection)
+settings the integration reads. Method, URL, query string, headers and cookies are filtered by
+their denylists. The client address and `scope["user"]` are attached only when `user_info` is on.
+A body is attached only when `http_bodies` includes `"incoming_request"` and the handler has
+already read it, because lean capture never reads the stream itself. The integration reads every
+non-GET body before the handler runs.
+
+An exception is reported only when its response is a 5xx, so one that your `exception_handlers`
+answer with a 404 is not reported. The integration reports every exception except an
+`HTTPException` below 500. Litestar logs the exceptions it handles, and lean capture keeps the
+`litestar` logger from turning them into a second event, as the integration does.
+
+Measured in-process on a do-nothing handler, over the same app without Sentry:
+
+| Sentry setup | sentry-sdk 2.73.0 | 3.0.0b2 |
+|---|---:|---:|
+| lean capture, the default | +7.3 µs | +8.3 µs |
+| `sentry_lean_error_capture=False` | +70.7 µs | +59.5 µs |
+| the same, request carries a sampled `sentry-trace` | +74.4 µs | +147.4 µs |
+
+sentry-sdk records installed integrations for the whole process, and `disabled_integrations`
+cannot remove one that an earlier `sentry_sdk.init` installed. If that happened, lite-bootstrap
+warns that errors may be reported twice.
+
 ## Prometheus
 
 `prometheus_group_path` defaults to `True`, so the `path` metric label uses the

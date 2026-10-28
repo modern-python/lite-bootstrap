@@ -36,6 +36,9 @@ DEFAULT_DATA_COLLECTION: typing.Final[dict[str, typing.Any]] = {
 }
 
 
+_TRACING_OPTIONS: typing.Final = ("traces_sample_rate", "traces_sampler", "enable_tracing")
+
+
 @dataclasses.dataclass(kw_only=True, frozen=True)
 class SentryConfig(BaseConfig):
     sentry_dsn: str | None = None
@@ -51,6 +54,15 @@ class SentryConfig(BaseConfig):
     sentry_tags: dict[str, str] | None = None
     sentry_default_integrations: bool = True
     sentry_before_send: "sentry_types.EventProcessor | None" = None
+
+    def is_sentry_tracing_requested(self) -> bool:
+        return any(
+            option is not None
+            for option in (
+                self.sentry_traces_sample_rate,
+                *(self.sentry_additional_params.get(name) for name in _TRACING_OPTIONS),
+            )
+        )
 
 
 def enrich_sentry_event_from_structlog_log(
@@ -98,8 +110,11 @@ def wrap_before_send_callbacks(
     return run_before_send
 
 
+SentryConfigT = typing.TypeVar("SentryConfigT", bound=SentryConfig)
+
+
 @dataclasses.dataclass(kw_only=True, slots=True)
-class SentryInstrument(BaseInstrument[SentryConfig]):
+class SentryInstrument(BaseInstrument[SentryConfigT]):
     not_configured_reason = "sentry_dsn is empty"
     missing_dependency_message = "sentry_sdk is not installed"
 
@@ -131,7 +146,7 @@ class SentryInstrument(BaseInstrument[SentryConfig]):
         )
         return [*config.sentry_integrations, LoggingIntegration(**logging_integration_kwargs)]
 
-    def bootstrap(self) -> None:
+    def _build_init_params(self) -> dict[str, typing.Any]:
         config = self.bootstrap_config
         init_params: dict[str, typing.Any] = {
             "dsn": config.sentry_dsn,
@@ -150,8 +165,11 @@ class SentryInstrument(BaseInstrument[SentryConfig]):
             ),
         }
         init_params.update(config.sentry_additional_params)
-        sentry_sdk.init(**init_params)
-        tags: dict[str, str] = config.sentry_tags or {}
+        return init_params
+
+    def bootstrap(self) -> None:
+        sentry_sdk.init(**self._build_init_params())
+        tags: dict[str, str] = self.bootstrap_config.sentry_tags or {}
         sentry_sdk.set_tags(tags)
 
     def teardown(self) -> None:
