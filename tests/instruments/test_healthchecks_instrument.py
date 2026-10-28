@@ -1,6 +1,10 @@
 import asyncio
 import time
+from unittest.mock import MagicMock
 
+import pytest
+
+from lite_bootstrap.instruments import healthchecks_instrument
 from lite_bootstrap.instruments.healthchecks_instrument import HealthChecksConfig, HealthChecksInstrument
 
 
@@ -72,3 +76,11 @@ async def test_healthchecks_status_is_healthy_without_probes() -> None:
 def test_healthchecks_render_data_unhealthy() -> None:
     instrument = HealthChecksInstrument(bootstrap_config=HealthChecksConfig())
     assert instrument.render_health_check_data(health_status=False)["health_status"] is False
+
+
+async def test_healthchecks_status_without_probes_skips_gather(monkeypatch: pytest.MonkeyPatch) -> None:
+    gather = MagicMock(side_effect=asyncio.gather)
+    monkeypatch.setattr(healthchecks_instrument.asyncio, "gather", gather)
+    instrument = HealthChecksInstrument(bootstrap_config=HealthChecksConfig())
+    assert await instrument.define_health_status()
+    gather.assert_not_called()

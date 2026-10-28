@@ -53,9 +53,12 @@ class HealthChecksInstrument(BaseInstrument[HealthChecksConfigT]):
         return health_check_data
 
     async def define_health_status(self) -> bool:
+        probes = self.bootstrap_config.health_checks_probes
+        if not probes:
+            return await self._define_framework_health_status()
         results = await asyncio.gather(
             self._define_framework_health_status(),
-            *(self._run_probe(name, probe) for name, probe in self.bootstrap_config.health_checks_probes.items()),
+            *(self._run_probe(name, probe) for name, probe in probes.items()),
         )
         return all(results)
 
