@@ -292,12 +292,18 @@ def test_teardown_removes_filters_even_when_a_handler_close_fails() -> None:
     target_logger = logging.getLogger("teardown_despite_error.target")
 
     class ExplodingHandler(logging.Handler):
+        exploded = False
+
         def emit(self, record: logging.LogRecord) -> None:
             """Never called: this handler exists only to fail on close."""
 
         def close(self) -> None:
-            msg = "boom"
-            raise RuntimeError(msg)
+            """Fail the first close only: a later logging.shutdown still reaches this handler until it is collected."""
+            super().close()
+            if not self.exploded:
+                self.exploded = True
+                msg = "boom"
+                raise RuntimeError(msg)
 
     instrument = LoggingInstrument(
         bootstrap_config=LoggingConfig(
@@ -309,8 +315,11 @@ def test_teardown_removes_filters_even_when_a_handler_close_fails() -> None:
     exploding_handler = ExplodingHandler()
     logging.getLogger().addHandler(exploding_handler)
 
-    with pytest.raises(TeardownError):
-        instrument.teardown()
+    try:
+        with pytest.raises(TeardownError):
+            instrument.teardown()
+    finally:
+        logging.getLogger().removeHandler(exploding_handler)
 
     assert target_logger.filters == []
 
