@@ -343,7 +343,7 @@ def test_fastapi_access_log_is_off_by_default(
 def test_fastapi_access_log_records_the_request_when_enabled(
     fastapi_config: FastAPIConfig, access_logger: RecordingAccessLogger
 ) -> None:
-    config = dataclasses.replace(fastapi_config, fastapi_logging_middleware_enabled=True)
+    config = dataclasses.replace(fastapi_config, logging_access_log_enabled=True)
     with _bootstrapped_with_route(config) as application, TestClient(application) as test_client:
         test_client.post("/items/abc", json={"a": 1})
 
@@ -369,7 +369,7 @@ def test_fastapi_access_log_never_records_bodies(
     credentials into the log. Pinning the field set, not just one secret, is what stops a later
     change quietly adding headers, cookies or a body back.
     """
-    config = dataclasses.replace(fastapi_config, fastapi_logging_middleware_enabled=True)
+    config = dataclasses.replace(fastapi_config, logging_access_log_enabled=True)
     secret = f"secret-{uuid.uuid4().hex}"
     with _bootstrapped_with_route(config) as application, TestClient(application) as test_client:
         response = test_client.post("/items/abc", json={"password": secret})
@@ -389,7 +389,7 @@ def test_fastapi_access_log_never_records_bodies(
 def test_fastapi_access_log_excludes_infrastructure_paths(
     fastapi_config: FastAPIConfig, access_logger: RecordingAccessLogger, path_attribute: str
 ) -> None:
-    config = dataclasses.replace(fastapi_config, fastapi_logging_middleware_enabled=True)
+    config = dataclasses.replace(fastapi_config, logging_access_log_enabled=True)
     with _bootstrapped_with_route(config) as application, TestClient(application) as test_client:
         test_client.get(getattr(config, path_attribute))
 
@@ -413,7 +413,7 @@ def test_fastapi_access_log_keeps_lookalike_paths(
     fastapi_config: FastAPIConfig, access_logger: RecordingAccessLogger
 ) -> None:
     """A route merely sharing a prefix with an excluded path is still logged."""
-    config = dataclasses.replace(fastapi_config, fastapi_logging_middleware_enabled=True)
+    config = dataclasses.replace(fastapi_config, logging_access_log_enabled=True)
     lookalike_path = f"{config.health_checks_path.rstrip('/')}y"
     with _bootstrapped(config) as application:
 
@@ -431,7 +431,7 @@ def test_fastapi_access_log_keeps_lookalike_paths(
 def test_fastapi_access_log_records_a_raising_request(
     fastapi_config: FastAPIConfig, access_logger: RecordingAccessLogger
 ) -> None:
-    config = dataclasses.replace(fastapi_config, fastapi_logging_middleware_enabled=True)
+    config = dataclasses.replace(fastapi_config, logging_access_log_enabled=True)
     with _bootstrapped(config) as application:
 
         @application.get("/boom")

@@ -31,7 +31,7 @@ HEALTH: typing.Final = {"health_checks_enabled": True}
 SCENARIOS: typing.Final = {
     "bare": Scenario(config=base_config()),
     "log": Scenario(config=base_config(**LOG)),
-    "log_mw": Scenario(config=base_config(**LOG, fastapi_logging_middleware_enabled=True)),
+    "log_mw": Scenario(config=base_config(**LOG, logging_access_log_enabled=True)),
     "prom": Scenario(config=base_config(**PROM)),
     "otel": Scenario(config=base_config(**OTEL)),
     "otel_excl": Scenario(config=base_config(**OTEL, **EXCL)),

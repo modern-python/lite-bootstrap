@@ -41,7 +41,7 @@ def no_fastmcp_spans() -> None:
 SCENARIOS: typing.Final = {
     "bare": Scenario(config=base_config()),
     "log": Scenario(config=base_config(**LOG)),
-    "log_mw": Scenario(config=base_config(**LOG, fastmcp_logging_middleware_enabled=True)),
+    "log_mw": Scenario(config=base_config(**LOG, logging_access_log_enabled=True)),
     "prom": Scenario(config=base_config(**PROM)),
     "otel": Scenario(config=base_config(**OTEL)),
     "otel_nofastmcp_spans": Scenario(config=base_config(**OTEL), patch=no_fastmcp_spans),

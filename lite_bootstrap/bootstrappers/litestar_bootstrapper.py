@@ -2,6 +2,7 @@ import dataclasses
 import pathlib
 import re
 import typing
+from collections.abc import Mapping
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
@@ -24,6 +25,7 @@ from lite_bootstrap.instruments.prometheus_instrument import (
 from lite_bootstrap.instruments.pyroscope_instrument import PyroscopeConfig, PyroscopeInstrument
 from lite_bootstrap.instruments.sentry_instrument import SentryConfig, SentryInstrument
 from lite_bootstrap.instruments.swagger_instrument import SwaggerConfig, SwaggerInstrument
+from lite_bootstrap.types import UNSET, UnsetType
 
 
 if import_checker.is_litestar_installed:
@@ -124,20 +126,29 @@ class LitestarConfig(
 ):
     application_config: "AppConfig" = dataclasses.field(default_factory=lambda: AppConfig())  # noqa: PLW0108
     litestar_logging_middleware_config: "LoggingMiddlewareConfig | None" = None
-    litestar_logging_middleware_enabled: bool = False
+    logging_access_log_enabled: bool = False
     opentelemetry_exclude_spans: list[typing.Literal["receive", "send"]] = dataclasses.field(default_factory=list)
     prometheus_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     # Bounds path-label cardinality (Litestar defaults False -> raw URLs leak memory). See litestar#4891.
     prometheus_group_path: bool = True
-    swagger_extra_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
+    swagger_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
+    # Deprecated names, removed in 2.0.
+    _renamed_fields: typing.ClassVar[Mapping[str, str]] = {
+        "litestar_logging_middleware_enabled": "logging_access_log_enabled",
+        "swagger_extra_params": "swagger_additional_params",
+    }
+    litestar_logging_middleware_enabled: bool | UnsetType = dataclasses.field(default=UNSET, repr=False, compare=False)
+    swagger_extra_params: dict[str, typing.Any] | UnsetType = dataclasses.field(
+        default=UNSET, repr=False, compare=False
+    )
 
     def __post_init__(self) -> None:
         # @dataclass(slots=True) replaces the class object, breaking bare super().
         super(LitestarConfig, self).__post_init__()
-        if self.litestar_logging_middleware_config is not None and not self.litestar_logging_middleware_enabled:
+        if self.litestar_logging_middleware_config is not None and not self.logging_access_log_enabled:
             warn_at_caller(
-                "litestar_logging_middleware_config is ignored while litestar_logging_middleware_enabled is False; "
-                "set litestar_logging_middleware_enabled=True to turn access logging on."
+                "litestar_logging_middleware_config is ignored while logging_access_log_enabled is False; "
+                "set logging_access_log_enabled=True to turn access logging on."
             )
 
 
@@ -212,7 +223,7 @@ class LitestarLoggingInstrument(LoggingInstrument[LitestarConfig]):
                         standard_lib_logging_config=self._build_standard_lib_logging_config(),
                     ),
                     # Litestar defaults this to True, which logs full request/response bodies.
-                    enable_middleware_logging=self.bootstrap_config.litestar_logging_middleware_enabled,
+                    enable_middleware_logging=self.bootstrap_config.logging_access_log_enabled,
                     middleware_logging_config=self._build_logging_middleware_config(),
                 ),
             )
@@ -315,7 +326,7 @@ class LitestarSwaggerInstrument(SwaggerInstrument[LitestarConfig]):
             version=config.service_version,
             description=config.service_description,
             render_plugins=render_plugins,
-            **config.swagger_extra_params,
+            **config.swagger_additional_params,
         )
         if config.swagger_offline_docs:
             static_dir_path = pathlib.Path(__file__).parent.parent / "static/litestar_docs"

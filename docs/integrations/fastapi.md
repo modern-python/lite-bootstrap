@@ -58,7 +58,7 @@ place to add a log record. Turn it on explicitly:
 ```python
 FastAPIConfig(
     service_name="microservice",
-    fastapi_logging_middleware_enabled=True,
+    logging_access_log_enabled=True,
 )
 ```
 
@@ -81,7 +81,7 @@ structured one, clear uvicorn's handlers:
 ```python
 FastAPIConfig(
     service_name="microservice",
-    fastapi_logging_middleware_enabled=True,
+    logging_access_log_enabled=True,
     logging_unset_handlers=["uvicorn.access"],
 )
 ```
