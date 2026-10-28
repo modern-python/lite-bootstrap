@@ -498,6 +498,43 @@ def test_one_event_per_failing_request_when_uvicorn_logs_the_exception(
     assert _exception_types(sentry_mock) == ["RuntimeError"]
 
 
+_AUTO_ENABLED_IN_THE_TEST_ENVIRONMENT: typing.Final = frozenset({"aiohttp", "httpx", "redis"})
+
+
+def test_lean_capture_leaves_auto_enabling_integrations_off_and_still_reports(sentry_mock: SentryTestTransport) -> None:
+    with TestClient(app=_bootstrap(sentry_mock), raise_server_exceptions=False) as test_client:
+        active = test_client.get("/integrations").json()
+        test_client.get("/boom")
+
+    assert not _AUTO_ENABLED_IN_THE_TEST_ENVIRONMENT & set(active)
+    [event] = _error_events(sentry_mock)
+    assert event["request"]["url"] == "http://testserver/boom"
+
+
+def test_integration_capture_keeps_auto_enabling_integrations(sentry_mock: SentryTestTransport) -> None:
+    active = _active_integrations(sentry_mock, sentry_lean_error_capture=False)
+
+    assert set(active) >= _AUTO_ENABLED_IN_THE_TEST_ENVIRONMENT
+
+
+def test_forced_lean_capture_leaves_auto_enabling_integrations_off_while_tracing_is_on(
+    sentry_mock: SentryTestTransport,
+) -> None:
+    with pytest.warns(UserWarning, match="Sentry tracing"):
+        config = _build_config(sentry_mock, sentry_lean_error_capture=True, sentry_traces_sample_rate=1.0)
+
+    assert _sentry_init_kwargs(config)["auto_enabling_integrations"] is False
+
+
+def test_fastmcp_lean_capture_leaves_mcp_integration_off(sentry_mock: SentryTestTransport) -> None:
+    bootstrapper = FastMcpBootstrapper(bootstrap_config=_build_fastmcp_config(sentry_mock))
+    application = bootstrapper.bootstrap()
+    with TestClient(application.http_app()) as test_client:
+        active = test_client.get("/integrations").json()
+
+    assert "mcp" not in active
+
+
 def test_lean_capture_replaces_the_starlette_integrations(sentry_mock: SentryTestTransport) -> None:
     active = _active_integrations(sentry_mock, sentry_lean_error_capture=True)
 
@@ -520,11 +557,25 @@ def test_lean_capture_warns_when_an_earlier_init_installed_the_starlette_integra
     sentry_mock: SentryTestTransport,
 ) -> None:
     sentry_integrations._installed_integrations.add(StarletteIntegration.identifier)  # noqa: SLF001
-    bootstrapper = FastAPIBootstrapper(bootstrap_config=_build_config(sentry_mock))
+    bootstrapper = FastAPIBootstrapper(
+        bootstrap_config=_build_config(sentry_mock, sentry_auto_enabling_integrations=True)
+    )
 
     with pytest.warns(UserWarning, match="installed by an earlier sentry_sdk.init"):
         bootstrapper.bootstrap()
     bootstrapper.teardown()
+
+
+def test_lean_capture_ignores_an_earlier_installed_starlette_integration_while_auto_enabling_is_off(
+    sentry_mock: SentryTestTransport,
+) -> None:
+    sentry_integrations._installed_integrations.add(StarletteIntegration.identifier)  # noqa: SLF001
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        active = _active_integrations(sentry_mock)
+
+    assert StarletteIntegration.identifier not in active
 
 
 def test_forced_lean_capture_warns_that_traces_sample_rate_gets_no_request_transactions(

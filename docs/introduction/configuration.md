@@ -21,6 +21,7 @@ Additional parameters can also be supplied through the settings object:
 - `sentry_tags` - key/value string pairs that are both indexed and searchable
 - `sentry_additional_params` - additional params, which will be passed to `sentry_sdk.init`, overriding any of the above that map to the same keyword
 - `sentry_default_integrations` - whether to use sentry's default integrations (default: `True`)
+- `sentry_auto_enabling_integrations` - whether sentry-sdk enables an integration for every installed package it knows, such as SQLAlchemy, asyncpg, redis and httpx (default: `None`, meaning off while Sentry tracing is off). See [Sentry auto-enabling integrations](#sentry-auto-enabling-integrations).
 - `sentry_before_send` - optional callback chained after the built-in structlog enricher, passed to `sentry_sdk.init(before_send=...)`
 - `sentry_lean_error_capture` - Litestar, FastAPI and FastMCP: report request errors without sentry-sdk's framework integration (default: `None`, meaning on while Sentry tracing is off). See [Litestar](../integrations/litestar.md#sentry), [FastAPI](../integrations/fastapi.md#sentry) and [FastMCP](../integrations/fastmcp.md#sentry).
 
@@ -57,6 +58,31 @@ Two ways to opt out of the appended integration: supply your own `LoggingIntegra
 `sentry_integrations`, which lite-bootstrap leaves untouched, or set
 `sentry_default_integrations=False`, which suppresses it along with every other default integration.
 Under either, `sentry_logging_breadcrumb_level` is ignored and lite-bootstrap warns.
+
+### Sentry auto-enabling integrations
+
+sentry-sdk enables an integration for every installed package it has one for: the web frameworks,
+SQLAlchemy, asyncpg, redis, httpx, aiohttp, MCP and others. lite-bootstrap passes
+`auto_enabling_integrations` to `sentry_sdk.init`, and `sentry_auto_enabling_integrations` picks it:
+
+- `None`, the default: off while Sentry tracing is off, on while it is on. On Litestar, FastAPI and
+  FastMCP it follows [`sentry_lean_error_capture`](#sentry) instead: off with lean capture, on when
+  sentry-sdk's framework integration reports request errors, because that integration is
+  auto-enabling too.
+- `True` or `False`: that value always. An `auto_enabling_integrations` in `sentry_additional_params`
+  still wins over both.
+
+With tracing off, those integrations still open a span and record a breadcrumb for every SQL
+statement, Redis command or outgoing HTTP request. `SqlalchemyIntegration` measured about 64 µs per
+statement on sentry-sdk 2.70, and `RedisIntegration` +27.1 µs per FastStream publish on 2.73.0 and
++9.5 µs on 3.0.0b2 ([FastStream](https://github.com/modern-python/lite-bootstrap/blob/main/benchmarks/README.md#8d-faststream)). The default integrations stay:
+dedupe, excepthook, threading, stdlib, atexit, modules, argv and lite-bootstrap's own
+`LoggingIntegration`.
+
+Off, error events lose what those integrations add: SQL, Redis and outgoing-HTTP breadcrumbs, and
+anything else an auto-enabled integration attaches. To keep them, set
+`sentry_auto_enabling_integrations=True`, or list just the integrations you want in
+`sentry_integrations`, for example `[SqlalchemyIntegration()]`.
 
 ### Sentry data collection
 

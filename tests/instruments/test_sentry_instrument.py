@@ -381,3 +381,85 @@ def test_sentry_does_not_warn_when_the_breadcrumb_level_is_left_at_its_default(
         assert [one for one in recwarn if "sentry_logging_breadcrumb_level" in str(one.message)] == []
     finally:
         instrument.teardown()
+
+
+_AUTO_ENABLED_IN_THE_TEST_ENVIRONMENT: typing.Final = frozenset({"aiohttp", "httpx", "redis"})
+
+
+def _active_integrations(bootstrap_config: SentryConfig) -> set[str]:
+    instrument = SentryInstrument(bootstrap_config=bootstrap_config)
+    instrument.bootstrap()
+    try:
+        return set(sentry_sdk.get_client().integrations)
+    finally:
+        instrument.teardown()
+
+
+def test_sentry_leaves_auto_enabling_integrations_off_while_tracing_is_off(
+    minimal_sentry_config: SentryConfig,
+) -> None:
+    active = _active_integrations(minimal_sentry_config)
+
+    assert not _AUTO_ENABLED_IN_THE_TEST_ENVIRONMENT & active
+    assert "logging" in active
+
+
+@pytest.mark.parametrize(
+    "tracing_overrides",
+    [
+        pytest.param({"sentry_traces_sample_rate": 0.0}, id="sentry_traces_sample_rate"),
+        pytest.param({"sentry_additional_params": {"traces_sample_rate": 0.5}}, id="traces_sample_rate"),
+        pytest.param({"sentry_additional_params": {"traces_sampler": lambda _: 0.5}}, id="traces_sampler"),
+    ],
+)
+def test_sentry_keeps_auto_enabling_integrations_while_tracing_is_on(
+    minimal_sentry_config: SentryConfig, tracing_overrides: dict[str, typing.Any]
+) -> None:
+    additional_params = {
+        **minimal_sentry_config.sentry_additional_params,
+        **tracing_overrides.pop("sentry_additional_params", {}),
+    }
+    bootstrap_config = dataclasses.replace(
+        minimal_sentry_config, sentry_additional_params=additional_params, **tracing_overrides
+    )
+
+    assert _active_integrations(bootstrap_config) >= _AUTO_ENABLED_IN_THE_TEST_ENVIRONMENT
+
+
+@pytest.mark.parametrize(
+    ("auto_enabling_integrations", "traces_sample_rate", "expected"),
+    [
+        pytest.param(True, None, True, id="on-while-tracing-is-off"),
+        pytest.param(False, 1.0, False, id="off-while-tracing-is-on"),
+    ],
+)
+def test_sentry_auto_enabling_integrations_set_explicitly_wins(
+    minimal_sentry_config: SentryConfig,
+    auto_enabling_integrations: bool,
+    traces_sample_rate: float | None,
+    expected: bool,
+) -> None:
+    bootstrap_config = dataclasses.replace(
+        minimal_sentry_config,
+        sentry_auto_enabling_integrations=auto_enabling_integrations,
+        sentry_traces_sample_rate=traces_sample_rate,
+    )
+    instrument = SentryInstrument(bootstrap_config=bootstrap_config)
+    instrument.bootstrap()
+
+    try:
+        assert sentry_sdk.get_client().options["auto_enabling_integrations"] is expected
+    finally:
+        instrument.teardown()
+
+
+def test_sentry_additional_params_auto_enabling_integrations_wins_over_the_field(
+    minimal_sentry_config: SentryConfig,
+) -> None:
+    bootstrap_config = dataclasses.replace(
+        minimal_sentry_config,
+        sentry_auto_enabling_integrations=False,
+        sentry_additional_params={**minimal_sentry_config.sentry_additional_params, "auto_enabling_integrations": True},
+    )
+
+    assert _active_integrations(bootstrap_config) >= _AUTO_ENABLED_IN_THE_TEST_ENVIRONMENT

@@ -495,9 +495,23 @@ lite-bootstrap logging on. The message triggers no work, so read the µs column:
 | Prometheus | +11.6 | |
 | OpenTelemetry, 100% | +73.0 | producer span plus context injection |
 | OpenTelemetry, 10% | +30.6 | |
-| Sentry | +28.8 | RedisIntegration (auto-enabling) on the redis client |
+| Sentry, 1.x defaults | +28.8 | RedisIntegration (auto-enabling) on the redis client |
 | Sentry, `auto_enabling_integrations=False` | +0.0 | |
 <!-- --8<-- [end:faststreampublish] -->
+
+Since 2.0, lite-bootstrap leaves sentry-sdk's auto-enabling integrations off while Sentry tracing is
+off. Rerun per publish on the M2 host (macOS, CPython 3.14.7, faststream 0.7.8, redis 8.1.0, Redis 8 in a local
+container, `bench.py faststream log@pub,sentry@pub,sentry_auto@pub,sentry_noauto@pub --repeat 3`),
+over a baseline of about 136 µs:
+
+| scenario | sentry-sdk 2.73.0 | 3.0.0b2 |
+|---|---:|---:|
+| `sentry`: the 2.0 default | -3.0 | -1.7 |
+| `sentry_auto`: `sentry_auto_enabling_integrations=True` | +27.1 | +9.5 |
+| `sentry_noauto`: `auto_enabling_integrations=False` in `sentry_additional_params` | -1.6 | -1.4 |
+
+The first round of the baseline ran 11% slower than the other two, so the negative rows are noise.
+`sentry_noauto` now has the same config as `sentry`.
 
 ### 8e. FastMCP
 

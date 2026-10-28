@@ -55,7 +55,13 @@ class SentryConfig(BaseConfig):
     sentry_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     sentry_tags: dict[str, str] | None = None
     sentry_default_integrations: bool = True
+    sentry_auto_enabling_integrations: bool | None = None
     sentry_before_send: "sentry_types.EventProcessor | None" = None
+
+    def is_sentry_auto_enabling_integrations_on(self) -> bool:
+        if self.sentry_auto_enabling_integrations is not None:
+            return self.sentry_auto_enabling_integrations
+        return self.is_sentry_tracing_requested()
 
     def is_sentry_tracing_requested(self) -> bool:
         return any(
@@ -100,6 +106,11 @@ class SentryLeanCaptureConfig(SentryConfig):
         if self.sentry_lean_error_capture is not None:
             return self.sentry_lean_error_capture
         return not self.is_sentry_tracing_requested() and not self._supplied_sentry_lean_replaced_integrations()
+
+    def is_sentry_auto_enabling_integrations_on(self) -> bool:
+        if self.sentry_auto_enabling_integrations is not None:
+            return self.sentry_auto_enabling_integrations
+        return not self.is_sentry_lean_error_capture_on()
 
 
 SENTRY_FAILED_REQUEST_STATUS_CODES: typing.Final = range(500, 600)
@@ -233,6 +244,7 @@ class SentryInstrument(BaseInstrument[SentryConfigT]):
             "auto_session_tracking": config.sentry_auto_session_tracking,
             "integrations": self._build_integrations(),
             "default_integrations": config.sentry_default_integrations,
+            "auto_enabling_integrations": config.is_sentry_auto_enabling_integrations_on(),
             "data_collection": DEFAULT_DATA_COLLECTION,
             "before_send": wrap_before_send_callbacks(
                 enrich_sentry_event_from_structlog_log, config.sentry_before_send
