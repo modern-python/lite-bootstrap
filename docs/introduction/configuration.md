@@ -17,7 +17,7 @@ Additional parameters can also be supplied through the settings object:
 - `sentry_attach_stacktrace` - if True, stack traces are automatically attached to all messages logged
 - `sentry_auto_session_tracking` - whether every request opens and closes a Sentry release-health `Session` (default: `True`), measured at ~7.7 µs per request. Set it to `False` if you do not use Sentry release health.
 - `sentry_integrations` - list of integrations to enable
-- `sentry_logging_breadcrumb_level` - the minimum standard-library log level recorded as a breadcrumb (default: `logging.INFO`). Passed as `LoggingIntegration(level=...)`; see below.
+- `sentry_logging_breadcrumb_level` - the minimum standard-library log level recorded as a breadcrumb (default: `logging.INFO`). See below for how it reaches `LoggingIntegration`.
 - `sentry_tags` - key/value string pairs that are both indexed and searchable
 - `sentry_additional_params` - additional params, which will be passed to `sentry_sdk.init`, overriding any of the above that map to the same keyword
 - `sentry_default_integrations` - whether to use sentry's default integrations (default: `True`)
@@ -30,15 +30,21 @@ integration; see [Performance](performance.md).
 
 ### Sentry logging integration
 
-Unless `sentry_integrations` already contains a `LoggingIntegration`, lite-bootstrap appends one built
-as `LoggingIntegration(level=sentry_logging_breadcrumb_level, sentry_logs_level=None)`. Its event
-handler keeps the sentry-sdk default (`ERROR`), so the only departure from sentry-sdk's own default
-integration is `sentry_logs_level`.
+lite-bootstrap supports sentry-sdk 2.70 and later, on both the 2.x and 3.x majors. Unless
+`sentry_integrations` already contains a `LoggingIntegration`, it appends one that turns `ERROR`
+records into events, records breadcrumbs from `sentry_logging_breadcrumb_level` up and sends no
+Sentry Logs. 3.0 renamed the integration's arguments, so the call differs per major:
 
-Turning `sentry_logs_level` off is free. lite-bootstrap never sets `enable_logs`, so Sentry Logs is
-off, but `SentryLogsHandler.emit` formats the record *before* it checks whether logs are enabled
-([getsentry/sentry-python#7402](https://github.com/getsentry/sentry-python/issues/7402)) - it formats
-every `INFO`+ record and discards the result. Dropping breadcrumbs as well, with
+- 2.x: `LoggingIntegration(level=sentry_logging_breadcrumb_level, sentry_logs_level=None)`, with the
+  event level left at its `ERROR` default.
+- 3.x: `LoggingIntegration(breadcrumb_level=sentry_logging_breadcrumb_level, event_level=logging.ERROR, level=None)`.
+  On 3.x `level` means Sentry Logs, and `event_level` defaults to `None`, so without it a logged
+  error creates no event.
+
+On 2.x, turning `sentry_logs_level` off is free. lite-bootstrap never sets `enable_logs`, so Sentry
+Logs is off, but `SentryLogsHandler.emit` formats the record *before* it checks whether logs are
+enabled ([getsentry/sentry-python#7402](https://github.com/getsentry/sentry-python/issues/7402)) - it
+formats every `INFO`+ record and discards the result. Dropping breadcrumbs as well, with
 `sentry_logging_breadcrumb_level=None`, saves more but costs you log breadcrumbs on error events, so
 it stays on by default. Both are measured on the [performance page](performance.md#where-the-time-goes).
 
@@ -46,6 +52,27 @@ Two ways to opt out of the appended integration: supply your own `LoggingIntegra
 `sentry_integrations`, which lite-bootstrap leaves untouched, or set
 `sentry_default_integrations=False`, which suppresses it along with every other default integration.
 Under either, `sentry_logging_breadcrumb_level` is ignored and lite-bootstrap warns.
+
+### Sentry data collection
+
+lite-bootstrap passes an explicit `data_collection` to `sentry_sdk.init`, close to what
+`send_default_pii=False` collected: no user identity, HTTP bodies, GraphQL documents, generative AI or
+MCP inputs and outputs, database query data or queue message bodies. Request headers, cookies and URL
+query parameters are sent with IP- and user-identifying keys filtered. Stack frame variables are sent
+with secret-looking names (`password`, `token`, `key`, `session` and the rest of sentry-sdk's
+denylist) replaced by `[Filtered]`. The dict is `sentry_instrument.DEFAULT_DATA_COLLECTION`.
+
+To collect more, pass your own `data_collection` in `sentry_additional_params`. It replaces the
+default as a whole, so keys you leave out take sentry-sdk's own defaults, which collect more. To
+change one key, spread the default: `{**DEFAULT_DATA_COLLECTION, "user_info": True}`. Read more about
+the option [here](https://docs.sentry.io/platforms/python/data-management/data-collected/).
+
+`send_default_pii` has no effect on 2.x while `data_collection` is set, and on 3.x it is gone. 3.0
+also raises `TypeError` at `sentry_sdk.init` for any option it removed, so passing one of these
+through `sentry_additional_params` fails at bootstrap on 3.x, `enable_tracing`, `enable_logs` and
+`include_local_variables` among them. sentry-sdk's
+[migration guide](https://github.com/getsentry/sentry-python/blob/master/MIGRATION_GUIDE.md) lists
+every removed option.
 
 
 ## Prometheus
