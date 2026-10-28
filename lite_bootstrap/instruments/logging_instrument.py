@@ -5,12 +5,14 @@ import typing
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.exceptions import collect_teardown_errors
+from lite_bootstrap.helpers.warn import deprecated_module_getattr
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 from lite_bootstrap.instruments.logging_factory import (
-    AddressProtocol,
-    RequestProtocol,
-    ScopeType,
+    _DEPRECATED_PROTOCOLS,
+    _AddressProtocol,
     _MemoryLoggerFactoryConfig,
+    _RequestProtocol,
+    _ScopeType,
     _serialize_log_to_string,
 )
 
@@ -54,12 +56,9 @@ else:  # pragma: no cover - only without opentelemetry, i.e. neither the [otl] n
 
 
 __all__ = [
-    "AddressProtocol",
     "LoggingConfig",
     "LoggingInstrument",
     "MemoryLoggerFactory",
-    "RequestProtocol",
-    "ScopeType",
     "tracer_injection",
 ]
 
@@ -240,3 +239,11 @@ class LoggingInstrument(BaseInstrument[LoggingConfigT]):
                             self._logger_factory.close_handlers()
                     finally:
                         self._logger_factory = None
+
+
+if typing.TYPE_CHECKING:
+    AddressProtocol = _AddressProtocol
+    RequestProtocol = _RequestProtocol
+    ScopeType = _ScopeType
+
+__getattr__ = deprecated_module_getattr(__name__, _DEPRECATED_PROTOCOLS)

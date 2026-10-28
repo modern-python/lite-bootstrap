@@ -1,5 +1,7 @@
 import dataclasses
 
+import pytest
+
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 
 
@@ -20,17 +22,29 @@ def test_an_instrument_written_against_the_old_attribute_names_still_works() -> 
     `dependencies_installed`, which answers True, and construct an instrument whose optional package
     is absent.
     """
+    with pytest.warns(DeprecationWarning, match="is deprecated") as record:
 
-    @dataclasses.dataclass(kw_only=True, slots=True)
-    class LegacyInstrument(BaseInstrument[BaseConfig]):
-        not_ready_message = "legacy reason"
+        @dataclasses.dataclass(kw_only=True, slots=True)
+        class LegacyInstrument(BaseInstrument[BaseConfig]):
+            not_ready_message = "legacy reason"
 
-        @staticmethod
-        def check_dependencies() -> bool:
-            return False
+            @staticmethod
+            def check_dependencies() -> bool:
+                return False
 
     assert LegacyInstrument.not_configured_reason == "legacy reason"
     assert LegacyInstrument.dependencies_installed() is False
+    assert [str(warning.message) for warning in record] == [
+        (
+            "LegacyInstrument.not_ready_message is deprecated and will be removed in lite-bootstrap 2.0; "
+            "use not_configured_reason instead."
+        ),
+        (
+            "LegacyInstrument.check_dependencies is deprecated and will be removed in lite-bootstrap 2.0; "
+            "use dependencies_installed instead."
+        ),
+    ]
+    assert {warning.filename for warning in record} == {__file__}
 
 
 def test_a_subclass_declaring_both_names_keeps_the_current_one() -> None:

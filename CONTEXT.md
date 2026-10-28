@@ -38,7 +38,8 @@ A *bootstrapper* is ready when its framework package is importable: `is_ready()`
 the config, and it is a different question from whether an instrument is **configured**.
 _Avoid_: configured, for this sense. The attribute names follow the split: a bootstrapper carries
 `not_ready_message`, an instrument carries `not_configured_reason`. An instrument written against
-the old `not_ready_message` still works because `BaseInstrument.__init_subclass__` forwards it.
+the old `not_ready_message` still works until 2.0: `BaseInstrument.__init_subclass__` forwards it
+and emits a `DeprecationWarning`.
 
 **Skipped**:
 An instrument the bootstrapper decided not to instantiate. Two paths, deliberately different
