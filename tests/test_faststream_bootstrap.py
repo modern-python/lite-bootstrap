@@ -399,6 +399,14 @@ def test_faststream_logging_teardown_runs_super_when_broker_write_raises(
     structlog.get_logger("verify-reset")
 
 
+def test_faststream_bootstrap_after_teardown_raises() -> None:
+    bootstrapper = FastStreamBootstrapper(bootstrap_config=FastStreamConfig())
+    bootstrapper.bootstrap()
+    bootstrapper.teardown()
+    with pytest.raises(ConfigurationError, match="construct a new FastStreamBootstrapper"):
+        bootstrapper.bootstrap()
+
+
 def test_second_faststream_bootstrapper_bootstrap_raises(broker: RedisBroker) -> None:
     config_a = build_faststream_config(broker=broker)
     first = FastStreamBootstrapper(bootstrap_config=config_a)

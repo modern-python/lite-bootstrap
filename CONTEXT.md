@@ -14,7 +14,8 @@ project uses it.
 The user-facing entry point, one class per framework. It owns exactly one application for the life
 of the process; it is not a builder you can run twice. A second bootstrapper on the same application (or,
 for Litestar, the same `AppConfig`) warns at construction and raises `ConfigurationError` from
-`bootstrap()`.
+`bootstrap()`. Once torn down, a bootstrapper cannot bootstrap again: `bootstrap()` after
+`teardown()` raises `ConfigurationError`.
 
 **Instrument**:
 One observability or middleware concern: logging, tracing, metrics, profiling, CORS, Swagger, or
@@ -55,7 +56,7 @@ possible probe.
 
 **Free**:
 Without a web framework: `FreeBootstrapper`, `FreeConfig`, the `free-all` extra. It has no
-application, so nothing to attach teardown to and no double-bootstrap guard.
+application, so nothing to attach teardown to and no guard against a second bootstrapper.
 _Avoid_: bare "free" for PEP 703 free-threaded CPython, which this project also supports. Write
 "free-threaded" in full.
 

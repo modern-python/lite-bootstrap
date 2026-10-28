@@ -346,6 +346,14 @@ def test_fastmcp_bootstrap_without_structlog() -> None:
         bootstrapper.teardown()
 
 
+def test_fastmcp_bootstrap_after_teardown_raises() -> None:
+    bootstrapper = FastMcpBootstrapper(bootstrap_config=FastMcpConfig())
+    bootstrapper.bootstrap()
+    bootstrapper.teardown()
+    with pytest.raises(ConfigurationError, match="construct a new FastMcpBootstrapper"):
+        bootstrapper.bootstrap()
+
+
 def test_second_fastmcp_bootstrapper_bootstrap_raises() -> None:
     application = FastMCP()
     first = FastMcpBootstrapper(bootstrap_config=FastMcpConfig(application=application, service_name="a"))
