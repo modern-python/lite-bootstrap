@@ -259,7 +259,7 @@ def test_fastmcp_logging_middleware_is_not_mounted_by_default() -> None:
 
 
 def test_fastmcp_logging_middleware_is_mounted_when_enabled() -> None:
-    config = _make_test_config(fastmcp_logging_middleware_enabled=True)
+    config = _make_test_config(logging_access_log_enabled=True)
     assert len(_mounted_logging_middleware(config)) == 1
 
 
@@ -273,7 +273,7 @@ def test_fastmcp_config_rejects_the_removed_turn_off_field() -> None:
         _make_test_config(logging_turn_off_middleware=True)
 
 
-@pytest.mark.parametrize("overrides", [{}, {"fastmcp_logging_middleware_enabled": True}], ids=["default", "enabled"])
+@pytest.mark.parametrize("overrides", [{}, {"logging_access_log_enabled": True}], ids=["default", "enabled"])
 def test_fastmcp_logging_config_warns_nothing(overrides: dict[str, bool]) -> None:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
@@ -537,7 +537,7 @@ def test_fastmcp_prometheus_instrumentator_params_are_passed() -> None:
     health_checks_path = f"/health-{uuid.uuid4().hex}/"
     config = _make_test_config(
         health_checks_path=health_checks_path,
-        prometheus_instrumentator_params={"excluded_handlers": [health_checks_path]},
+        prometheus_instrumentator_additional_params={"excluded_handlers": [health_checks_path]},
     )
     bootstrapper = FastMcpBootstrapper(bootstrap_config=config)
     application = bootstrapper.bootstrap()

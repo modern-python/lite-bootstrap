@@ -55,7 +55,7 @@ explicitly:
 ```python
 FastMcpConfig(
     service_name="microservice",
-    fastmcp_logging_middleware_enabled=True,
+    logging_access_log_enabled=True,
 )
 ```
 

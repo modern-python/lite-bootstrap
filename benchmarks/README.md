@@ -200,7 +200,7 @@ structlog 26.1.0. In-process, baseline 17.7 µs per request. The handler does no
 | scenario | +µs/req | note |
 |---|---:|---|
 | logging configured, no records | +0.1 | |
-| `fastapi_logging_middleware_enabled=True` | +18.3 | one access-log record per request, about 10 µs of it the record |
+| `logging_access_log_enabled=True` | +18.3 | one access-log record per request, about 10 µs of it the record |
 | Prometheus | +19.1 | |
 | OpenTelemetry, 100% sampling | +147.9 | |
 | OpenTelemetry, `opentelemetry_exclude_spans=["receive", "send"]` | +101.6 | -46.3 |
@@ -354,7 +354,7 @@ prometheus-client 0.26.0, structlog 26.1.0. In-process, baseline 12.1 µs per re
 |---|---:|---|
 | logging configured, no records | -0.1 | free until something logs |
 | logging, 3 structlog records in the handler | +33.8 | 11.3 µs per record |
-| `litestar_logging_middleware_enabled=True` | +70.7 | 2 records per request, each written twice; a second run gave +74.4 |
+| `logging_access_log_enabled=True` | +70.7 | 2 records per request, each written twice; a second run gave +74.4 |
 | Prometheus | +11.6 | |
 | Prometheus, `prometheus_group_path=False` | +11.8 | |
 | OpenTelemetry, 100% sampling | +145.4 | a second run gave +131.8 |
@@ -477,7 +477,7 @@ it FastMCP and the MCP SDK. Noise on this suite is about ±30 µs even with 3 re
 | scenario | +µs/call | note |
 |---|---:|---|
 | logging configured | +15 | noise |
-| `fastmcp_logging_middleware_enabled=True` | +51 | one record per MCP message |
+| `logging_access_log_enabled=True` | +51 | one record per MCP message |
 | Prometheus (HTTP instrumentator and tool-call middleware) | +35 | the split between the two is within noise |
 | OpenTelemetry, 100% | +272 | 3 ASGI spans plus FastMCP's own server span |
 | OpenTelemetry, 100%, FastMCP's own spans replaced by a no-op tracer | +226 | FastMCP's spans cost 46 |

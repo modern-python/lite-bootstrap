@@ -59,7 +59,7 @@ so there is nothing else material hiding in it. That configuration is:
 --8<-- "benchmarks/README.md:tuned"
 
 One thing to leave off rather than turn on: the FastAPI access log
-([`fastapi_logging_middleware_enabled`](../integrations/fastapi.md#logging)) is off by default, and
+([`logging_access_log_enabled`](../integrations/fastapi.md#logging)) is off by default, and
 turning it on makes every request emit a log record. On a service that otherwise logs nothing per
 request, every request then pays the per-record cost measured here:
 
@@ -102,7 +102,7 @@ The same app on Granian, over real sockets:
 
 **Sentry costs more on Litestar than on FastAPI**, and all of it is `LitestarIntegration`: turning
 off auto-enabling integrations removes the cost and, with it, request error capture. The access log
-([`litestar_logging_middleware_enabled`](../integrations/litestar.md#logging)) is the other large opt-in
+([`logging_access_log_enabled`](../integrations/litestar.md#logging)) is the other large opt-in
 item, at about 70 µs per request in-process.
 
 ## FastStream

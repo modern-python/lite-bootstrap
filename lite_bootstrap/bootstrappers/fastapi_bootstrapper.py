@@ -2,7 +2,7 @@ import contextlib
 import dataclasses
 import time
 import typing
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Mapping
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
@@ -63,10 +63,27 @@ class FastAPIConfig(
     application_kwargs: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     # Not on OpenTelemetryConfig: only the FastAPI and Litestar instrumentors take `exclude_spans`.
     opentelemetry_exclude_spans: list[typing.Literal["receive", "send"]] = dataclasses.field(default_factory=list)
-    prometheus_instrumentator_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
-    prometheus_instrument_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
-    prometheus_expose_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
-    fastapi_logging_middleware_enabled: bool = False
+    prometheus_instrumentator_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
+    prometheus_instrument_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
+    prometheus_expose_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
+    logging_access_log_enabled: bool = False
+    # Deprecated names, removed in 2.0.
+    _renamed_fields: typing.ClassVar[Mapping[str, str]] = {
+        "prometheus_instrumentator_params": "prometheus_instrumentator_additional_params",
+        "prometheus_instrument_params": "prometheus_instrument_additional_params",
+        "prometheus_expose_params": "prometheus_expose_additional_params",
+        "fastapi_logging_middleware_enabled": "logging_access_log_enabled",
+    }
+    prometheus_instrumentator_params: dict[str, typing.Any] | UnsetType = dataclasses.field(
+        default=UNSET, repr=False, compare=False
+    )
+    prometheus_instrument_params: dict[str, typing.Any] | UnsetType = dataclasses.field(
+        default=UNSET, repr=False, compare=False
+    )
+    prometheus_expose_params: dict[str, typing.Any] | UnsetType = dataclasses.field(
+        default=UNSET, repr=False, compare=False
+    )
+    fastapi_logging_middleware_enabled: bool | UnsetType = dataclasses.field(default=UNSET, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         # @dataclass(slots=True) replaces the class object, breaking bare super().
@@ -158,7 +175,7 @@ class _AccessLogMiddleware:
 class FastAPILoggingInstrument(LoggingInstrument[FastAPIConfig]):
     def bootstrap(self) -> None:
         super().bootstrap()
-        if not self.bootstrap_config.fastapi_logging_middleware_enabled:
+        if not self.bootstrap_config.logging_access_log_enabled:
             return
         self.bootstrap_config.app.add_middleware(_AccessLogMiddleware, excluded_paths=self._build_excluded_paths())
 
@@ -218,14 +235,14 @@ class FastAPIPrometheusInstrument(PrometheusInstrument[FastAPIConfig]):
     def bootstrap(self) -> None:
         config = self.bootstrap_config
         application = config.app
-        Instrumentator(**config.prometheus_instrumentator_params).instrument(
+        Instrumentator(**config.prometheus_instrumentator_additional_params).instrument(
             application,
-            **config.prometheus_instrument_params,
+            **config.prometheus_instrument_additional_params,
         ).expose(
             application,
             endpoint=config.prometheus_metrics_path,
             include_in_schema=config.prometheus_metrics_include_in_schema,
-            **config.prometheus_expose_params,
+            **config.prometheus_expose_additional_params,
         )
 
 

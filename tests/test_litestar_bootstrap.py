@@ -324,7 +324,7 @@ def test_litestar_access_log_has_one_handler(litestar_config: LitestarConfig) ->
 
     config = dataclasses.replace(
         litestar_config,
-        litestar_logging_middleware_enabled=True,
+        logging_access_log_enabled=True,
         application_config=AppConfig(route_handlers=[_ping_handler]),
     )
     application = LitestarBootstrapper(bootstrap_config=config).bootstrap()
@@ -342,7 +342,7 @@ def test_litestar_access_logging_disabled_by_default(litestar_config: LitestarCo
 
 
 def test_litestar_access_logging_opt_in_emits_access_logs(litestar_config: LitestarConfig) -> None:
-    log_lines = _post_password(dataclasses.replace(litestar_config, litestar_logging_middleware_enabled=True))
+    log_lines = _post_password(dataclasses.replace(litestar_config, logging_access_log_enabled=True))
 
     events = [record["event"] for record in _access_log_records(log_lines)]
     assert "HTTP Request" in events
@@ -350,7 +350,7 @@ def test_litestar_access_logging_opt_in_emits_access_logs(litestar_config: Lites
 
 
 def test_litestar_access_logging_logs_metadata_only(litestar_config: LitestarConfig) -> None:
-    log_lines = _post_password(dataclasses.replace(litestar_config, litestar_logging_middleware_enabled=True))
+    log_lines = _post_password(dataclasses.replace(litestar_config, logging_access_log_enabled=True))
 
     assert not any("hunter2" in log_line for log_line in log_lines)
     records = _access_log_records(log_lines)
@@ -364,7 +364,7 @@ def test_litestar_access_logging_logs_metadata_only(litestar_config: LitestarCon
 
 
 def test_litestar_access_logging_excludes_infrastructure_paths(litestar_config: LitestarConfig) -> None:
-    config = dataclasses.replace(litestar_config, litestar_logging_middleware_enabled=True)
+    config = dataclasses.replace(litestar_config, logging_access_log_enabled=True)
     application = LitestarBootstrapper(bootstrap_config=config).bootstrap()
 
     with TestClient(app=application) as client, _recorded_litestar_logs() as log_lines:
@@ -383,7 +383,7 @@ def test_litestar_access_logging_keeps_lookalike_paths(litestar_config: Litestar
 
     config = dataclasses.replace(
         litestar_config,
-        litestar_logging_middleware_enabled=True,
+        logging_access_log_enabled=True,
         application_config=AppConfig(route_handlers=[lookalike_handler]),
     )
     application = LitestarBootstrapper(bootstrap_config=config).bootstrap()
@@ -403,7 +403,7 @@ def test_litestar_access_logging_custom_config_replaces_defaults(litestar_config
     log_lines = _post_password(
         dataclasses.replace(
             litestar_config,
-            litestar_logging_middleware_enabled=True,
+            logging_access_log_enabled=True,
             litestar_logging_middleware_config=custom_config,
         )
     )
@@ -415,7 +415,7 @@ def test_litestar_access_logging_custom_config_replaces_defaults(litestar_config
 
 
 def test_litestar_logging_middleware_config_without_flag_warns(litestar_config: LitestarConfig) -> None:
-    with pytest.warns(UserWarning, match="litestar_logging_middleware_enabled") as caught:
+    with pytest.warns(UserWarning, match="logging_access_log_enabled") as caught:
         dataclasses.replace(litestar_config, litestar_logging_middleware_config=LoggingMiddlewareConfig())
 
     assert caught[0].filename == __file__

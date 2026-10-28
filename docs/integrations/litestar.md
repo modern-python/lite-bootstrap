@@ -68,7 +68,7 @@ Swagger bundle into your logs. Turn it on explicitly:
 ```python
 LitestarConfig(
     service_name="microservice",
-    litestar_logging_middleware_enabled=True,
+    logging_access_log_enabled=True,
 )
 ```
 
@@ -92,7 +92,7 @@ from litestar.middleware.logging import LoggingMiddlewareConfig
 
 LitestarConfig(
     service_name="microservice",
-    litestar_logging_middleware_enabled=True,
+    logging_access_log_enabled=True,
     litestar_logging_middleware_config=LoggingMiddlewareConfig(request_log_fields=("path", "method", "content_type")),
 )
 ```

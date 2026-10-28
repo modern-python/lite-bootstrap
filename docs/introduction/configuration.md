@@ -93,9 +93,9 @@ Prometheus's integration for FastAPI uses `prometheus_fastapi_instrumentator` pa
 
 Additional parameters for FastAPI integration:
 
-- `prometheus_instrumentator_params` - passed to `prometheus_fastapi_instrumentator.Instrumentator`
-- `prometheus_instrument_params` - passed to `method Instrumentator(...).instrument`
-- `prometheus_expose_params` - passed to `method Instrumentator(...).expose`.
+- `prometheus_instrumentator_additional_params` - passed to `prometheus_fastapi_instrumentator.Instrumentator`
+- `prometheus_instrument_additional_params` - passed to `method Instrumentator(...).instrument`
+- `prometheus_expose_additional_params` - passed to `method Instrumentator(...).expose`.
 
 ### Prometheus FastMCP
 
@@ -110,9 +110,9 @@ route itself is not counted. Tool calls are counted in `fastmcp_tool_calls_total
 
 Additional parameters for FastMCP integration:
 
-- `prometheus_instrumentator_params` - passed to `prometheus_fastapi_instrumentator.Instrumentator`;
+- `prometheus_instrumentator_additional_params` - passed to `prometheus_fastapi_instrumentator.Instrumentator`;
   `excluded_handlers` defaults to the metrics route.
-- `prometheus_instrument_params` - passed to `method Instrumentator(...).instrument`.
+- `prometheus_instrument_additional_params` - passed to `method Instrumentator(...).instrument`.
 - `fastmcp_prometheus_tool_metrics_enabled` - count and time tool calls (default: `True`).
 
 
@@ -321,8 +321,8 @@ async def handler(request: Request) -> dict[str, str]:
 
 Additional parameters for Litestar's access-log middleware:
 
-- `litestar_logging_middleware_enabled` - turn on request/response access logging (default: `False`).
-- `litestar_logging_middleware_config` - a caller-supplied `LoggingMiddlewareConfig` that replaces the built-in defaults wholesale. It is ignored, with a warning, unless `litestar_logging_middleware_enabled` is `True`.
+- `logging_access_log_enabled` - turn on request/response access logging (default: `False`).
+- `litestar_logging_middleware_config` - a caller-supplied `LoggingMiddlewareConfig` that replaces the built-in defaults wholesale. It is ignored, with a warning, unless `logging_access_log_enabled` is `True`.
 
 See [the Litestar integration guide](../integrations/litestar.md#logging) for what gets logged and why access logging defaults to off.
 
@@ -330,7 +330,7 @@ See [the Litestar integration guide](../integrations/litestar.md#logging) for wh
 
 FastAPI ships no access log of its own, so lite-bootstrap provides one. It is **off by default**:
 
-- `fastapi_logging_middleware_enabled` - turn on the structured access log (default: `False`).
+- `logging_access_log_enabled` - turn on the structured access log (default: `False`).
 
 See [the FastAPI integration guide](../integrations/fastapi.md#logging) for what gets logged and why
 it defaults to off.
@@ -339,7 +339,7 @@ it defaults to off.
 
 The per-MCP-message access log is **off by default**:
 
-- `fastmcp_logging_middleware_enabled` - turn on the access log (default: `False`).
+- `logging_access_log_enabled` - turn on the access log (default: `False`).
 
 See [the FastMCP integration guide](../integrations/fastmcp.md#logging) for what gets logged.
 
@@ -383,6 +383,7 @@ To bootstrap swagger, you have the following parameters:
 - `swagger_static_path` - path for offline docs static
 - `swagger_path`
 - `swagger_offline_docs` - option to turn on offline docs.
+- `swagger_additional_params` - Litestar only: extra keyword arguments for `litestar.openapi.OpenAPIConfig`. It cannot repeat `path`, `title`, `version`, `description` or `render_plugins`, which lite-bootstrap already passes.
 
 Swagger is on by default at `swagger_path` (default: `/docs`). For Litestar, set `swagger_path` to an empty string to disable it.
 

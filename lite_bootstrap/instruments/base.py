@@ -1,7 +1,10 @@
 import dataclasses
 import typing
+from collections.abc import Mapping
 
+from lite_bootstrap.exceptions import ConfigurationError
 from lite_bootstrap.helpers.warn import warn_at_caller
+from lite_bootstrap.types import UNSET, UnsetType
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
@@ -11,14 +14,37 @@ class BaseConfig:
     service_version: str = "1.0.0"
     service_environment: str | None = None
     service_debug: bool = True
+    # Deprecated field name -> the field that replaced it. The deprecated field defaults to UNSET.
+    _renamed_fields: typing.ClassVar[Mapping[str, str]] = {}
 
     def __post_init__(self) -> None:
-        """Terminate the MRO __post_init__ cascade safely.
+        """Terminate the MRO __post_init__ cascade safely, after forwarding deprecated field names.
 
         Subclasses call super().__post_init__() to propagate through multiple-inheritance
         chains (e.g. FastAPIConfig → CorsConfig → OpenTelemetryConfig → BaseConfig).
-        Without this no-op, the chain would raise AttributeError on object.
+        Without this, the chain would raise AttributeError on object.
+
+        Running first in the cascade, the forwarding copies each deprecated field the caller set into
+        its replacement before any subclass reads it, then resets the deprecated field to UNSET so
+        `dataclasses.replace()` does not see both set.
         """
+        for old_name, new_name in self._renamed_fields.items():
+            old_value = getattr(self, old_name)
+            if isinstance(old_value, UnsetType):
+                continue
+            new_field = next(field for field in dataclasses.fields(self) if field.name == new_name)
+            new_default = (
+                new_field.default if new_field.default_factory is dataclasses.MISSING else new_field.default_factory()
+            )
+            if getattr(self, new_name) != new_default:
+                msg = f"{old_name} and {new_name} are both set; {old_name} is deprecated, set only {new_name}."
+                raise ConfigurationError(msg)
+            warn_at_caller(
+                f"{old_name} is deprecated and will be removed in lite-bootstrap 2.0; use {new_name} instead.",
+                category=DeprecationWarning,
+            )
+            object.__setattr__(self, new_name, old_value)
+            object.__setattr__(self, old_name, UNSET)
 
     @classmethod
     def from_dict(cls, data: dict[str, typing.Any]) -> typing.Self:

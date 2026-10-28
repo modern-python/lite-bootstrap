@@ -5,7 +5,7 @@ import inspect
 import re
 import time
 import typing
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Mapping
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
@@ -15,6 +15,7 @@ from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryCon
 from lite_bootstrap.instruments.prometheus_instrument import PrometheusConfig, PrometheusInstrument
 from lite_bootstrap.instruments.pyroscope_instrument import PyroscopeConfig, PyroscopeInstrument
 from lite_bootstrap.instruments.sentry_instrument import SentryConfig, SentryInstrument
+from lite_bootstrap.types import UNSET, UnsetType
 
 
 if import_checker.is_fastmcp_installed:
@@ -193,10 +194,23 @@ class FastMcpConfig(
     HealthChecksConfig, LoggingConfig, OpenTelemetryConfig, PrometheusConfig, PyroscopeConfig, SentryConfig
 ):
     application: "FastMCP[typing.Any]" = dataclasses.field(default_factory=_make_fastmcp)
-    fastmcp_logging_middleware_enabled: bool = False
+    logging_access_log_enabled: bool = False
     fastmcp_prometheus_tool_metrics_enabled: bool = True
-    prometheus_instrumentator_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
-    prometheus_instrument_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
+    prometheus_instrumentator_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
+    prometheus_instrument_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
+    # Deprecated names, removed in 2.0.
+    _renamed_fields: typing.ClassVar[Mapping[str, str]] = {
+        "fastmcp_logging_middleware_enabled": "logging_access_log_enabled",
+        "prometheus_instrumentator_params": "prometheus_instrumentator_additional_params",
+        "prometheus_instrument_params": "prometheus_instrument_additional_params",
+    }
+    fastmcp_logging_middleware_enabled: bool | UnsetType = dataclasses.field(default=UNSET, repr=False, compare=False)
+    prometheus_instrumentator_params: dict[str, typing.Any] | UnsetType = dataclasses.field(
+        default=UNSET, repr=False, compare=False
+    )
+    prometheus_instrument_params: dict[str, typing.Any] | UnsetType = dataclasses.field(
+        default=UNSET, repr=False, compare=False
+    )
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -279,19 +293,19 @@ class FastMcpPrometheusInstrument(PrometheusInstrument[FastMcpConfig]):
         config: typing.Final = self.bootstrap_config
         instrumentator_params: typing.Final[dict[str, typing.Any]] = {
             "excluded_handlers": [f"^{re.escape(config.prometheus_metrics_path)}$"],
-            **config.prometheus_instrumentator_params,
+            **config.prometheus_instrumentator_additional_params,
         }
         # A second http_app() would register the default metrics again, which the instrumentator
         # treats as a duplicate and silently skips, so every application shares the first set.
         if self._default_metrics is None:
             default_metrics_params: typing.Final[dict[str, typing.Any]] = {
                 name: value
-                for name, value in {**instrumentator_params, **config.prometheus_instrument_params}.items()
+                for name, value in {**instrumentator_params, **config.prometheus_instrument_additional_params}.items()
                 if name in _DEFAULT_METRICS_PARAMETERS
             }
             self._default_metrics = instrumentator_metrics.default(**default_metrics_params)
         Instrumentator(**instrumentator_params).add(self._default_metrics).instrument(
-            http_application, **config.prometheus_instrument_params
+            http_application, **config.prometheus_instrument_additional_params
         )
         return http_application
 
@@ -323,7 +337,7 @@ class FastMcpPrometheusInstrument(PrometheusInstrument[FastMcpConfig]):
 class FastMcpLoggingInstrument(LoggingInstrument[FastMcpConfig]):
     def bootstrap(self) -> None:
         super().bootstrap()
-        if not self.bootstrap_config.fastmcp_logging_middleware_enabled:
+        if not self.bootstrap_config.logging_access_log_enabled:
             return
         self.bootstrap_config.application.add_middleware(FastMcpLoggingMiddleware())
 

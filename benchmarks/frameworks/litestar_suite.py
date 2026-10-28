@@ -45,7 +45,7 @@ SCENARIOS: typing.Final = {
     "defaults_noobs": Scenario(config=base_config(**LITESTAR_DEFAULTS)),
     "log": Scenario(config=base_config(**LOG)),
     "log_log3": Scenario(config=base_config(**LOG), kind="structlog"),
-    "log_mw": Scenario(config=base_config(**LOG, litestar_logging_middleware_enabled=True)),
+    "log_mw": Scenario(config=base_config(**LOG, logging_access_log_enabled=True)),
     "prom": Scenario(config=base_config(**PROM)),
     "prom_nogroup": Scenario(config=base_config(**PROM, prometheus_group_path=False)),
     "otel": Scenario(config=base_config(**OTEL)),
