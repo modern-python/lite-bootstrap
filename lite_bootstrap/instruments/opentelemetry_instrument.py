@@ -123,6 +123,13 @@ class OpenTelemetryConfig(OpenTelemetryServiceFieldsConfig):
         return host
 
 
+@dataclasses.dataclass(kw_only=True, frozen=True)
+class OpenTelemetryAsgiConfig(OpenTelemetryConfig):
+    opentelemetry_exclude_spans: list[typing.Literal["receive", "send"]] = dataclasses.field(
+        default_factory=lambda: ["receive", "send"]
+    )
+
+
 if import_checker.is_opentelemetry_sdk_installed and import_checker.is_pyroscope_installed:
     _OTEL_PROFILE_ID_KEY: typing.Final = "pyroscope.profile.id"
     _PYROSCOPE_SPAN_ID_KEY: typing.Final = "span_id"

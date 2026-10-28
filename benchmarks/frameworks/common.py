@@ -163,6 +163,7 @@ def sentry(**extra_params: object) -> dict[str, typing.Any]:
 OTEL: typing.Final = {"opentelemetry_endpoint": OTLP_TRACES, "opentelemetry_exporter_protocol": "http"}
 OTEL_METRICS: typing.Final = {"opentelemetry_metrics_endpoint": OTLP_METRICS}
 EXCL: typing.Final = {"opentelemetry_exclude_spans": ["receive", "send"]}
+ALL_SPANS: typing.Final = {"opentelemetry_exclude_spans": []}
 PROM: typing.Final = {"prometheus_metrics_path": "/metrics"}
 LOG: typing.Final = {"logging_enabled": True}
 CORS: typing.Final = {"cors_allowed_origins": ["https://example.com"], "cors_allowed_methods": ["GET"]}

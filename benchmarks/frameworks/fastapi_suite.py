@@ -3,6 +3,7 @@
 import typing
 
 from common import (
+    ALL_SPANS,
     CORS,
     EXCL,
     LOG,
@@ -37,6 +38,7 @@ SCENARIOS: typing.Final = {
     "log_mw": Scenario(config=base_config(**LOG, logging_access_log_enabled=True)),
     "prom": Scenario(config=base_config(**PROM)),
     "otel": Scenario(config=base_config(**OTEL)),
+    "otel_all_spans": Scenario(config=base_config(**OTEL, **ALL_SPANS)),
     "otel_excl": Scenario(config=base_config(**OTEL, **EXCL)),
     "otel_10": Scenario(config=base_config(**OTEL, **ratio(0.1))),
     "otel_10_excl": Scenario(config=base_config(**OTEL, **ratio(0.1), **EXCL)),

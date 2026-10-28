@@ -673,15 +673,14 @@ def _span_kinds_for_one_request(config: LitestarConfig) -> list[SpanKind]:
     return sorted((span.kind for span in exporter.get_finished_spans()), key=lambda kind: kind.value)
 
 
-def test_litestar_otel_exclude_spans_defaults_to_recording_them(litestar_config: LitestarConfig) -> None:
-    """The default keeps the ASGI event spans a trace view shows today; dropping them is opt-in."""
-    assert SpanKind.INTERNAL in _span_kinds_for_one_request(litestar_config)
+def test_litestar_otel_exclude_spans_defaults_to_only_the_server_span(litestar_config: LitestarConfig) -> None:
+    assert _span_kinds_for_one_request(litestar_config) == [SpanKind.SERVER]
 
 
-def test_litestar_otel_exclude_spans_leaves_only_the_server_span(litestar_config: LitestarConfig) -> None:
-    config = dataclasses.replace(litestar_config, opentelemetry_exclude_spans=["receive", "send"])
+def test_litestar_otel_exclude_spans_emptied_records_the_event_spans(litestar_config: LitestarConfig) -> None:
+    config = dataclasses.replace(litestar_config, opentelemetry_exclude_spans=[])
 
-    assert _span_kinds_for_one_request(config) == [SpanKind.SERVER]
+    assert SpanKind.INTERNAL in _span_kinds_for_one_request(config)
 
 
 def test_litestar_otel_unmatched_path_span_is_named_by_method_only(litestar_config: LitestarConfig) -> None:

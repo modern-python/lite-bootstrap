@@ -450,6 +450,24 @@ def test_fastmcp_otel_excludes_infrastructure_and_configured_paths() -> None:
     assert [span.name for span in _server_spans(exporter)] == ["GET"]
 
 
+def _span_kinds_for_one_health_check(**overrides: typing.Any) -> list[SpanKind]:  # noqa: ANN401
+    with (
+        _bootstrapped_with_span_exporter(**overrides) as (bootstrapper, application, exporter),
+        TestClient(application.http_app()) as client,
+    ):
+        assert client.get(bootstrapper.bootstrap_config.health_checks_path).status_code == status.HTTP_200_OK
+
+    return [span.kind for span in exporter.get_finished_spans()]
+
+
+def test_fastmcp_otel_exclude_spans_defaults_to_only_the_server_span() -> None:
+    assert _span_kinds_for_one_health_check() == [SpanKind.SERVER]
+
+
+def test_fastmcp_otel_exclude_spans_emptied_records_the_event_spans() -> None:
+    assert SpanKind.INTERNAL in _span_kinds_for_one_health_check(opentelemetry_exclude_spans=[])
+
+
 def test_fastmcp_otel_instruments_every_http_app_once() -> None:
     with _bootstrapped_with_span_exporter() as (bootstrapper, application, _):
         first_http_application = application.http_app()

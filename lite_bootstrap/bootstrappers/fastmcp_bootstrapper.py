@@ -11,7 +11,7 @@ from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
 from lite_bootstrap.instruments.healthchecks_instrument import HealthChecksConfig, HealthChecksInstrument
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument
-from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryConfig, OpenTelemetryInstrument
+from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryAsgiConfig, OpenTelemetryInstrument
 from lite_bootstrap.instruments.prometheus_instrument import PrometheusConfig, PrometheusInstrument
 from lite_bootstrap.instruments.pyroscope_instrument import PyroscopeConfig, PyroscopeInstrument
 from lite_bootstrap.instruments.sentry_instrument import (
@@ -201,7 +201,12 @@ if import_checker.is_fastmcp_installed:
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class FastMcpConfig(
-    HealthChecksConfig, LoggingConfig, OpenTelemetryConfig, PrometheusConfig, PyroscopeConfig, SentryLeanCaptureConfig
+    HealthChecksConfig,
+    LoggingConfig,
+    OpenTelemetryAsgiConfig,
+    PrometheusConfig,
+    PyroscopeConfig,
+    SentryLeanCaptureConfig,
 ):
     application: "FastMCP[typing.Any]" = dataclasses.field(default_factory=_make_fastmcp)
     logging_access_log_enabled: bool = False
@@ -264,6 +269,7 @@ class FastMcpOpenTelemetryInstrument(OpenTelemetryInstrument[FastMcpConfig]):
             ),
             # OpenTelemetryMiddleware only parses a raw string from 0.56b0; the floor is 0.49b0.
             excluded_urls=parse_excluded_urls(",".join(self._build_excluded_url_patterns("STARLETTE"))),
+            exclude_spans=self.bootstrap_config.opentelemetry_exclude_spans,
             tracer_provider=get_tracer_provider(),
             meter_provider=get_meter_provider(),
         )
