@@ -104,10 +104,12 @@ The same app on Granian, over real sockets:
 
 --8<-- "benchmarks/README.md:litestargranian"
 
-**Sentry costs more on Litestar than on FastAPI**, and all of it is `LitestarIntegration`: turning
-off auto-enabling integrations removes the cost and, with it, request error capture. The access log
-([`logging_access_log_enabled`](../integrations/litestar.md#logging)) is the other large opt-in
-item, at about 70 µs per request in-process.
+**Before 2.0, Sentry cost more on Litestar than on FastAPI**, and all of it was `LitestarIntegration`.
+Since 2.0, lite-bootstrap reports Litestar request errors itself while Sentry tracing is off, which
+brings Sentry from about +71 to about +7 µs per request in-process
+([Litestar: Sentry](../integrations/litestar.md#sentry)). The access log
+([`logging_access_log_enabled`](../integrations/litestar.md#logging)) is the largest opt-in item
+left, at about 70 µs per request in-process.
 
 ## FastStream
 
