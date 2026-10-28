@@ -31,6 +31,7 @@ from tests.conftest import (
     SentryTestTransport,
     capture_probe_warnings,
     emulate_package_missing,
+    emulate_package_missing_with_module_reload,
     failed_probe_names,
     warning_source_files,
 )
@@ -160,6 +161,17 @@ def test_fastapi_bootstrapper_with_missing_instrument_dependency(
 ) -> None:
     with emulate_package_missing(package_name), pytest.warns(UserWarning, match=package_name):
         FastAPIBootstrapper(bootstrap_config=fastapi_config)
+
+
+def test_fastapi_bootstrapper_runs_without_sentry_sdk(fastapi_config: FastAPIConfig) -> None:
+    with emulate_package_missing_with_module_reload(
+        "sentry_sdk",
+        ["lite_bootstrap.instruments.sentry_instrument", "lite_bootstrap.bootstrappers.fastapi_bootstrapper"],
+    ):
+        with pytest.warns(UserWarning, match="sentry_sdk"):
+            bootstrapper = fastapi_bootstrapper.FastAPIBootstrapper(bootstrap_config=fastapi_config)
+        bootstrapper.bootstrap()
+        bootstrapper.teardown()
 
 
 def test_second_fastapi_bootstrapper_on_same_app_warns_not_stacks(fastapi_config: FastAPIConfig) -> None:

@@ -12,7 +12,13 @@ import pytest
 import sentry_sdk
 from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
 from opentelemetry.util._once import Once
+from sentry_sdk import integrations as sentry_integrations
+from sentry_sdk import scope as sentry_scope
 from sentry_sdk.envelope import Envelope
+from sentry_sdk.integrations import Integration
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.litestar import LitestarIntegration
+from sentry_sdk.integrations.starlette import StarletteIntegration
 from structlog.typing import EventDict, WrappedLogger
 
 from lite_bootstrap import import_checker
@@ -95,6 +101,59 @@ def _reset_otel_providers() -> typing.Iterator[None]:
     opentelemetry.trace._TRACER_PROVIDER_SET_ONCE = Once()  # noqa: SLF001
     opentelemetry.metrics._internal._METER_PROVIDER = None  # noqa: SLF001
     opentelemetry.metrics._internal._METER_PROVIDER_SET_ONCE = Once()  # noqa: SLF001
+
+
+_LEAN_CAPTURE_REPLACED_INTEGRATIONS: typing.Final[tuple[type[Integration], ...]] = (
+    LitestarIntegration,
+    StarletteIntegration,
+    FastApiIntegration,
+)
+_integrations_set_up: set[str] = set()
+
+
+@pytest.fixture(autouse=True)
+def _lean_capture_replaced_integrations_not_yet_installed(monkeypatch: pytest.MonkeyPatch) -> typing.Iterator[None]:
+    """Start each test as a fresh process would, with sentry-sdk's framework integrations not installed.
+
+    sentry-sdk records installed integrations process-wide, and ``disabled_integrations`` cannot remove one
+    that an earlier ``sentry_sdk.init`` installed. Any test that bootstraps Sentry with a framework
+    importable installs its integration, because they are all auto-enabling.
+
+    An integration's patches cannot be undone, and ``setup_once`` on these integrations wraps the framework
+    again on every call, which stacked over a hundred layers on ``Starlette.__call__`` across the suite. So
+    once it has run it is replaced by a no-op: the registries say "not installed" while the patches from
+    the first run stay in place.
+    """
+    identifiers: typing.Final = {integration.identifier for integration in _LEAN_CAPTURE_REPLACED_INTEGRATIONS}
+    registries: typing.Final = (
+        sentry_integrations._processed_integrations,  # noqa: SLF001
+        sentry_integrations._installed_integrations,  # noqa: SLF001
+    )
+    _integrations_set_up.update(identifiers & sentry_integrations._installed_integrations)  # noqa: SLF001
+    for integration in _LEAN_CAPTURE_REPLACED_INTEGRATIONS:
+        if integration.identifier in _integrations_set_up:
+            monkeypatch.setattr(integration, "setup_once", staticmethod(lambda: None))
+    saved: typing.Final = [registry & identifiers for registry in registries]
+    for registry in registries:
+        registry.difference_update(identifiers)
+    yield
+    _integrations_set_up.update(identifiers & sentry_integrations._installed_integrations)  # noqa: SLF001
+    for registry, was_there in zip(registries, saved, strict=True):
+        registry.difference_update(identifiers)
+        registry.update(was_there)
+
+
+@pytest.fixture(autouse=True)
+def _fresh_sentry_scopes() -> typing.Iterator[None]:
+    """Give each test the current and isolation scopes a fresh process has.
+
+    Tests run in one context, so a transaction name an integration left on a scope reaches every later event.
+    """
+    current_token: typing.Final = sentry_scope._current_scope.set(None)  # noqa: SLF001
+    isolation_token: typing.Final = sentry_scope._isolation_scope.set(None)  # noqa: SLF001
+    yield
+    sentry_scope._isolation_scope.reset(isolation_token)  # noqa: SLF001
+    sentry_scope._current_scope.reset(current_token)  # noqa: SLF001
 
 
 @pytest.fixture

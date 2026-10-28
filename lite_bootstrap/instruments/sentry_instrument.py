@@ -1,6 +1,7 @@
 import dataclasses
 import logging
 import typing
+from collections.abc import Mapping
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.helpers.warn import deprecated_module_getattr, warn_at_caller
@@ -16,6 +17,7 @@ if typing.TYPE_CHECKING:
 if import_checker.is_sentry_installed:
     import sentry_sdk
     from sentry_sdk.integrations.logging import LoggingIntegration
+    from sentry_sdk.utils import event_from_exception
 
     IS_SENTRY_SDK_2: typing.Final = sentry_sdk.VERSION.startswith("2.")
 
@@ -62,6 +64,78 @@ class SentryConfig(BaseConfig):
                 self.sentry_traces_sample_rate,
                 *(self.sentry_additional_params.get(name) for name in _TRACING_OPTIONS),
             )
+        )
+
+
+@dataclasses.dataclass(kw_only=True, frozen=True)
+class SentryLeanCaptureConfig(SentryConfig):
+    """A framework whose request errors lite-bootstrap can report without sentry-sdk's framework integration."""
+
+    sentry_lean_error_capture: bool | None = None
+    _sentry_lean_replaced_integrations: typing.ClassVar[Mapping[str, str]] = {}
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not self.sentry_lean_error_capture:
+            return
+        if self.is_sentry_tracing_requested():
+            warn_at_caller(
+                "sentry_lean_error_capture starts no transaction per request, so Sentry tracing "
+                "only samples transactions your code starts itself."
+            )
+        if supplied := self._supplied_sentry_lean_replaced_integrations():
+            warn_at_caller(
+                f"sentry_lean_error_capture disables Sentry's {' and '.join(supplied)}, so the one in "
+                "sentry_integrations is dropped."
+            )
+
+    def _supplied_sentry_lean_replaced_integrations(self) -> list[str]:
+        return [
+            self._sentry_lean_replaced_integrations[integration.identifier]
+            for integration in self.sentry_integrations
+            if integration.identifier in self._sentry_lean_replaced_integrations
+        ]
+
+    def is_sentry_lean_error_capture_on(self) -> bool:
+        if self.sentry_lean_error_capture is not None:
+            return self.sentry_lean_error_capture
+        return not self.is_sentry_tracing_requested() and not self._supplied_sentry_lean_replaced_integrations()
+
+
+SENTRY_FAILED_REQUEST_STATUS_CODES: typing.Final = range(500, 600)
+_SENTRY_TRACE_HEADERS: typing.Final = frozenset({b"sentry-trace", b"baggage"})
+
+
+def read_sentry_trace_headers(headers: typing.Iterable[tuple[bytes, bytes]]) -> dict[str, str]:
+    return {name.decode("latin-1"): value.decode("latin-1") for name, value in headers if name in _SENTRY_TRACE_HEADERS}
+
+
+def capture_request_exception(
+    exception: BaseException,
+    *,
+    mechanism_type: str,
+    handled: bool,
+    enrich: typing.Callable[["sentry_types.Event"], "sentry_types.Event"] = lambda event: event,
+) -> None:
+    client_options: typing.Final = {"client_options": sentry_sdk.get_client().options} if IS_SENTRY_SDK_2 else {}
+    event, hint = event_from_exception(
+        exception, mechanism={"type": mechanism_type, "handled": handled}, **client_options
+    )
+    sentry_sdk.capture_event(enrich(event), hint=hint)
+
+
+def disable_sentry_integrations(
+    init_params: dict[str, typing.Any], integrations: typing.Sequence[type["Integration"]]
+) -> None:
+    init_params["disabled_integrations"] = [*init_params.get("disabled_integrations", []), *integrations]
+
+
+def warn_about_sentry_integrations_installed_earlier(integrations: typing.Sequence[type["Integration"]]) -> None:
+    client: typing.Final = sentry_sdk.get_client()
+    if installed := [integration.__name__ for integration in integrations if client.get_integration(integration)]:
+        warn_at_caller(
+            f"Sentry's {' and '.join(installed)} was installed by an earlier sentry_sdk.init in this process and "
+            "sentry_lean_error_capture cannot disable it, so request errors may be reported twice."
         )
 
 

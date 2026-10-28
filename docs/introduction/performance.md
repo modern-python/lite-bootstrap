@@ -39,7 +39,10 @@ Four things here are worth knowing before you tune anything:
 
 `attach_stacktrace`, `max_breadcrumbs` and dropping the default integrations all measure inside
 noise. Essentially the entire cost is the ASGI integration, and over half of that is a `Transaction`
-built and discarded because `sentry_traces_sample_rate` is unset.
+built and discarded because `sentry_traces_sample_rate` is unset. That table configures
+sentry-sdk directly. Since 2.0, lite-bootstrap leaves the framework integration out while tracing
+is off and reports request errors itself, which costs about 6 µs per request on FastAPI
+([FastAPI: Sentry](../integrations/fastapi.md#sentry)).
 
 ## If you are RPS-constrained, start here
 
@@ -65,13 +68,15 @@ request, every request then pays the per-record cost measured here:
 
 --8<-- "benchmarks/README.md:logging"
 
-lite-bootstrap already applies three savings for you. It turns Sentry Logs off in the logging
+lite-bootstrap already applies four savings for you. It turns Sentry Logs off in the logging
 integration, because it never enables them and on 2.x the handler formats every record before
 checking whether they are enabled; that one costs nothing. Since 2.0 it also leaves release-health
 sessions off and starts breadcrumbs at `WARNING`, so an `INFO` record skips the breadcrumb handler.
 Those two cost you release health and `INFO` breadcrumbs on error events; set
 `sentry_auto_session_tracking=True` or `sentry_logging_breadcrumb_level=logging.INFO` to get them
-back. The numbers on this page were measured before 2.0, against the old defaults.
+back. And while Sentry tracing is off it reports request errors without sentry-sdk's framework
+integration, which costs you request transactions and bodies the handler never read; set `sentry_lean_error_capture=False` to keep the integration. The numbers on this page were
+measured before 2.0, against the old defaults.
 
 ## What each saving costs you
 
@@ -92,7 +97,8 @@ The same instruments one at a time, in-process, in the Linux container:
 --8<-- "benchmarks/README.md:fastapilinux"
 
 The ordering matches macOS: OpenTelemetry first, then Sentry, then Prometheus, with logging free
-until something logs.
+until something logs. Since 2.0, Sentry with tracing off drops from about +59 to about +6 µs per
+request, below Prometheus ([FastAPI: Sentry](../integrations/fastapi.md#sentry)).
 
 ## Litestar
 
@@ -131,7 +137,8 @@ Per tool call, through the stateless JSON HTTP app:
 --8<-- "benchmarks/README.md:fastmcp"
 
 The baseline is large, so the instruments are a smaller share here than on the HTTP frameworks.
-OpenTelemetry is still the largest item.
+OpenTelemetry is still the largest item. Since 2.0, Sentry with tracing off drops from about +82 to
+about +21 µs per tool call ([FastMCP: Sentry](../integrations/fastmcp.md#sentry)).
 
 ## Unsampled OpenTelemetry is not free
 

@@ -10,6 +10,7 @@ from common import (
     OTEL,
     OTEL_METRICS,
     PROM,
+    SAMPLED_SENTRY_TRACE,
     ASGIApp,
     Cleanup,
     Op,
@@ -22,6 +23,8 @@ from common import (
     start_lifespan,
 )
 from fastapi import FastAPI
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.starlette import StarletteIntegration
 
 from lite_bootstrap import FastAPIBootstrapper, FastAPIConfig
 
@@ -44,6 +47,16 @@ SCENARIOS: typing.Final = {
     "sentry": Scenario(config=base_config(**sentry())),
     "sentry_nosess": Scenario(config=base_config(**sentry(), sentry_auto_session_tracking=False)),
     "sentry_noauto": Scenario(config=base_config(**sentry(auto_enabling_integrations=False))),
+    "sentry_nointegration": Scenario(
+        config=base_config(
+            **sentry(disabled_integrations=[StarletteIntegration, FastApiIntegration]), sentry_lean_error_capture=False
+        )
+    ),
+    "sentry_integration": Scenario(config=base_config(**sentry(), sentry_lean_error_capture=False)),
+    "sentry_sampled_trace": Scenario(config=base_config(**sentry()), headers=SAMPLED_SENTRY_TRACE),
+    "sentry_integration_sampled_trace": Scenario(
+        config=base_config(**sentry(), sentry_lean_error_capture=False), headers=SAMPLED_SENTRY_TRACE
+    ),
     "health": Scenario(config=base_config(**HEALTH), path="/health/"),
     "health_otel": Scenario(config=base_config(**HEALTH, **OTEL), path="/health/"),
     "health_otel_nospan": Scenario(
