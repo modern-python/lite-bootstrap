@@ -114,6 +114,9 @@ class OpenTelemetryConfig(OpenTelemetryServiceFieldsConfig):
         if "://" not in raw:
             raw = f"//{raw}"
         parsed = urllib.parse.urlparse(raw)
+        # The gRPC exporter forces TLS for https whatever insecure says.
+        if parsed.scheme == "https":
+            return None
         host = (parsed.hostname or "").lower()
         if host in _LOCAL_HOSTS:
             return None
