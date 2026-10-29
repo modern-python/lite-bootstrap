@@ -229,7 +229,7 @@ class FastMcpHealthChecksInstrument(HealthChecksInstrument[FastMcpConfig]):
             health_status = await self.define_health_status()
             return JSONResponse(
                 dict(self.render_health_check_data(health_status=health_status)),
-                status_code=status.HTTP_200_OK if health_status else status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status_code=status.HTTP_200_OK if health_status else status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
 

@@ -486,7 +486,7 @@ Additional params:
 - `health_checks_include_in_schema`
 - `health_checks_probes`: named async callables, each returning `bool`, that the route runs on every request
 
-The health check route on Litestar, FastAPI, FastMCP and FastStream runs every probe concurrently. On FastStream the probes run alongside the broker pings. The route returns 200 with `health_status: true` when everything passes. If any probe returns `False` or raises, the route returns 500 with the same JSON body and `health_status: false`. Each failed probe logs one warning with its name; the response body does not say which probe failed.
+The health check route on Litestar, FastAPI, FastMCP and FastStream runs every probe concurrently. On FastStream the probes run alongside the broker pings. The route returns 200 with `health_status: true` when everything passes. If any probe returns `False` or raises, the route returns 503 Service Unavailable with the same JSON body and `health_status: false`. Each failed probe logs one warning with its name; the response body does not say which probe failed.
 
 ```python
 import functools

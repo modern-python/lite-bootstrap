@@ -65,8 +65,8 @@ async def raising_probe() -> bool:
 
 HEALTH_PROBE_CASES: typing.Final = [
     pytest.param({"db": passing_probe, "cache": passing_probe}, 200, True, [], id="all-pass"),
-    pytest.param({"db": passing_probe, "cache": failing_probe}, 500, False, ["cache"], id="one-returns-false"),
-    pytest.param({"db": passing_probe, "cache": raising_probe}, 500, False, ["cache"], id="one-raises"),
+    pytest.param({"db": passing_probe, "cache": failing_probe}, 503, False, ["cache"], id="one-returns-false"),
+    pytest.param({"db": passing_probe, "cache": raising_probe}, 503, False, ["cache"], id="one-raises"),
 ]
 
 
