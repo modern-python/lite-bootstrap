@@ -13,7 +13,7 @@ class BaseConfig:
     service_description: str | None = None
     service_version: str = "1.0.0"
     service_environment: str | None = None
-    service_debug: bool = True
+    service_debug: bool = False
     # Deprecated field name -> the field that replaced it. The deprecated field defaults to UNSET.
     _renamed_fields: typing.ClassVar[Mapping[str, str]] = {}
 

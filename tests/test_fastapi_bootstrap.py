@@ -206,6 +206,17 @@ def test_app_property_raises_when_application_unset() -> None:
         _ = config.app
 
 
+@pytest.mark.parametrize(
+    ("config_kwargs", "expected_debug"),
+    [
+        pytest.param({}, False, id="default"),
+        pytest.param({"service_debug": True}, True, id="service-debug-on"),
+    ],
+)
+def test_built_app_debug_follows_service_debug(config_kwargs: dict[str, typing.Any], expected_debug: bool) -> None:
+    assert FastAPIConfig(**config_kwargs).app.debug is expected_debug
+
+
 def test_user_supplied_app_keeps_title_version_debug() -> None:
     user_app = fastapi.FastAPI(title="user-title", version="9.9.9", debug=False)
     config = FastAPIConfig(

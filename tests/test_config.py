@@ -72,7 +72,7 @@ def test_from_object_skips_missing_attribute() -> None:
     config = BaseConfig.from_object(Source())
     assert config.service_name == "micro-service"
     assert config.service_version == "1.0.0"
-    assert config.service_debug is True
+    assert config.service_debug is False
 
 
 def test_from_object_preserves_falsy_values() -> None:

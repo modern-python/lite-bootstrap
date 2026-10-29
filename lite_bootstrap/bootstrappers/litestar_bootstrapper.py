@@ -501,7 +501,7 @@ class LitestarBootstrapper(BaseBootstrapper["litestar.Litestar"]):
         self._attach_teardown_once(application_config, lambda: self._apply_config(application_config))
 
     def _apply_config(self, application_config: "AppConfig") -> None:
-        application_config.debug = self.bootstrap_config.service_debug
+        application_config.debug = application_config.debug or self.bootstrap_config.service_debug
         # An Empty value reaches layer resolution and 500s every body-reading handler.
         if application_config.request_max_body_size is Empty:
             application_config.request_max_body_size = _LITESTAR_DEFAULT_REQUEST_MAX_BODY_SIZE
