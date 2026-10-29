@@ -353,7 +353,7 @@ class LitestarLoggingInstrument(LoggingInstrument[LitestarConfig]):
 
 @dataclasses.dataclass(kw_only=True)
 class LitestarOpenTelemetryInstrument(OpenTelemetryInstrument[LitestarConfig]):
-    missing_dependency_message = "opentelemetry-instrumentation-asgi or litestar>=2.22 is not installed"
+    missing_dependency_message = "opentelemetry-instrumentation-asgi is not installed"
 
     @staticmethod
     def dependencies_installed() -> bool:
