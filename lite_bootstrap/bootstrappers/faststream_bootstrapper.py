@@ -222,7 +222,7 @@ class FastStreamPrometheusInstrument(PrometheusInstrument[FastStreamConfig]):
                 broker.add_middleware(middleware_cls(registry=self.collector_registry))
 
 
-class FastStreamBootstrapper(BaseBootstrapper["AsgiFastStream"]):
+class FastStreamBootstrapper(BaseBootstrapper["AsgiFastStream", FastStreamConfig]):
     __slots__ = "bootstrap_config", "instruments"
 
     instruments_types: typing.ClassVar = [
@@ -233,7 +233,6 @@ class FastStreamBootstrapper(BaseBootstrapper["AsgiFastStream"]):
         FastStreamLoggingInstrument,
         FastStreamPrometheusInstrument,
     ]
-    bootstrap_config: FastStreamConfig  # ty: ignore[invalid-mutable-override]
     not_ready_message = "faststream is not installed"
 
     def is_ready(self) -> bool:

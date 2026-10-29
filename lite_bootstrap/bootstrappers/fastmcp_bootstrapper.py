@@ -381,7 +381,7 @@ class FastMcpLoggingInstrument(LoggingInstrument[FastMcpConfig]):
         self.bootstrap_config.application.add_middleware(FastMcpLoggingMiddleware())
 
 
-class FastMcpBootstrapper(BaseBootstrapper["FastMCP[typing.Any]"]):
+class FastMcpBootstrapper(BaseBootstrapper["FastMCP[typing.Any]", FastMcpConfig]):
     __slots__ = "bootstrap_config", "instruments"
 
     instruments_types: typing.ClassVar = [
@@ -392,7 +392,6 @@ class FastMcpBootstrapper(BaseBootstrapper["FastMCP[typing.Any]"]):
         FastMcpLoggingInstrument,
         FastMcpPrometheusInstrument,
     ]
-    bootstrap_config: FastMcpConfig  # ty: ignore[invalid-mutable-override]
     not_ready_message = "fastmcp is not installed"
 
     def is_ready(self) -> bool:

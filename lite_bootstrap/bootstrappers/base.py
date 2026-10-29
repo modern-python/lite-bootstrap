@@ -9,7 +9,7 @@ from lite_bootstrap.exceptions import (
     InstrumentDependencyMissingWarning,
     collect_teardown_errors,
 )
-from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
+from lite_bootstrap.instruments.base import BaseInstrument, ConfigT
 from lite_bootstrap.types import ApplicationT
 
 
@@ -19,12 +19,12 @@ logger = logging.getLogger(__name__)
 InstrumentT = typing.TypeVar("InstrumentT", bound=BaseInstrument)
 
 
-class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
+class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT, ConfigT]):
     instruments_types: typing.ClassVar[list[type[BaseInstrument]]]
     not_ready_message: typing.ClassVar[str]
     instruments: list[BaseInstrument]
     skipped_instruments: list[tuple[type[BaseInstrument], str]]
-    bootstrap_config: BaseConfig
+    bootstrap_config: ConfigT
     _application: ApplicationT
 
     # Marker tagged on a user-supplied app (or its config) once this bootstrapper has
@@ -32,7 +32,7 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT]):
     # bootstrapper on the same app from re-attaching. Its accepted limits: ADR-0003.
     _TEARDOWN_MARKER: typing.ClassVar[str] = "_lite_bootstrap_teardown_attached"
 
-    def __init__(self, bootstrap_config: BaseConfig) -> None:
+    def __init__(self, bootstrap_config: ConfigT) -> None:
         self.is_bootstrapped = False
         self._torn_down = False
         # Set when another bootstrapper already owns this application; bootstrap() then refuses.

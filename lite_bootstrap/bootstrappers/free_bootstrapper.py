@@ -12,7 +12,7 @@ from lite_bootstrap.instruments.sentry_instrument import SentryConfig, SentryIns
 class FreeConfig(LoggingConfig, OpenTelemetryConfig, PyroscopeConfig, SentryConfig): ...
 
 
-class FreeBootstrapper(BaseBootstrapper[None]):
+class FreeBootstrapper(BaseBootstrapper[None, FreeConfig]):
     __slots__ = "bootstrap_config", "instruments"
 
     instruments_types: typing.ClassVar = [
@@ -21,7 +21,6 @@ class FreeBootstrapper(BaseBootstrapper[None]):
         OpenTelemetryInstrument,
         PyroscopeInstrument,
     ]
-    bootstrap_config: FreeConfig  # ty: ignore[invalid-mutable-override]
     not_ready_message = ""
 
     def is_ready(self) -> bool:

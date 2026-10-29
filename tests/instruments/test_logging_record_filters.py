@@ -349,7 +349,7 @@ def test_bootstrap_teardown_bootstrap_attaches_each_filter_once() -> None:
 
 BootstrapperBuilder = typing.Callable[
     [dict[str, tuple[logging.Filter, ...]]],
-    BaseBootstrapper[typing.Any],
+    BaseBootstrapper[typing.Any, typing.Any],
 ]
 
 
