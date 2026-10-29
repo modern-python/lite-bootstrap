@@ -336,6 +336,10 @@ Read more about Sentry's profiling options [here](https://docs.sentry.io/platfor
 
 Structlog is bootstrapped by default. To opt out, set `logging_enabled=False`.
 
+Structlog and standard-library records go through one handler on the root logger, which writes each
+record to stdout as one JSON line. A logger name structlog uses stays an ordinary stdlib logger: its
+stdlib records come out as JSON too, and a handler you add to root sees structlog's records.
+
 Configuring it costs almost nothing; the cost arrives per log record, and most of it is Sentry's.
 See [Performance](performance.md).
 

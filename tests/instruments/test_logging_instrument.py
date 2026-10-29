@@ -1,6 +1,8 @@
 import contextlib
 import json
 import logging
+import threading
+import typing
 from io import StringIO
 from unittest.mock import patch
 
@@ -9,8 +11,7 @@ import structlog
 from opentelemetry.trace import get_tracer
 
 from lite_bootstrap.exceptions import TeardownError
-from lite_bootstrap.instruments.logging_factory import _MemoryLoggerFactoryConfig
-from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument, MemoryLoggerFactory
+from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument
 from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryConfig, OpenTelemetryInstrument
 from tests.conftest import LoggingMock
 
@@ -83,70 +84,15 @@ def test_logging_instrument_tracer_injection(logging_mock: LoggingMock) -> None:
         opentelemetry_instrument.teardown()
 
 
-def _make_factory(stream: StringIO) -> MemoryLoggerFactory:
-    return MemoryLoggerFactory(
-        config=_MemoryLoggerFactoryConfig(logging_log_level=logging.INFO, log_stream=stream),
-    )
-
-
-def test_memory_logger_factory_writes_each_line_at_once() -> None:
-    test_stream = StringIO()
-    logger_factory = _make_factory(test_stream)
+def test_unnamed_structlog_logger_is_named_after_its_caller(capsys: pytest.CaptureFixture[str]) -> None:
+    logging_instrument = LoggingInstrument(bootstrap_config=LoggingConfig())
     try:
-        test_logger = logger_factory("written_at_once")
-        test_logger.info("first")
-        assert test_stream.getvalue().splitlines() == ["first"]
-        test_logger.info("second")
-        assert test_stream.getvalue().splitlines() == ["first", "second"]
-        assert [type(handler) for handler in test_logger.handlers] == [logging.StreamHandler]
+        logging_instrument.bootstrap()
+        structlog.getLogger().info("unnamed")
     finally:
-        logger_factory.close_handlers()
+        logging_instrument.teardown()
 
-
-def test_memory_logger_factory_configures_each_logger_once() -> None:
-    test_stream = StringIO()
-    logger_factory = _make_factory(test_stream)
-    try:
-        first = logger_factory("configured_once")
-        second = logger_factory("configured_once")
-        second.info("one line")
-
-        assert first is second
-        assert len(first.handlers) == 1
-        assert test_stream.getvalue().splitlines() == ["one line"]
-    finally:
-        logger_factory.close_handlers()
-
-    assert logging.getLogger("configured_once").handlers == []
-
-
-def test_memory_logger_factory_names_unnamed_logger_after_caller() -> None:
-    logger_factory = _make_factory(StringIO())
-    try:
-        assert logger_factory().name == __name__
-    finally:
-        logger_factory.close_handlers()
-
-
-def test_memory_logger_factory_keeps_a_level_set_beforehand() -> None:
-    preset_logger = logging.getLogger("preset_level")
-    preset_logger.setLevel(logging.DEBUG)
-    logger_factory = _make_factory(StringIO())
-    try:
-        assert logger_factory("preset_level").level == logging.DEBUG
-        assert logger_factory("unset_level").level == logging.INFO
-    finally:
-        logger_factory.close_handlers()
-        preset_logger.setLevel(logging.NOTSET)
-        logging.getLogger("unset_level").setLevel(logging.NOTSET)
-
-
-def test_memory_logger_factory_close_handlers_restores_the_level_it_set() -> None:
-    logger_factory = _make_factory(StringIO())
-    logger_factory("restored_level")
-    logger_factory.close_handlers()
-
-    assert logging.getLogger("restored_level").level == logging.NOTSET
+    assert json.loads(capsys.readouterr().out)["logger"] == __name__
 
 
 def test_logging_instrument_lifecycle_replay(logging_mock: LoggingMock) -> None:
@@ -164,24 +110,6 @@ def test_logging_instrument_lifecycle_replay(logging_mock: LoggingMock) -> None:
         assert any(e.get("event") == "after replay" for e in logging_mock.entries)
     finally:
         instrument.teardown()
-
-
-def test_logging_instrument_teardown_resets_factory_when_close_handlers_raises() -> None:
-    instrument = LoggingInstrument(
-        bootstrap_config=LoggingConfig(),
-    )
-    instrument.bootstrap()
-    factory = instrument._logger_factory  # noqa: SLF001
-    assert factory is not None
-
-    with (
-        patch.object(factory, "close_handlers", side_effect=RuntimeError("boom")),
-        pytest.raises(TeardownError) as excinfo,
-    ):
-        instrument.teardown()
-
-    assert any("boom" in str(err) for _, err in excinfo.value.errors)
-    assert instrument._logger_factory is None  # noqa: SLF001
 
 
 def test_logging_instrument_teardown_aggregates_handler_close_errors() -> None:
@@ -205,34 +133,9 @@ def test_logging_instrument_teardown_aggregates_handler_close_errors() -> None:
     assert any("boom" in str(err) for _, err in excinfo.value.errors)
 
     # After teardown despite the raise, post-loop cleanup must have completed:
-    assert instrument._logger_factory is None  # noqa: SLF001
     assert root_logger.level == logging.WARNING
     # And the broken handler must have been removed from root despite raising.
     assert target_handler not in root_logger.handlers
-
-
-def test_logging_instrument_teardown_aggregates_handler_and_factory_errors() -> None:
-    instrument = LoggingInstrument(
-        bootstrap_config=LoggingConfig(),
-    )
-    instrument.bootstrap()
-    root_logger = logging.getLogger()
-    factory = instrument._logger_factory  # noqa: SLF001
-    assert factory is not None
-
-    target_handler = next(h for h in root_logger.handlers if isinstance(h, logging.StreamHandler))
-
-    with (
-        patch.object(target_handler, "close", side_effect=RuntimeError("handler boom")),
-        patch.object(factory, "close_handlers", side_effect=RuntimeError("factory boom")),
-        pytest.raises(TeardownError) as excinfo,
-    ):
-        instrument.teardown()
-
-    error_msgs = [str(err) for _, err in excinfo.value.errors]
-    assert any("handler boom" in m for m in error_msgs), error_msgs
-    assert any("factory boom" in m for m in error_msgs), error_msgs
-    assert instrument._logger_factory is None  # noqa: SLF001
 
 
 def test_logging_instrument_binds_log_stream_at_bootstrap() -> None:
@@ -256,11 +159,10 @@ def test_one_rendered_event_is_one_physical_line(capsys: pytest.CaptureFixture[s
     before the string ever becomes a `LogRecord`. Everything downstream of that is transport, so
     the handler must emit the rendered string verbatim.
 
-    Dropping the formatter from the stream handler `MemoryLoggerFactory` builds is what breaks it,
-    and the break is invisible until something raises: stdlib's `Logger.exception` hardcodes
-    `exc_info=True` on the record, so the default `logging.Formatter` appends `record.exc_text`
-    after the JSON and the same traceback ships twice. Every line-oriented log shipper reads the
-    suffix as four malformed events.
+    The root handler's formatter has to pass that string through. If it treated the record as
+    foreign, it would render the JSON line again as the `event` of a second JSON object, and
+    stdlib's `Logger.exception`, which sets `exc_info=True` on the record, would add the same
+    traceback a second time.
     """
     logging_instrument = LoggingInstrument(bootstrap_config=LoggingConfig())
     try:
@@ -318,3 +220,54 @@ def test_structlog_lines_are_written_at_once_and_in_order_with_stdlib_lines(
         logging_instrument.teardown()
 
     assert events == ["1", "2", "3"]
+
+
+def test_stdlib_lines_on_a_structlog_logger_name_stay_json(capsys: pytest.CaptureFixture[str]) -> None:
+    logging_instrument = LoggingInstrument(bootstrap_config=LoggingConfig())
+    try:
+        logging_instrument.bootstrap()
+        structlog.getLogger("shared_name").info("from structlog")
+        logging.getLogger("shared_name").info("from stdlib %s", "same name")
+        logging.getLogger("shared_name.child").info("from stdlib child")
+        try:
+            msg = "some error"
+            raise ValueError(msg)  # noqa: TRY301
+        except ValueError:
+            logging.getLogger("shared_name").exception("stdlib exception")
+    finally:
+        logging_instrument.teardown()
+
+    payloads = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+
+    assert [(payload["logger"], payload["event"]) for payload in payloads] == [
+        ("shared_name", "from structlog"),
+        ("shared_name", "from stdlib same name"),
+        ("shared_name.child", "from stdlib child"),
+        ("shared_name", "stdlib exception"),
+    ]
+    assert "ValueError: some error" in payloads[-1]["exception"]
+
+
+def test_concurrent_first_use_of_a_logger_name_writes_each_line_once(capsys: pytest.CaptureFixture[str]) -> None:
+    thread_count: typing.Final = 8
+    start_barrier: typing.Final = threading.Barrier(thread_count)
+
+    def log_once(thread_number: int) -> None:
+        start_barrier.wait()
+        structlog.getLogger("concurrent_first_use").info(f"thread {thread_number}")
+
+    logging_instrument = LoggingInstrument(bootstrap_config=LoggingConfig())
+    try:
+        logging_instrument.bootstrap()
+        threads = [threading.Thread(target=log_once, args=(number,)) for number in range(thread_count)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        assert logging.getLogger("concurrent_first_use").handlers == []
+    finally:
+        logging_instrument.teardown()
+
+    events = sorted(json.loads(line)["event"] for line in capsys.readouterr().out.splitlines())
+
+    assert events == sorted(f"thread {number}" for number in range(thread_count))

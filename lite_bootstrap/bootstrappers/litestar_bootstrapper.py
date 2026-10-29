@@ -322,9 +322,7 @@ class LitestarLoggingInstrument(LoggingInstrument[LitestarConfig]):
         return LitestarStandardLoggingConfig(
             configure_root_logger=False,
             handlers={"console": {"class": "logging.NullHandler"}, "queue_listener": {"class": "logging.NullHandler"}},
-            loggers={
-                "litestar": {"level": self.bootstrap_config.logging_log_level, "handlers": [], "propagate": False}
-            },
+            loggers={"litestar": {"level": self.bootstrap_config.logging_log_level, "handlers": [], "propagate": True}},
         )
 
     def _configure_structlog_loggers(self) -> None:
@@ -334,7 +332,7 @@ class LitestarLoggingInstrument(LoggingInstrument[LitestarConfig]):
                 config=StructlogConfig(
                     structlog_logging_config=StructLoggingConfig(
                         processors=self.structlog_processors,
-                        logger_factory=self.memory_logger_factory,
+                        logger_factory=structlog.stdlib.LoggerFactory(),
                         wrapper_class=structlog.stdlib.BoundLogger,
                         cache_logger_on_first_use=True,
                         pretty_print_tty=False,

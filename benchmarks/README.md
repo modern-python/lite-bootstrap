@@ -612,7 +612,7 @@ leaves out by default: section 4a has the rerun.
 
 The per-call chain is the same on every framework: structlog's stdlib `BoundLogger`, lite-bootstrap's
 processors, `JSONRenderer` with orjson, stdlib `Logger.info`, `MemoryHandler(capacity=10)` and a
-`StreamHandler`. What differs per framework is who logs per request: FastAPI's opt-in access log (1
+`StreamHandler`. 2.0 propagates structlog records to the root logger's `StreamHandler` instead (#381). What differs per framework is who logs per request: FastAPI's opt-in access log (1
 record), Litestar's opt-in `LoggingMiddleware` (2 records), FastMCP's opt-in logging middleware (1
 record per MCP message), FastStream's own "Received" and "Processed" (filtered at the default
 `faststream_log_level=WARNING`).
@@ -620,7 +620,7 @@ record per MCP message), FastStream's own "Received" and "Processed" (filtered a
 Linux, a 2-CPU container on the same Apple M2 under OrbStack, CPython 3.14.9, structlog 26.1.0,
 orjson 3.11.9, sentry-sdk 2.67.1, opentelemetry-sdk 1.44.0. Output to a real `/dev/null` file,
 50000 calls per round, loop overhead (0.06 µs) subtracted. The `MemoryHandler` was removed afterwards
-(#377), and 2.0 writes through the `StreamHandler` directly; the rows have not been rerun.
+(#377), and 2.0 writes through the root `StreamHandler`; the rows have not been rerun.
 
 | call | µs/call |
 |---|---:|
