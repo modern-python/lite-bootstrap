@@ -35,7 +35,6 @@ if import_checker.is_fastmcp_opentelemetry_installed:
     from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
     from opentelemetry.metrics import get_meter_provider
     from opentelemetry.trace import get_tracer_provider
-    from opentelemetry.util.http import parse_excluded_urls
     from starlette.routing import BaseRoute, Match, Mount, Route
     from starlette.types import Scope
 
@@ -253,8 +252,7 @@ class FastMcpOpenTelemetryInstrument(OpenTelemetryInstrument[FastMcpConfig]):
             default_span_details=functools.partial(
                 build_fastmcp_route_details_from_scope, routes=http_application.routes
             ),
-            # OpenTelemetryMiddleware only parses a raw string from 0.56b0; the floor is 0.49b0.
-            excluded_urls=parse_excluded_urls(",".join(self._build_excluded_url_patterns("STARLETTE"))),
+            excluded_urls=",".join(self._build_excluded_url_patterns("STARLETTE")),
             exclude_spans=self.bootstrap_config.opentelemetry_exclude_spans,
             tracer_provider=get_tracer_provider(),
             meter_provider=get_meter_provider(),

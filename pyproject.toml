@@ -56,21 +56,21 @@ pyroscope = [
     "pyroscope-io>=1.0.1",
 ]
 otl = [
-    # One release train: api/sdk/exporters 1.28 pair with every instrumentation package at
-    # 0.49b0. 0.49b0 is the first that does not import `pkg_resources`, which setuptools no
-    # longer ships, so anything older fails at import on a fresh install. The exporters carry
-    # the floor separately: nothing else constrains them, and left bare they resolve 23 minors
-    # behind the api they must match.
-    "opentelemetry-api>=1.28",
-    "opentelemetry-sdk>=1.28",
-    "opentelemetry-exporter-otlp-proto-grpc>=1.28",
-    "opentelemetry-instrumentation>=0.49b0",
+    # One release train: api/sdk/exporters 1.42 pair with every instrumentation package at
+    # 0.63b0. 1.42 is the first sdk whose base SpanProcessor.force_flush returns True rather
+    # than None, which PyroscopeSpanProcessor relies on. The exporters carry the floor
+    # separately: nothing else constrains them, so left bare they can resolve to a release
+    # that does not match the api.
+    "opentelemetry-api>=1.42",
+    "opentelemetry-sdk>=1.42",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.42",
+    "opentelemetry-instrumentation>=0.63b0",
 ]
 otl-http = [
-    "opentelemetry-api>=1.28",
-    "opentelemetry-sdk>=1.28",
-    "opentelemetry-exporter-otlp-proto-http>=1.28",
-    "opentelemetry-instrumentation>=0.49b0",
+    "opentelemetry-api>=1.42",
+    "opentelemetry-sdk>=1.42",
+    "opentelemetry-exporter-otlp-proto-http>=1.42",
+    "opentelemetry-instrumentation>=0.63b0",
 ]
 logging = [
     # >=21.3 for structlog.stdlib.ProcessorFormatter.remove_processors_meta (LoggingInstrument's
@@ -93,7 +93,7 @@ fastapi-sentry = [
 ]
 fastapi-otl = [
     "lite-bootstrap[fastapi,otl]",
-    "opentelemetry-instrumentation-fastapi>=0.49b0",
+    "opentelemetry-instrumentation-fastapi>=0.63b0",
 ]
 fastapi-logging = [
     "lite-bootstrap[fastapi,logging]",
@@ -129,9 +129,9 @@ litestar-otl = [
     "lite-bootstrap[litestar,otl]",
     # >=2.22 for litestar.plugins.opentelemetry (LitestarOpenTelemetryInstrument registers its OpenTelemetryPlugin).
     "litestar>=2.22",
-    # Raised from 0.46b0 with the rest of the train: every instrumentation package pins
-    # `opentelemetry-instrumentation` to its own exact version, so they move together.
-    "opentelemetry-instrumentation-asgi>=0.49b0",
+    # Moves with the rest of the train: every instrumentation package pins
+    # `opentelemetry-instrumentation` to its own exact version.
+    "opentelemetry-instrumentation-asgi>=0.63b0",
 ]
 litestar-logging = [
     "lite-bootstrap[litestar,logging]",
@@ -183,7 +183,7 @@ fastmcp = [
 ]
 fastmcp-otl = [
     "lite-bootstrap[fastmcp,otl]",
-    "opentelemetry-instrumentation-asgi>=0.49b0",
+    "opentelemetry-instrumentation-asgi>=0.63b0",
 ]
 fastmcp-metrics = [
     "lite-bootstrap[fastmcp]",
