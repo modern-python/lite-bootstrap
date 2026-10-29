@@ -658,3 +658,9 @@ def test_fastapi_health_check_runs_probes(
         "service_version": "2.0.0",
     }
     assert failed_probe_names(probe_warnings) == expected_failed
+
+
+def test_built_app_title_and_version_fall_back_when_unset() -> None:
+    application = FastAPIConfig().app
+    assert application.title == "micro-service"
+    assert application.version == "1.0.0"

@@ -837,3 +837,13 @@ def test_litestar_health_check_runs_probes(
         "service_version": "2.0.0",
     }
     assert failed_probe_names(probe_warnings) == expected_failed
+
+
+def test_litestar_openapi_and_prometheus_fall_back_to_default_service_name() -> None:
+    application = LitestarBootstrapper(bootstrap_config=LitestarConfig(logging_buffer_capacity=0)).bootstrap()
+    assert application.openapi_config is not None
+    assert application.openapi_config.title == "micro-service"
+    assert application.openapi_config.version == "1.0.0"
+    with TestClient(app=application) as client:
+        client.get("/health/")
+        assert 'app_name="micro-service"' in client.get("/metrics").text

@@ -1,5 +1,13 @@
 # Configuration
 
+## Service name and version
+
+`service_name` and `service_version` default to `None` since 2.0. Left unset:
+
+- OpenTelemetry leaves `service.name` and `service.version` out of the resource, so the SDK takes them from `OTEL_SERVICE_NAME` and `OTEL_RESOURCE_ATTRIBUTES`. With neither set, `service.name` is `unknown_service`.
+- Sentry gets no `release` from lite-bootstrap, and sentry-sdk picks one itself, from `SENTRY_RELEASE`, the git revision or CI variables. A `service_version` you set is passed as `release` and wins over all of those.
+- Everything else that needs a string uses `"micro-service"` and `"1.0.0"`, as before 2.0: the title and version of an app FastAPI builds for you, Litestar's OpenAPI title and version, Litestar's Prometheus `app_name` label, the health-check body, and Pyroscope's application name when `opentelemetry_service_name` is unset too.
+
 ## Debug mode
 
 `service_debug` defaults to `False`. Debug mode puts tracebacks in error responses, so keep it off in production.
@@ -15,6 +23,8 @@ Sentry integration uses `sentry_sdk` package under the hood.
 To bootstrap Sentry, you must provide at least:
 
 - `sentry_dsn` - tells sentry-sdk where to send the events.
+
+`service_version`, when set, is passed as `release`; see [Service name and version](#service-name-and-version).
 
 Additional parameters can also be supplied through the settings object:
 
@@ -295,8 +305,8 @@ OTEL_EXPERIMENTAL_RESOURCE_DETECTORS=process,os
 
 The attributes lite-bootstrap sets (`service.name`, `service.namespace`, `service.version`,
 `container.name`, and `deployment.environment.name` from `service_environment`) are merged last and override anything a detector or environment variable supplies.
-`service_name` defaults to `"micro-service"`, so `OTEL_SERVICE_NAME` is overridden unless `service_name`
-is empty: set `opentelemetry_service_name` or `service_name` instead.
+`service_name` and `service_version` default to `None`, and an unset attribute is left out, so
+`OTEL_SERVICE_NAME` and `OTEL_RESOURCE_ATTRIBUTES` can supply it.
 
 
 ## Pyroscope

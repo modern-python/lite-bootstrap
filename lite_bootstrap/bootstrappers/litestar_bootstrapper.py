@@ -414,7 +414,7 @@ class LitestarPrometheusInstrument(PrometheusInstrument[LitestarConfig]):
             "group_path": config.prometheus_group_path,
             **config.prometheus_additional_params,
         }
-        litestar_prometheus_config = PrometheusConfig(app_name=config.service_name, **prometheus_params)
+        litestar_prometheus_config = PrometheusConfig(app_name=config.service_name_or_default, **prometheus_params)
 
         config.application_config.route_handlers.append(LitestarPrometheusController)
         if config.is_prometheus_http_metrics_on(
@@ -466,8 +466,8 @@ class LitestarSwaggerInstrument(SwaggerInstrument[LitestarConfig]):
         )
         config.application_config.openapi_config = OpenAPIConfig(
             path=config.swagger_path,
-            title=config.service_name,
-            version=config.service_version,
+            title=config.service_name_or_default,
+            version=config.service_version_or_default,
             description=config.service_description,
             render_plugins=render_plugins,
             **config.swagger_additional_params,

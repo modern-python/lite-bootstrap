@@ -75,6 +75,13 @@ def test_pyroscope_bootstrap_uses_opentelemetry_service_name() -> None:
         assert mock_pyroscope.configure.call_args.kwargs["application_name"] == "otel-name"
 
 
+def test_pyroscope_application_name_falls_back_when_service_name_unset() -> None:
+    config = FreeConfig(pyroscope_endpoint="http://pyroscope:4040")
+    with patch(_PYROSCOPE_PYROSCOPE) as mock_pyroscope:
+        PyroscopeInstrument(bootstrap_config=config).bootstrap()
+        assert mock_pyroscope.configure.call_args.kwargs["application_name"] == "micro-service"
+
+
 def test_pyroscope_standalone_config_accepts_otel_fields() -> None:
     config = PyroscopeConfig(
         service_name="fallback",
