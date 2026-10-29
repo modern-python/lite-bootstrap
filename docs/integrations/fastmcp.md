@@ -62,6 +62,11 @@ FastMcpConfig(
 Enabled, each message is logged with its `method`, `source` and `type`, plus `duration` in
 nanoseconds. A message that raises is logged at exception level and the exception is re-raised.
 
+lite-bootstrap 2.0 requires fastmcp 4, where this log sees every message a client sends. That
+includes notifications such as `notifications/initialized` and `notifications/cancelled`, the
+`server/discover` request of a modern connection, and requests that fail before reaching a handler.
+On fastmcp 3 it saw only routable requests.
+
 Set `health_checks_enabled=False` to omit the health route.
 
 ## Sentry

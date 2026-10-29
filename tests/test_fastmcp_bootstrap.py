@@ -131,6 +131,25 @@ async def test_fastmcp_logging_middleware_logs_success(monkeypatch: pytest.Monke
     assert isinstance(call_kwargs.kwargs["duration"], int)
 
 
+async def test_fastmcp_access_log_records_notifications(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_logger = MagicMock()
+    monkeypatch.setattr(fastmcp_bootstrapper, "fastmcp_access_logger", fake_logger)
+    bootstrapper = FastMcpBootstrapper(bootstrap_config=_make_test_config(logging_access_log_enabled=True))
+    application = bootstrapper.bootstrap()
+    try:
+        async with Client(application, mode="legacy") as client:
+            await client.list_tools()
+    finally:
+        bootstrapper.teardown()
+
+    logged = [(call.kwargs["mcp"]["method"], call.kwargs["mcp"]["type"]) for call in fake_logger.info.call_args_list]
+    assert logged == [
+        ("initialize", "request"),
+        ("notifications/initialized", "notification"),
+        ("tools/list", "request"),
+    ]
+
+
 async def test_fastmcp_logging_middleware_logs_exception(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_logger = MagicMock()
     monkeypatch.setattr(
