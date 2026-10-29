@@ -1,5 +1,13 @@
 # Configuration
 
+## Debug mode
+
+`service_debug` defaults to `False`. Debug mode puts tracebacks in error responses, so keep it off in production.
+
+- FastAPI: when lite-bootstrap builds the app because no `application` was passed, it sets the app's `debug` to `service_debug`. An app you pass in keeps its own `debug`.
+- Litestar: the app runs in debug mode when `service_debug=True` or `AppConfig(debug=True)`. Either one turns it on, and neither turns the other off.
+- FastStream, FastMCP and the free bootstrapper don't use it.
+
 ## Sentry
 
 Sentry integration uses `sentry_sdk` package under the hood.

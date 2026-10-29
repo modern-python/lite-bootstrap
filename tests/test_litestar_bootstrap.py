@@ -520,6 +520,24 @@ def test_litestar_bootstrap_keeps_explicit_unlimited_request_max_body_size(lites
         assert application.request_max_body_size is None
 
 
+@pytest.mark.parametrize(
+    ("application_config", "config_kwargs", "expected_debug"),
+    [
+        pytest.param(AppConfig(), {}, False, id="default"),
+        pytest.param(AppConfig(debug=False), {}, False, id="app-config-debug-off"),
+        pytest.param(AppConfig(debug=True), {}, True, id="app-config-debug-on"),
+        pytest.param(AppConfig(), {"service_debug": True}, True, id="service-debug-on"),
+    ],
+)
+def test_litestar_debug_follows_app_config_and_service_debug(
+    application_config: AppConfig, config_kwargs: dict[str, typing.Any], expected_debug: bool
+) -> None:
+    config = LitestarConfig(application_config=application_config, **config_kwargs)
+    application = LitestarBootstrapper(bootstrap_config=config).bootstrap()
+
+    assert application.debug is expected_debug
+
+
 def test_litestar_default_request_max_body_size_matches_litestar() -> None:
     """Guard: our constant must stay equal to the default Litestar's own __init__ applies."""
     litestar_default = inspect.signature(litestar.Litestar.__init__).parameters["request_max_body_size"].default
