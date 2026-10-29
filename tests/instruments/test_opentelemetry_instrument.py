@@ -1,3 +1,4 @@
+import dataclasses
 import logging
 import os
 import re
@@ -126,7 +127,7 @@ def test_opentelemetry_sampler_wins_over_sampler_env_vars(monkeypatch: pytest.Mo
 @pytest.mark.parametrize(
     ("config", "expected_service_name"),
     [
-        (OpenTelemetryConfig(opentelemetry_log_traces=True), "micro-service"),
+        (OpenTelemetryConfig(opentelemetry_log_traces=True), "from-env"),
         (OpenTelemetryConfig(opentelemetry_log_traces=True, service_name="configured"), "configured"),
         (
             OpenTelemetryConfig(
@@ -136,7 +137,7 @@ def test_opentelemetry_sampler_wins_over_sampler_env_vars(monkeypatch: pytest.Mo
         ),
     ],
 )
-def test_opentelemetry_configured_service_name_wins_over_env(
+def test_opentelemetry_service_name_falls_back_to_otel_service_name(
     monkeypatch: pytest.MonkeyPatch, config: OpenTelemetryConfig, expected_service_name: str
 ) -> None:
     monkeypatch.setenv("OTEL_SERVICE_NAME", "from-env")
@@ -145,6 +146,23 @@ def test_opentelemetry_configured_service_name_wins_over_env(
         instrument.bootstrap()
         assert instrument._tracer_provider is not None  # noqa: SLF001
         assert instrument._tracer_provider.resource.attributes["service.name"] == expected_service_name  # noqa: SLF001
+    finally:
+        instrument.teardown()
+
+
+@pytest.mark.parametrize(("service_version", "expected_service_version"), [("2.3.4", "2.3.4"), (None, "from-env")])
+def test_opentelemetry_service_version_falls_back_to_otel_resource_attributes(
+    monkeypatch: pytest.MonkeyPatch, service_version: str | None, expected_service_version: str
+) -> None:
+    monkeypatch.setenv("OTEL_RESOURCE_ATTRIBUTES", "service.version=from-env")
+    config = OpenTelemetryConfig(opentelemetry_log_traces=True)
+    if service_version is not None:
+        config = dataclasses.replace(config, service_version=service_version)
+    instrument = OpenTelemetryInstrument(bootstrap_config=config)
+    try:
+        instrument.bootstrap()
+        assert instrument._tracer_provider is not None  # noqa: SLF001
+        assert instrument._tracer_provider.resource.attributes["service.version"] == expected_service_version  # noqa: SLF001
     finally:
         instrument.teardown()
 

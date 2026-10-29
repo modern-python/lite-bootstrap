@@ -463,3 +463,34 @@ def test_sentry_additional_params_auto_enabling_integrations_wins_over_the_field
     )
 
     assert _active_integrations(bootstrap_config) >= _AUTO_ENABLED_IN_THE_TEST_ENVIRONMENT
+
+
+@pytest.mark.parametrize(
+    ("service_version", "sentry_release_env", "expected_release"),
+    [
+        pytest.param("2.3.4", None, "2.3.4", id="service-version"),
+        pytest.param("2.3.4", "from-env", "2.3.4", id="service-version-wins-over-env"),
+        pytest.param(None, "from-env", "from-env", id="env-when-unset"),
+    ],
+)
+def test_sentry_release_follows_service_version(
+    monkeypatch: pytest.MonkeyPatch,
+    minimal_sentry_config: SentryConfig,
+    service_version: str | None,
+    sentry_release_env: str | None,
+    expected_release: str,
+) -> None:
+    if sentry_release_env is None:
+        monkeypatch.delenv("SENTRY_RELEASE", raising=False)
+    else:
+        monkeypatch.setenv("SENTRY_RELEASE", sentry_release_env)
+    config = minimal_sentry_config
+    if service_version is not None:
+        config = dataclasses.replace(config, service_version=service_version)
+    instrument = SentryInstrument(bootstrap_config=config)
+    instrument.bootstrap()
+
+    try:
+        assert sentry_sdk.get_client().options["release"] == expected_release
+    finally:
+        instrument.teardown()

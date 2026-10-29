@@ -250,6 +250,8 @@ class SentryInstrument(BaseInstrument[SentryConfigT]):
                 enrich_sentry_event_from_structlog_log, config.sentry_before_send
             ),
         }
+        if config.service_version:
+            init_params["release"] = config.service_version
         init_params.update(config.sentry_additional_params)
         return init_params
 

@@ -7,15 +7,27 @@ from lite_bootstrap.helpers.warn import NEXT_MAJOR_VERSION, warn_at_caller
 from lite_bootstrap.types import UNSET, UnsetType
 
 
+_DEFAULT_SERVICE_NAME: typing.Final = "micro-service"
+_DEFAULT_SERVICE_VERSION: typing.Final = "1.0.0"
+
+
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class BaseConfig:
-    service_name: str = "micro-service"
+    service_name: str | None = None
     service_description: str | None = None
-    service_version: str = "1.0.0"
+    service_version: str | None = None
     service_environment: str | None = None
     service_debug: bool = False
     # Deprecated field name -> the field that replaced it. The deprecated field defaults to UNSET.
     _renamed_fields: typing.ClassVar[Mapping[str, str]] = {}
+
+    @property
+    def service_name_or_default(self) -> str:
+        return self.service_name or _DEFAULT_SERVICE_NAME
+
+    @property
+    def service_version_or_default(self) -> str:
+        return self.service_version or _DEFAULT_SERVICE_VERSION
 
     def __post_init__(self) -> None:
         """Terminate the MRO __post_init__ cascade safely, after forwarding deprecated field names.

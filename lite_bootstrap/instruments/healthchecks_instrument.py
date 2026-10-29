@@ -30,8 +30,8 @@ class HealthChecksConfig(BaseConfig):
     @property
     def health_check_data(self) -> HealthCheckTypedDict:
         return {
-            "service_version": self.service_version,
-            "service_name": self.service_name,
+            "service_version": self.service_version_or_default,
+            "service_name": self.service_name_or_default,
             "health_status": True,
         }
 
