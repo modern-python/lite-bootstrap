@@ -398,7 +398,11 @@ def _server_spans(exporter: InMemorySpanExporter) -> list[ReadableSpan]:
 def _bootstrapped_with_span_exporter(
     **overrides: typing.Any,  # noqa: ANN401
 ) -> Generator[tuple[FastMcpBootstrapper, FastMCP, InMemorySpanExporter]]:
-    bootstrapper = FastMcpBootstrapper(bootstrap_config=_make_test_config(opentelemetry_log_traces=True, **overrides))
+    """Trace with health-check spans on, since the health route is the cheapest request these tests send."""
+    config_overrides: typing.Final = {"opentelemetry_generate_health_check_spans": True, **overrides}
+    bootstrapper = FastMcpBootstrapper(
+        bootstrap_config=_make_test_config(opentelemetry_log_traces=True, **config_overrides)
+    )
     application = bootstrapper.bootstrap()
     tracer_provider = get_tracer_provider()
     assert isinstance(tracer_provider, SDKTracerProvider)
@@ -522,8 +526,8 @@ def _unregister_request_metrics() -> None:
 
 
 def _http_metric_sets_one_request_moves(**overrides: typing.Any) -> tuple[bool, bool]:  # noqa: ANN401
-    """Return whether one request reached OpenTelemetry's HTTP metrics and Prometheus's, in that order."""
-    config: typing.Final = _make_test_config(**overrides)
+    """Return whether one health-check request reached OpenTelemetry's HTTP metrics and Prometheus's, in that order."""
+    config: typing.Final = _make_test_config(**{"opentelemetry_generate_health_check_spans": True, **overrides})
     with in_memory_opentelemetry_metric_reader() as reader:
         bootstrapper = FastMcpBootstrapper(bootstrap_config=config)
         application = bootstrapper.bootstrap()

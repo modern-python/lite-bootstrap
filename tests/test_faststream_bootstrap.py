@@ -20,11 +20,15 @@ from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
 from opentelemetry.metrics import MeterProvider, get_meter_provider
 from opentelemetry.sdk import resources
 from opentelemetry.sdk.metrics import MeterProvider as SDKMeterProvider
-from opentelemetry.trace import TracerProvider
+from opentelemetry.sdk.trace import TracerProvider as SDKTracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace import TracerProvider, get_tracer, get_tracer_provider
 from starlette import status
 from starlette.testclient import TestClient
 
 from lite_bootstrap import FastStreamBootstrapper, FastStreamConfig
+from lite_bootstrap.bootstrappers import faststream_bootstrapper
 from lite_bootstrap.bootstrappers.faststream_bootstrapper import (
     FastStreamLoggingInstrument,
     FastStreamOpenTelemetryInstrument,
@@ -213,11 +217,39 @@ def test_faststream_bootstrap_without_prometheus_client(broker: RedisBroker) -> 
         bootstrapper.bootstrap()
 
 
+def _span_names_for_one_health_check(config: FastStreamConfig) -> list[str]:
+    bootstrapper = FastStreamBootstrapper(bootstrap_config=config)
+    # The module's tracer stays bound to the first provider a test installed; this one resolves to this test's.
+    with patch.object(faststream_bootstrapper, "tracer", get_tracer(__name__)):
+        application = bootstrapper.bootstrap()
+    tracer_provider = get_tracer_provider()
+    assert isinstance(tracer_provider, SDKTracerProvider)
+    exporter = InMemorySpanExporter()
+    tracer_provider.add_span_processor(SimpleSpanProcessor(exporter))
+    try:
+        TestClient(app=application).get(config.health_checks_path)
+    finally:
+        bootstrapper.teardown()
+    return [span.name for span in exporter.get_finished_spans()]
+
+
+def test_faststream_health_check_records_no_span_by_default() -> None:
+    assert _span_names_for_one_health_check(build_faststream_config()) == []
+
+
+def test_faststream_health_check_span_is_recorded_when_turned_on() -> None:
+    config = dataclasses.replace(build_faststream_config(), opentelemetry_generate_health_check_spans=True)
+
+    assert _span_names_for_one_health_check(config) == [f"GET {config.health_checks_path}"]
+
+
 def test_faststream_bootstrap_without_opentelemetry(broker: RedisBroker) -> None:
     # Regression: issue #87 bug 2 — FastStreamHealthChecksInstrument.bootstrap
     # referenced unbound `tracer` when opentelemetry was absent and
     # opentelemetry_generate_health_check_spans defaulted to True.
-    bootstrap_config = build_faststream_config(broker=broker)
+    bootstrap_config = dataclasses.replace(
+        build_faststream_config(broker=broker), opentelemetry_generate_health_check_spans=True
+    )
     with emulate_package_missing_with_module_reload(
         "opentelemetry",
         ["lite_bootstrap.bootstrappers.faststream_bootstrapper"],
@@ -326,7 +358,9 @@ def test_faststream_build_excluded_urls_covers_prometheus_and_health_paths(broke
     assert config_no_health_spans.prometheus_metrics_path in excluded  # always excluded
     assert config_no_health_spans.health_checks_path in excluded  # excluded when health spans are off
 
-    config_with_health_spans = build_faststream_config(broker=broker)  # generate_health_check_spans defaults True
+    config_with_health_spans = dataclasses.replace(
+        build_faststream_config(broker=broker), opentelemetry_generate_health_check_spans=True
+    )
     excluded_with = FastStreamOpenTelemetryInstrument(bootstrap_config=config_with_health_spans)._build_excluded_urls()  # noqa: SLF001
     assert config_with_health_spans.prometheus_metrics_path in excluded_with
     assert config_with_health_spans.health_checks_path not in excluded_with  # kept when health spans are on
