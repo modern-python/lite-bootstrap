@@ -816,21 +816,6 @@ def test_litestar_otel_traces_everything_when_nothing_is_excluded(litestar_confi
     assert [span.name for span in _server_spans(exporter)] == ["GET /traced"]
 
 
-def test_litestar_otel_is_skipped_without_litestars_opentelemetry_plugin(litestar_config: LitestarConfig) -> None:
-    """Litestar below 2.22 has no `litestar.plugins.opentelemetry`; that must skip the instrument, not crash."""
-    with emulate_package_missing_with_module_reload(
-        "litestar.plugins.opentelemetry",
-        ["lite_bootstrap.bootstrappers.litestar_bootstrapper"],
-    ):
-        with pytest.warns(UserWarning, match=r"litestar>=2\.22"):
-            bootstrapper = litestar_bootstrapper.LitestarBootstrapper(bootstrap_config=litestar_config)
-        bootstrapper.bootstrap()
-
-        assert "OpenTelemetryPlugin" not in {
-            type(plugin).__name__ for plugin in litestar_config.application_config.plugins
-        }
-
-
 @pytest.mark.parametrize(("probes", "expected_status", "expected_health_status", "expected_failed"), HEALTH_PROBE_CASES)
 def test_litestar_health_check_runs_probes(
     litestar_config: LitestarConfig,

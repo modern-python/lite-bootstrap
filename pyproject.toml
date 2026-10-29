@@ -115,8 +115,10 @@ litestar = [
     # >=2.13 for AppConfig.request_max_body_size (LitestarBootstrapper._apply_config reads it);
     # >=2.15 for litestar.middleware.ASGIMiddleware (LitestarOpenTelemetryRouteMiddleware
     # subclasses it); >=2.19 because litestar/concurrency.py imports sniffio and only 2.19 declares
-    # it -- until then it arrived via anyio, which dropped the dependency in 4.14. The highest wins.
-    "litestar>=2.19",
+    # it -- until then it arrived via anyio, which dropped the dependency in 4.14; >=2.22 for
+    # litestar.plugins.opentelemetry (LitestarOpenTelemetryInstrument registers its
+    # OpenTelemetryPlugin). The highest wins.
+    "litestar>=2.22",
     # litestar declares `typing-extensions` bare while importing typing_extensions.ReadOnly (4.9),
     # so the floor has to come from here. >=4.12 rather than 4.9: 4.9 and 4.11 assign
     # `typing.ParamSpec.__default__`, which Python 3.13 made read-only.
@@ -127,8 +129,6 @@ litestar-sentry = [
 ]
 litestar-otl = [
     "lite-bootstrap[litestar,otl]",
-    # >=2.22 for litestar.plugins.opentelemetry (LitestarOpenTelemetryInstrument registers its OpenTelemetryPlugin).
-    "litestar>=2.22",
     # Moves with the rest of the train: every instrumentation package pins
     # `opentelemetry-instrumentation` to its own exact version.
     "opentelemetry-instrumentation-asgi>=0.63b0",
