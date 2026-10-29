@@ -127,7 +127,7 @@ class FastStreamHealthChecksInstrument(HealthChecksInstrument[FastStreamConfig])
             health_status = await self.define_health_status()
             return AsgiResponse(
                 json.dumps(self.render_health_check_data(health_status=health_status)).encode(),
-                200 if health_status else 500,
+                200 if health_status else 503,
                 headers={"content-type": "application/json"},
             )
 

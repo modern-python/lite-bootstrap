@@ -132,7 +132,7 @@ async def test_faststream_bootstrap_health_check_wo_broker() -> None:
     test_client = TestClient(app=application)
 
     response = test_client.get(bootstrap_config.health_checks_path)
-    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
     assert response.json() == {
         "health_status": False,
         "service_name": "microservice",
@@ -305,7 +305,7 @@ async def test_faststream_health_check_fails_when_second_broker_is_down(broker: 
             TestClient(app=application) as test_client,
         ):
             response = test_client.get(config.health_checks_path)
-            assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+            assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
             assert response.json()["health_status"] is False
     finally:
         bootstrapper.teardown()
@@ -573,7 +573,7 @@ async def test_faststream_health_check_fails_on_broker_ping_despite_passing_prob
     finally:
         bootstrapper.teardown()
 
-    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
     assert response.json()["health_status"] is False
 
 

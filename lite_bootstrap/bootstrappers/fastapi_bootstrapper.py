@@ -194,7 +194,7 @@ class FastAPIHealthChecksInstrument(HealthChecksInstrument[FastAPIConfig]):
         async def health_check_handler(response: fastapi.Response) -> HealthCheckTypedDict:
             health_status = await self.define_health_status()
             if not health_status:
-                response.status_code = fastapi.status.HTTP_500_INTERNAL_SERVER_ERROR
+                response.status_code = fastapi.status.HTTP_503_SERVICE_UNAVAILABLE
             return self.render_health_check_data(health_status=health_status)
 
         return fastapi_router
