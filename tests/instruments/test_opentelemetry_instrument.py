@@ -293,6 +293,73 @@ def test_opentelemetry_config_no_warning_for_unix_socket_endpoint() -> None:
         )
 
 
+_INSECURE_ENV_VARS: typing.Final = (
+    "OTEL_EXPORTER_OTLP_INSECURE",
+    "OTEL_EXPORTER_OTLP_TRACES_INSECURE",
+    "OTEL_EXPORTER_OTLP_METRICS_INSECURE",
+)
+_SIGNAL_INSECURE_ENV_VAR: typing.Final = "OTEL_EXPORTER_OTLP_{signal}_INSECURE"
+_REMOTE_HTTP: typing.Final = "http://collector.example.com:4317"
+_REMOTE_SCHEMELESS: typing.Final = "collector.example.com:4317"
+
+
+@pytest.fixture
+def without_insecure_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    for env_var in _INSECURE_ENV_VARS:
+        monkeypatch.delenv(env_var, raising=False)
+
+
+@pytest.mark.usefixtures("without_insecure_env")
+@pytest.mark.parametrize("signal", ["traces", "metrics"])
+@pytest.mark.parametrize(
+    ("endpoint", "insecure", "env", "expected_plaintext"),
+    [
+        pytest.param(_REMOTE_HTTP, None, {}, True, id="http-scheme"),
+        pytest.param(_REMOTE_SCHEMELESS, None, {}, False, id="schemeless"),
+        pytest.param("https://collector.example.com:4317", True, {}, False, id="https-forces-tls"),
+        pytest.param(_REMOTE_SCHEMELESS, True, {}, True, id="field-on"),
+        pytest.param(_REMOTE_HTTP, False, {}, False, id="field-off"),
+        pytest.param(_REMOTE_HTTP, None, {"OTEL_EXPORTER_OTLP_INSECURE": "false"}, False, id="generic-env-off"),
+        pytest.param(_REMOTE_SCHEMELESS, None, {"OTEL_EXPORTER_OTLP_INSECURE": "true"}, True, id="generic-env-on"),
+        pytest.param(_REMOTE_HTTP, None, {_SIGNAL_INSECURE_ENV_VAR: "false"}, False, id="signal-env-off"),
+        pytest.param(_REMOTE_SCHEMELESS, None, {_SIGNAL_INSECURE_ENV_VAR: "true"}, True, id="signal-env-on"),
+        pytest.param(
+            _REMOTE_SCHEMELESS,
+            None,
+            {_SIGNAL_INSECURE_ENV_VAR: "true", "OTEL_EXPORTER_OTLP_INSECURE": "false"},
+            True,
+            id="signal-env-wins",
+        ),
+        pytest.param(_REMOTE_HTTP, True, {_SIGNAL_INSECURE_ENV_VAR: "false"}, True, id="field-wins"),
+    ],
+)
+def test_insecure_warning_fires_exactly_when_the_grpc_exporter_sends_plaintext(
+    signal: typing.Literal["traces", "metrics"],
+    endpoint: str,
+    insecure: bool | None,
+    env: dict[str, str],
+    expected_plaintext: bool,
+) -> None:
+    signal_env = {env_var.format(signal=signal.upper()): value for env_var, value in env.items()}
+    endpoint_field = "opentelemetry_endpoint" if signal == "traces" else "opentelemetry_metrics_endpoint"
+    fields: dict[str, typing.Any] = {endpoint_field: endpoint}
+    if insecure is not None:
+        fields["opentelemetry_insecure"] = insecure
+
+    with patch.dict(os.environ, signal_env):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            config = OpenTelemetryConfig(**fields)
+        instrument = OpenTelemetryInstrument(bootstrap_config=config)
+        exporter = instrument._build_span_exporter() if signal == "traces" else instrument._build_metric_exporter()  # noqa: SLF001
+    assert exporter is not None
+    try:
+        assert exporter._insecure is expected_plaintext  # noqa: SLF001  # ty: ignore[unresolved-attribute]
+        assert any("unencrypted" in str(w.message) for w in caught) is expected_plaintext
+    finally:
+        exporter.shutdown()
+
+
 def test_opentelemetry_teardown_aggregates_instrumentor_and_shutdown_errors() -> None:
     class BoomInstrumentor(BaseInstrumentor):
         def instrumentation_dependencies(self) -> typing.Collection[str]:
@@ -401,7 +468,7 @@ def test_bootstrap_grpc_protocol_uses_grpc_exporter() -> None:
     try:
         with patch.object(otel_module, "OTLPGrpcSpanExporter") as mock_grpc:
             instrument.bootstrap()
-        mock_grpc.assert_called_once_with(endpoint="localhost:4317", insecure=True)
+        mock_grpc.assert_called_once_with(endpoint="localhost:4317", insecure=None)
     finally:
         instrument.teardown()
 
