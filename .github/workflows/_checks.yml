@@ -65,25 +65,6 @@ jobs:
       - run: uv python pin ${{ matrix.python-version }}
       - run: just install
       - run: just test-ci
-  sentry-majors:
-    # The pytest jobs resolve whichever sentry-sdk major is newest; this runs the suite on each one.
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        sentry-sdk: ["sentry-sdk<3", "sentry-sdk==3.0.0b2"]
-    steps:
-      - uses: actions/checkout@v6
-      - uses: extractions/setup-just@v4
-      - uses: astral-sh/setup-uv@v8.2.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: "**/pyproject.toml"
-      - run: uv python install 3.14
-      - run: uv python pin 3.14
-      - run: just install
-      - run: uv pip install "${{ matrix.sentry-sdk }}"
-      - run: just test
   free-threaded:
     runs-on: ubuntu-latest
     strategy:

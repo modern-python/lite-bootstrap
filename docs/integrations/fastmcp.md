@@ -85,11 +85,11 @@ attached, with lean capture on or off and with `MCPIntegration` on or off.
 
 Measured in-process per `tools/call` over stateless JSON HTTP, over the same app without Sentry:
 
-| Sentry setup | sentry-sdk 2.73.0 | 3.0.0b2 |
-|---|---:|---:|
-| lean capture, the default | +20.6 µs | +15.9 µs |
-| `sentry_lean_error_capture=False` | +82.2 µs | +65.0 µs |
-| the same, request carries a sampled `sentry-trace` | +82.3 µs | +216.4 µs |
+| Sentry setup | sentry-sdk 2.73.0 |
+|---|---:|
+| lean capture, the default | +20.6 µs |
+| `sentry_lean_error_capture=False` | +82.2 µs |
+| the same, request carries a sampled `sentry-trace` | +82.3 µs |
 
 A tool call costs about 620 µs before Sentry, and rows differ by up to 15% between runs.
 

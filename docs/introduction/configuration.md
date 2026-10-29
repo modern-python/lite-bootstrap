@@ -51,18 +51,13 @@ Litestar, FastAPI and FastMCP while Sentry tracing is off; see [Performance](per
 
 ### Sentry logging integration
 
-lite-bootstrap supports sentry-sdk 2.70 and later, on both the 2.x and 3.x majors. Unless
-`sentry_integrations` already contains a `LoggingIntegration`, it appends one that turns `ERROR`
-records into events, records breadcrumbs from `sentry_logging_breadcrumb_level` up and sends no
-Sentry Logs. 3.0 renamed the integration's arguments, so the call differs per major:
+lite-bootstrap supports sentry-sdk 2.70 and later 2.x releases. sentry-sdk 3.0 is not supported
+yet. Unless `sentry_integrations` already contains a `LoggingIntegration`, lite-bootstrap appends
+`LoggingIntegration(level=sentry_logging_breadcrumb_level, sentry_logs_level=None)`. It turns
+`ERROR` records into events, records breadcrumbs from `sentry_logging_breadcrumb_level` up and sends
+no Sentry Logs.
 
-- 2.x: `LoggingIntegration(level=sentry_logging_breadcrumb_level, sentry_logs_level=None)`, with the
-  event level left at its `ERROR` default.
-- 3.x: `LoggingIntegration(breadcrumb_level=sentry_logging_breadcrumb_level, event_level=logging.ERROR, level=None)`.
-  On 3.x `level` means Sentry Logs, and `event_level` defaults to `None`, so without it a logged
-  error creates no event.
-
-On 2.x, turning `sentry_logs_level` off is free. lite-bootstrap never sets `enable_logs`, so Sentry
+Turning `sentry_logs_level` off is free. lite-bootstrap never sets `enable_logs`, so Sentry
 Logs is off, but `SentryLogsHandler.emit` formats the record *before* it checks whether logs are
 enabled ([getsentry/sentry-python#7402](https://github.com/getsentry/sentry-python/issues/7402)) - it
 formats every `INFO`+ record and discards the result.
@@ -92,8 +87,8 @@ SQLAlchemy, asyncpg, redis, httpx, aiohttp, MCP and others. lite-bootstrap passe
 
 With tracing off, those integrations still open a span and record a breadcrumb for every SQL
 statement, Redis command or outgoing HTTP request. `SqlalchemyIntegration` measured about 64 µs per
-statement on sentry-sdk 2.70, and `RedisIntegration` +27.1 µs per FastStream publish on 2.73.0 and
-+9.5 µs on 3.0.0b2 ([FastStream](https://github.com/modern-python/lite-bootstrap/blob/main/benchmarks/README.md#8d-faststream)). The default integrations stay:
+statement on sentry-sdk 2.70, and `RedisIntegration` +27.1 µs per FastStream publish on 2.73.0
+([FastStream](https://github.com/modern-python/lite-bootstrap/blob/main/benchmarks/README.md#8d-faststream)). The default integrations stay:
 dedupe, excepthook, threading, stdlib, atexit, modules, argv and lite-bootstrap's own
 `LoggingIntegration`.
 
@@ -116,12 +111,8 @@ default as a whole, so keys you leave out take sentry-sdk's own defaults, which 
 change one key, spread the default: `{**DEFAULT_DATA_COLLECTION, "user_info": True}`. Read more about
 the option [here](https://docs.sentry.io/platforms/python/data-management/data-collected/).
 
-`send_default_pii` has no effect on 2.x while `data_collection` is set, and on 3.x it is gone. 3.0
-also raises `TypeError` at `sentry_sdk.init` for any option it removed, so passing one of these
-through `sentry_additional_params` fails at bootstrap on 3.x, `enable_tracing`, `enable_logs` and
-`include_local_variables` among them. sentry-sdk's
-[migration guide](https://github.com/getsentry/sentry-python/blob/master/MIGRATION_GUIDE.md) lists
-every removed option.
+`send_default_pii` has no effect while `data_collection` is set, because sentry-sdk lets
+`data_collection` take precedence.
 
 
 ## Prometheus

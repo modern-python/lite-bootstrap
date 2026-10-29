@@ -113,8 +113,7 @@ sentry-sdk's `LitestarIntegration`. Tracing counts as off when `sentry_traces_sa
 and `sentry_additional_params` sets none of `traces_sample_rate`, `traces_sampler` and
 `enable_tracing`. With tracing off, the integration still builds a transaction and a span per
 middleware for every request and then discards them
-([getsentry/sentry-python#7400](https://github.com/getsentry/sentry-python/issues/7400)). On
-sentry-sdk 3.0, an incoming `sentry-trace` header marked as sampled makes it record a real span.
+([getsentry/sentry-python#7400](https://github.com/getsentry/sentry-python/issues/7400)).
 
 `sentry_lean_error_capture` picks the path:
 
@@ -143,11 +142,11 @@ answer with a 404 is not reported. The integration reports every exception excep
 
 Measured in-process on a do-nothing handler, over the same app without Sentry:
 
-| Sentry setup | sentry-sdk 2.73.0 | 3.0.0b2 |
-|---|---:|---:|
-| lean capture, the default | +7.3 µs | +8.3 µs |
-| `sentry_lean_error_capture=False` | +70.7 µs | +59.5 µs |
-| the same, request carries a sampled `sentry-trace` | +74.4 µs | +147.4 µs |
+| Sentry setup | sentry-sdk 2.73.0 |
+|---|---:|
+| lean capture, the default | +7.3 µs |
+| `sentry_lean_error_capture=False` | +70.7 µs |
+| the same, request carries a sampled `sentry-trace` | +74.4 µs |
 
 sentry-sdk records installed integrations for the whole process, and `disabled_integrations`
 cannot remove one that an earlier `sentry_sdk.init` installed. That matters only with

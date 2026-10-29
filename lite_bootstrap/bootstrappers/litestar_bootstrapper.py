@@ -74,9 +74,6 @@ if import_checker.is_litestar_installed and import_checker.is_sentry_installed:
     from sentry_sdk.integrations.litestar import LitestarIntegration, retrieve_user_from_scope
     from sentry_sdk.utils import transaction_from_function
 
-    # 3.x narrowed ignore_logger to Sentry Logs and moved its 2.x meaning to ignore_logger_for_events.
-    ignore_logger_for_events = getattr(sentry_logging, "ignore_logger_for_events", sentry_logging.ignore_logger)
-
 if import_checker.is_opentelemetry_installed:
     from opentelemetry.metrics import get_meter_provider
     from opentelemetry.trace import get_tracer_provider
@@ -437,7 +434,7 @@ class LitestarSentryInstrument(SentryInstrument[LitestarConfig]):
             return
         warn_about_sentry_integrations_installed_earlier([LitestarIntegration])
         # LitestarIntegration ignores this logger too: Litestar logs every exception it handles.
-        ignore_logger_for_events("litestar")
+        sentry_logging.ignore_logger("litestar")
         application_config: typing.Final = self.bootstrap_config.application_config
         application_config.middleware.insert(0, LitestarSentryCaptureMiddleware())
         application_config.after_exception.append(capture_litestar_exception_after_handling)
