@@ -112,6 +112,7 @@ class FastStreamConfig(
         | Mapping[type, type[FastStreamPrometheusMiddlewareProtocol]]
         | None
     ) = None
+    prometheus_metrics_path: str = ""
     prometheus_collector_registry: "prometheus_client.CollectorRegistry | None" = None
     faststream_log_level: int = logging.WARNING
     faststream_health_check_broker_timeout: float = 5.0
@@ -196,29 +197,14 @@ class FastStreamOpenTelemetryInstrument(OpenTelemetryInstrument[FastStreamConfig
                 )
 
 
-def _make_collector_registry() -> "prometheus_client.CollectorRegistry":
-    return prometheus_client.CollectorRegistry()
-
-
 @dataclasses.dataclass(kw_only=True)
 class FastStreamPrometheusInstrument(PrometheusInstrument[FastStreamConfig]):
     collector_registry: "prometheus_client.CollectorRegistry" = dataclasses.field(init=False)
-    not_configured_reason = (
-        PrometheusInstrument.not_configured_reason
-        + ", or neither prometheus_middleware_cls nor prometheus_collector_registry is set"
-    )
     missing_dependency_message = "prometheus_client is not installed"
 
     def __post_init__(self) -> None:
         injected = self.bootstrap_config.prometheus_collector_registry
-        self.collector_registry = injected if injected is not None else _make_collector_registry()
-
-    @classmethod
-    def is_configured(cls, bootstrap_config: "FastStreamConfig") -> bool:  # ty: ignore[invalid-method-override]
-        return super().is_configured(bootstrap_config) and (
-            bootstrap_config.prometheus_middleware_cls is not None
-            or bootstrap_config.prometheus_collector_registry is not None
-        )
+        self.collector_registry = injected if injected is not None else prometheus_client.REGISTRY
 
     @staticmethod
     def dependencies_installed() -> bool:

@@ -392,25 +392,51 @@ async def test_faststream_prometheus_uses_injected_registry(broker: RedisBroker,
         bootstrapper.teardown()
 
 
-async def test_faststream_prometheus_is_skipped_without_middleware_or_registry(broker: RedisBroker) -> None:
-    bootstrap_config = dataclasses.replace(
-        build_faststream_config(broker=broker),
-        prometheus_middleware_cls=None,
-        prometheus_collector_registry=None,
+def test_faststream_prometheus_is_skipped_without_metrics_path(broker: RedisBroker) -> None:
+    bootstrap_config = FastStreamConfig(
+        application=faststream.asgi.AsgiFastStream(broker),
+        prometheus_middleware_cls=RedisPrometheusMiddleware,
+        logging_buffer_capacity=0,
     )
     bootstrapper = FastStreamBootstrapper(bootstrap_config=bootstrap_config)
     skipped = dict(bootstrapper.skipped_instruments)
-    assert FastStreamPrometheusInstrument in skipped
-    assert "prometheus_collector_registry" in skipped[FastStreamPrometheusInstrument]
+    assert skipped[FastStreamPrometheusInstrument] == "prometheus_metrics_path is empty or not valid"
 
+
+async def test_faststream_prometheus_serves_the_default_registry(broker: RedisBroker) -> None:
+    counter_name = f"default_registry_counter_{uuid.uuid4().hex}_total"
+    counter = prometheus_client.Counter(counter_name, "Default registry counter")
+    counter.inc()
+    bootstrap_config = dataclasses.replace(
+        build_faststream_config(broker=broker), prometheus_middleware_cls=None, prometheus_collector_registry=None
+    )
+    bootstrapper = FastStreamBootstrapper(bootstrap_config=bootstrap_config)
     application = bootstrapper.bootstrap()
     try:
+        instruments = [one for one in bootstrapper.instruments if isinstance(one, FastStreamPrometheusInstrument)]
+        assert [one.collector_registry for one in instruments] == [prometheus_client.REGISTRY]
         with TestClient(app=application) as test_client:
             async with TestRedisBroker(broker):
                 response = test_client.get(bootstrap_config.prometheus_metrics_path)
-                assert response.status_code == status.HTTP_404_NOT_FOUND
+                assert response.status_code == status.HTTP_200_OK
+                assert counter_name.encode() in response.content
+                assert b"python_info" in response.content
     finally:
         bootstrapper.teardown()
+        prometheus_client.REGISTRY.unregister(counter)
+
+
+def test_faststream_default_registry_takes_two_brokers_and_a_second_bootstrap() -> None:
+    for _ in range(2):
+        brokers: list[BrokerUsecase[typing.Any, typing.Any, typing.Any]] = [RedisBroker(), RedisBroker()]
+        bootstrapper = _bootstrap_with_brokers(
+            brokers, opentelemetry_log_traces=False, opentelemetry_middleware_cls=None
+        )
+        try:
+            for one in brokers:
+                assert _middleware_types(one) == [RedisPrometheusMiddleware]
+        finally:
+            bootstrapper.teardown()
 
 
 def test_faststream_logging_teardown_runs_super_when_broker_write_raises(

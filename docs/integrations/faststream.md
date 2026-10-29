@@ -79,6 +79,7 @@ bootstrapper_config = FastStreamConfig(
         KafkaBroker: KafkaTelemetryMiddleware,
         RedisBroker: RedisTelemetryMiddleware,
     },
+    prometheus_metrics_path="/metrics",
     prometheus_middleware_cls={
         KafkaBroker: KafkaPrometheusMiddleware,
         RedisBroker: RedisPrometheusMiddleware,
