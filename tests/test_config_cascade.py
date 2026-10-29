@@ -15,7 +15,7 @@ from lite_bootstrap.instruments.base import BaseConfig
 from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryConfig
 
 
-_REMOTE_INSECURE_ENDPOINT: typing.Final = "collector.example.com:4317"
+_REMOTE_INSECURE_ENDPOINT: typing.Final = "http://collector.example.com:4317"
 
 
 @pytest.mark.parametrize(

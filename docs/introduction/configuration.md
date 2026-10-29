@@ -214,7 +214,7 @@ Additional parameters:
 - `opentelemetry_endpoint` - will be passed to `OTLPSpanExporter` as endpoint. Under `opentelemetry_exporter_protocol="http"` this is a full URL (e.g. `http://collector:4318/v1/traces`).
 - `opentelemetry_namespace` - will be passed to the `Resource`.
 - `opentelemetry_exporter_protocol` - OTLP exporter transport: `"grpc"` (default, needs the `otl` extra) or `"http"` (needs the `otl-http` extra, no `grpcio` - installable on free-threaded Python).
-- `opentelemetry_insecure` - whether the gRPC OTLP connection is insecure (default: `True`; gRPC only; for `http` the endpoint URL scheme carries security). While it is `True`, an endpoint pointing at a non-local host triggers a warning that telemetry is sent unencrypted.
+- `opentelemetry_insecure` - whether the gRPC OTLP connection is insecure (default: `None`; gRPC only; for `http` the endpoint URL scheme carries security). Left `None`, the exporter decides: `OTEL_EXPORTER_OTLP_TRACES_INSECURE` or `OTEL_EXPORTER_OTLP_METRICS_INSECURE` first, then `OTEL_EXPORTER_OTLP_INSECURE`, then the endpoint's scheme, where only `http://` connects in plaintext. Since 2.0 a schemeless endpoint such as `collector:4317` uses TLS, so write `http://collector:4317` for a plaintext collector, or set the field to `True`, which a `unix://` socket needs too. An `https://` endpoint uses TLS whatever the field says. When the connection is plaintext and the endpoint points at a non-local host, a warning says telemetry is sent unencrypted.
 - `opentelemetry_instrumentors` - a list of extra instrumentors.
 - `opentelemetry_log_traces` - traces will be logged to stdout.
 - `opentelemetry_sampler` - an `opentelemetry.sdk.trace.sampling.Sampler` deciding which traces are recorded. Unset, the SDK's own default applies: `parentbased_always_on`, which records every trace that is not the child of a non-recording remote parent, unless `OTEL_TRACES_SAMPLER` / `OTEL_TRACES_SAMPLER_ARG` say otherwise.
@@ -244,8 +244,8 @@ counted by both.
 ```python
 config = FastAPIConfig(
     service_name="my-service",
-    opentelemetry_endpoint="localhost:4317",
-    opentelemetry_metrics_endpoint="localhost:4317",
+    opentelemetry_endpoint="http://localhost:4317",
+    opentelemetry_metrics_endpoint="http://localhost:4317",
 )
 ```
 

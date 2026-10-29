@@ -74,7 +74,7 @@ class OpenTelemetryConfig(OpenTelemetryServiceFieldsConfig):
     )
     opentelemetry_endpoint: str | None = None
     opentelemetry_metrics_endpoint: str | None = None
-    opentelemetry_insecure: bool = True
+    opentelemetry_insecure: bool | None = None
     opentelemetry_exporter_protocol: typing.Literal["grpc", "http"] = "grpc"
     opentelemetry_instrumentors: list[typing.Union[InstrumentorWithParams, "BaseInstrumentor"]] = dataclasses.field(
         default_factory=list
@@ -96,17 +96,18 @@ class OpenTelemetryConfig(OpenTelemetryServiceFieldsConfig):
 
     def _parse_remote_insecure_hosts(self) -> list[str]:
         """Return each distinct host an insecure, non-local endpoint points at, in declaration order."""
-        endpoints = (self.opentelemetry_endpoint, self.opentelemetry_metrics_endpoint)
-        hosts = (self._parse_remote_insecure_host(endpoint) for endpoint in endpoints)
+        endpoints = (
+            (self.opentelemetry_endpoint, "OTEL_EXPORTER_OTLP_TRACES_INSECURE"),
+            (self.opentelemetry_metrics_endpoint, "OTEL_EXPORTER_OTLP_METRICS_INSECURE"),
+        )
+        hosts = (self._parse_remote_insecure_host(endpoint, env_var) for endpoint, env_var in endpoints)
         return list(dict.fromkeys(host for host in hosts if host is not None))
 
-    def _parse_remote_insecure_host(self, endpoint: str | None) -> str | None:
+    def _parse_remote_insecure_host(self, endpoint: str | None, signal_insecure_env_var: str) -> str | None:
         """Return the host name if the endpoint is insecure AND non-local; else None."""
         if self.opentelemetry_exporter_protocol != "grpc":
             return None
-        if not endpoint or not self.opentelemetry_insecure:
-            return None
-        if endpoint.startswith("unix://"):
+        if not endpoint or endpoint.startswith("unix://"):
             return None
         # urlparse treats schemeless input as `path`, misparsing `host:port` forms.
         # Prepend `//` so urlparse always sees a network-location-style input.
@@ -114,13 +115,24 @@ class OpenTelemetryConfig(OpenTelemetryServiceFieldsConfig):
         if "://" not in raw:
             raw = f"//{raw}"
         parsed = urllib.parse.urlparse(raw)
-        # The gRPC exporter forces TLS for https whatever insecure says.
-        if parsed.scheme == "https":
+        if not self._is_grpc_plaintext(parsed.scheme, signal_insecure_env_var):
             return None
         host = (parsed.hostname or "").lower()
         if host in _LOCAL_HOSTS:
             return None
         return host
+
+    def _is_grpc_plaintext(self, scheme: str, signal_insecure_env_var: str) -> bool:
+        """Decide insecure as the gRPC exporter does: https, then the field, the variables, the scheme."""
+        if scheme == "https":
+            return False
+        if self.opentelemetry_insecure is not None:
+            return self.opentelemetry_insecure
+        for env_var in (signal_insecure_env_var, "OTEL_EXPORTER_OTLP_INSECURE"):
+            value = os.environ.get(env_var)
+            if value is not None:
+                return value.lower() == "true"
+        return scheme == "http"
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
