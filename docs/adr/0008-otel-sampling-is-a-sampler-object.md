@@ -4,7 +4,7 @@
 default), the SDK picks its own sampler, which honours `OTEL_TRACES_SAMPLER` / `OTEL_TRACES_SAMPLER_ARG`,
 so both the default behaviour and the existing environment-variable path are unchanged; the
 pass-through needs no conditional, because `TracerProvider(sampler=None)` is identical to omitting
-the argument at the declared 1.28 floor and at 1.44 alike.
+the argument at the declared 1.42 floor and at 1.44 alike.
 
 A `float` sample rate mirroring `sentry_traces_sample_rate` was rejected. It buys no dependency
 independence, since `opentelemetry_instrumentors` already carries `BaseInstrumentor` and
