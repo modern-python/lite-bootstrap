@@ -54,7 +54,6 @@ def fastapi_config() -> FastAPIConfig:
         service_debug=False,
         cors_allowed_origins=["http://test"],
         health_checks_path="/custom-health/",
-        logging_buffer_capacity=0,
         opentelemetry_instrumentors=[CustomInstrumentor()],
         opentelemetry_log_traces=True,
         opentelemetry_generate_health_check_spans=False,
@@ -617,7 +616,6 @@ def test_fastapi_otel_leaves_the_health_check_untraced_by_default() -> None:
     config = FastAPIConfig(
         service_name="microservice",
         health_checks_path="/custom-health/",
-        logging_buffer_capacity=0,
         opentelemetry_log_traces=True,
     )
 

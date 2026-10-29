@@ -352,8 +352,6 @@ Additional parameters:
 
 - `logging_enabled` - whether to configure structlog (default: `True`).
 - `logging_log_level`
-- `logging_flush_level`
-- `logging_buffer_capacity`
 - `logging_extra_processors`
 - `logging_unset_handlers`
 - `logging_record_filters` - standard-library `logging.Filter` instances to attach to named loggers (see below).

@@ -138,7 +138,6 @@ def _free() -> None:
             service_name="floor-smoke",
             service_version="1.0.0",
             service_environment="test",
-            logging_buffer_capacity=0,
             sentry_dsn=SENTRY_DSN,
             sentry_additional_params=SENTRY_PARAMS,
             sentry_tags={"floor": "smoke"},
@@ -170,7 +169,6 @@ def _fastapi_lean_sentry_capture() -> None:
         bootstrap_config=FastAPIConfig(
             service_name="floor-smoke",
             service_version="1.0.0",
-            logging_buffer_capacity=0,
             sentry_dsn=SENTRY_DSN,
             sentry_additional_params=SENTRY_PARAMS,
             application=application,
@@ -189,7 +187,6 @@ def _fastapi() -> None:
             service_name="floor-smoke",
             service_version="1.0.0",
             service_debug=False,
-            logging_buffer_capacity=0,
             cors_allowed_origins=["http://test"],
             health_checks_path=HEALTH_PATH,
             health_checks_include_in_schema=True,
@@ -225,7 +222,6 @@ def _litestar_lean_sentry_capture() -> None:
             service_name="floor-smoke",
             service_version="1.0.0",
             service_debug=False,
-            logging_buffer_capacity=0,
             sentry_dsn=SENTRY_DSN,
             sentry_additional_params=SENTRY_PARAMS,
             application_config=AppConfig(route_handlers=[floor_error]),
@@ -244,7 +240,6 @@ def _litestar() -> None:
             service_name="floor-smoke",
             service_version="1.0.0",
             service_debug=False,
-            logging_buffer_capacity=0,
             cors_allowed_origins=["http://test"],
             health_checks_path=HEALTH_PATH,
             sentry_dsn=SENTRY_DSN,
@@ -267,7 +262,6 @@ def _faststream() -> None:
         bootstrap_config=FastStreamConfig(
             service_name="floor-smoke",
             service_version="1.0.0",
-            logging_buffer_capacity=0,
             health_checks_path=HEALTH_PATH,
             sentry_dsn=SENTRY_DSN,
             sentry_additional_params=SENTRY_PARAMS,
@@ -290,7 +284,6 @@ def _fastmcp_lean_sentry_capture() -> None:
         bootstrap_config=FastMcpConfig(
             service_name="floor-smoke",
             service_version="1.0.0",
-            logging_buffer_capacity=0,
             sentry_dsn=SENTRY_DSN,
             sentry_additional_params=SENTRY_PARAMS,
         )
@@ -314,7 +307,6 @@ def _fastmcp() -> None:
         bootstrap_config=FastMcpConfig(
             service_name="floor-smoke",
             service_version="1.0.0",
-            logging_buffer_capacity=0,
             health_checks_path=HEALTH_PATH,
             sentry_dsn=SENTRY_DSN,
             sentry_additional_params=SENTRY_PARAMS,

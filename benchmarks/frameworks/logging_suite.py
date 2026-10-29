@@ -28,7 +28,6 @@ class LogScenario:
     span: bool = False
     native: bool = False
     stdlib_json: bool = False
-    buffer_capacity: int = 10
 
 
 SCENARIOS: typing.Final = {
@@ -37,7 +36,6 @@ SCENARIOS: typing.Final = {
     "info_kw5": LogScenario(call="info_kw5"),
     "debug_filtered": LogScenario(call="debug"),
     "info_stdjson": LogScenario(call="info", stdlib_json=True),
-    "info_capacity1": LogScenario(call="info", buffer_capacity=1),
     "info_span": LogScenario(call="info", span=True),
     "info_sentry": LogScenario(call="info", sentry={}),
     "info_sentry_nocrumb": LogScenario(call="info", sentry={"sentry_logging_breadcrumb_level": None}),
@@ -113,7 +111,7 @@ def setup(scenario: LogScenario) -> list[typing.Callable[[], object]]:
         configure_native(devnull_bytes)
     elif scenario.call != "noop":
         with contextlib.redirect_stdout(devnull):
-            config = LoggingConfig(logging_enabled=True, logging_buffer_capacity=scenario.buffer_capacity)
+            config = LoggingConfig(logging_enabled=True)
             LoggingInstrument(bootstrap_config=config).bootstrap()
 
     if scenario.sentry is not None:

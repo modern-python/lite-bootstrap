@@ -154,7 +154,6 @@ def _build_config(transport: SentryTestTransport, **overrides: typing.Any) -> Fa
         service_environment="test",
         sentry_dsn="https://testdsn@localhost/1",
         sentry_additional_params=sentry_additional_params,
-        logging_buffer_capacity=0,
         application=application,
         **overrides,
     )
@@ -196,7 +195,6 @@ def test_lean_capture_is_the_default_on_fastapi_while_tracing_is_off(sentry_mock
         bootstrap_config=FastAPIConfig(
             sentry_dsn="https://testdsn@localhost/1",
             sentry_additional_params={"transport": sentry_mock},
-            logging_buffer_capacity=0,
             application=application,
         )
     ).bootstrap()
@@ -637,7 +635,6 @@ def _build_fastmcp_config(transport: SentryTestTransport, **overrides: typing.An
         service_environment="test",
         sentry_dsn="https://testdsn@localhost/1",
         sentry_additional_params={"transport": transport},
-        logging_buffer_capacity=0,
         prometheus_metrics_path="",
         application=application,
         **overrides,

@@ -19,7 +19,6 @@ def test_logging_instrument_simple(logging_mock: LoggingMock) -> None:
     logging_instrument = LoggingInstrument(
         bootstrap_config=LoggingConfig(
             logging_unset_handlers=["uvicorn"],
-            logging_buffer_capacity=0,
             service_debug=False,
             logging_extra_processors=[logging_mock],
         )
@@ -49,7 +48,6 @@ def test_logging_instrument_tracer_injection(logging_mock: LoggingMock) -> None:
     logging_instrument = LoggingInstrument(
         bootstrap_config=LoggingConfig(
             logging_unset_handlers=["uvicorn"],
-            logging_buffer_capacity=0,
             logging_extra_processors=[logging_mock],
         )
     )
@@ -85,64 +83,29 @@ def test_logging_instrument_tracer_injection(logging_mock: LoggingMock) -> None:
         opentelemetry_instrument.teardown()
 
 
-def test_memory_logger_factory_info() -> None:
-    test_capacity = 10
-    test_flush_level = logging.ERROR
-    test_stream = StringIO()
-
-    logger_factory = MemoryLoggerFactory(
-        config=_MemoryLoggerFactoryConfig(
-            logging_buffer_capacity=test_capacity,
-            logging_flush_level=test_flush_level,
-            logging_log_level=logging.INFO,
-            log_stream=test_stream,
-        ),
-    )
-    test_logger = logger_factory()
-    test_message = "test message"
-
-    for current_log_index in range(test_capacity):
-        test_logger.info(test_message)
-        log_contents = test_stream.getvalue()
-        if current_log_index == test_capacity - 1:
-            assert test_message in log_contents
-        else:
-            assert not log_contents
-
-
-def test_memory_logger_factory_error() -> None:
-    test_capacity = 10
-    test_flush_level = logging.ERROR
-    test_stream = StringIO()
-
-    logger_factory = MemoryLoggerFactory(
-        config=_MemoryLoggerFactoryConfig(
-            logging_buffer_capacity=test_capacity,
-            logging_flush_level=test_flush_level,
-            logging_log_level=logging.INFO,
-            log_stream=test_stream,
-        ),
-    )
-    test_logger = logger_factory()
-    error_message = "error message"
-    test_logger.error(error_message)
-    assert error_message in test_stream.getvalue()
-
-
-def _unbuffered_factory(stream: StringIO) -> MemoryLoggerFactory:
+def _make_factory(stream: StringIO) -> MemoryLoggerFactory:
     return MemoryLoggerFactory(
-        config=_MemoryLoggerFactoryConfig(
-            logging_buffer_capacity=0,
-            logging_flush_level=logging.ERROR,
-            logging_log_level=logging.INFO,
-            log_stream=stream,
-        ),
+        config=_MemoryLoggerFactoryConfig(logging_log_level=logging.INFO, log_stream=stream),
     )
+
+
+def test_memory_logger_factory_writes_each_line_at_once() -> None:
+    test_stream = StringIO()
+    logger_factory = _make_factory(test_stream)
+    try:
+        test_logger = logger_factory("written_at_once")
+        test_logger.info("first")
+        assert test_stream.getvalue().splitlines() == ["first"]
+        test_logger.info("second")
+        assert test_stream.getvalue().splitlines() == ["first", "second"]
+        assert [type(handler) for handler in test_logger.handlers] == [logging.StreamHandler]
+    finally:
+        logger_factory.close_handlers()
 
 
 def test_memory_logger_factory_configures_each_logger_once() -> None:
     test_stream = StringIO()
-    logger_factory = _unbuffered_factory(test_stream)
+    logger_factory = _make_factory(test_stream)
     try:
         first = logger_factory("configured_once")
         second = logger_factory("configured_once")
@@ -158,7 +121,7 @@ def test_memory_logger_factory_configures_each_logger_once() -> None:
 
 
 def test_memory_logger_factory_names_unnamed_logger_after_caller() -> None:
-    logger_factory = _unbuffered_factory(StringIO())
+    logger_factory = _make_factory(StringIO())
     try:
         assert logger_factory().name == __name__
     finally:
@@ -168,7 +131,7 @@ def test_memory_logger_factory_names_unnamed_logger_after_caller() -> None:
 def test_memory_logger_factory_keeps_a_level_set_beforehand() -> None:
     preset_logger = logging.getLogger("preset_level")
     preset_logger.setLevel(logging.DEBUG)
-    logger_factory = _unbuffered_factory(StringIO())
+    logger_factory = _make_factory(StringIO())
     try:
         assert logger_factory("preset_level").level == logging.DEBUG
         assert logger_factory("unset_level").level == logging.INFO
@@ -179,7 +142,7 @@ def test_memory_logger_factory_keeps_a_level_set_beforehand() -> None:
 
 
 def test_memory_logger_factory_close_handlers_restores_the_level_it_set() -> None:
-    logger_factory = _unbuffered_factory(StringIO())
+    logger_factory = _make_factory(StringIO())
     logger_factory("restored_level")
     logger_factory.close_handlers()
 
@@ -189,7 +152,6 @@ def test_memory_logger_factory_close_handlers_restores_the_level_it_set() -> Non
 def test_logging_instrument_lifecycle_replay(logging_mock: LoggingMock) -> None:
     instrument = LoggingInstrument(
         bootstrap_config=LoggingConfig(
-            logging_buffer_capacity=0,
             logging_extra_processors=[logging_mock],
         ),
     )
@@ -206,7 +168,7 @@ def test_logging_instrument_lifecycle_replay(logging_mock: LoggingMock) -> None:
 
 def test_logging_instrument_teardown_resets_factory_when_close_handlers_raises() -> None:
     instrument = LoggingInstrument(
-        bootstrap_config=LoggingConfig(logging_buffer_capacity=0),
+        bootstrap_config=LoggingConfig(),
     )
     instrument.bootstrap()
     factory = instrument._logger_factory  # noqa: SLF001
@@ -224,7 +186,7 @@ def test_logging_instrument_teardown_resets_factory_when_close_handlers_raises()
 
 def test_logging_instrument_teardown_aggregates_handler_close_errors() -> None:
     instrument = LoggingInstrument(
-        bootstrap_config=LoggingConfig(logging_buffer_capacity=0),
+        bootstrap_config=LoggingConfig(),
     )
     instrument.bootstrap()
     root_logger = logging.getLogger()
@@ -251,7 +213,7 @@ def test_logging_instrument_teardown_aggregates_handler_close_errors() -> None:
 
 def test_logging_instrument_teardown_aggregates_handler_and_factory_errors() -> None:
     instrument = LoggingInstrument(
-        bootstrap_config=LoggingConfig(logging_buffer_capacity=0),
+        bootstrap_config=LoggingConfig(),
     )
     instrument.bootstrap()
     root_logger = logging.getLogger()
@@ -274,9 +236,9 @@ def test_logging_instrument_teardown_aggregates_handler_and_factory_errors() -> 
 
 
 def test_logging_instrument_binds_log_stream_at_bootstrap() -> None:
-    """The memory logger writes to the stdout in effect at bootstrap, not the one bound at import."""
+    """The structlog logger writes to the stdout in effect at bootstrap, not the one bound at import."""
     redirected_stdout = StringIO()
-    logging_instrument = LoggingInstrument(bootstrap_config=LoggingConfig(logging_buffer_capacity=0))
+    logging_instrument = LoggingInstrument(bootstrap_config=LoggingConfig())
     try:
         with contextlib.redirect_stdout(redirected_stdout):
             logging_instrument.bootstrap()
@@ -300,7 +262,7 @@ def test_one_rendered_event_is_one_physical_line(capsys: pytest.CaptureFixture[s
     after the JSON and the same traceback ships twice. Every line-oriented log shipper reads the
     suffix as four malformed events.
     """
-    logging_instrument = LoggingInstrument(bootstrap_config=LoggingConfig(logging_buffer_capacity=0))
+    logging_instrument = LoggingInstrument(bootstrap_config=LoggingConfig())
     try:
         logging_instrument.bootstrap()
         logger = structlog.getLogger("one_physical_line")
@@ -322,7 +284,7 @@ def test_one_rendered_event_is_one_physical_line(capsys: pytest.CaptureFixture[s
 
 def test_foreign_logger_exception_is_one_physical_line(capsys: pytest.CaptureFixture[str]) -> None:
     """The same one-line contract holds for a plain stdlib logger going through the root handler."""
-    logging_instrument = LoggingInstrument(bootstrap_config=LoggingConfig(logging_buffer_capacity=0))
+    logging_instrument = LoggingInstrument(bootstrap_config=LoggingConfig())
     try:
         logging_instrument.bootstrap()
         try:
@@ -339,3 +301,20 @@ def test_foreign_logger_exception_is_one_physical_line(capsys: pytest.CaptureFix
     payload = json.loads(lines[0])
     assert payload["event"] == "logging error"
     assert "ValueError: some error" in payload["exception"]
+
+
+def test_structlog_lines_are_written_at_once_and_in_order_with_stdlib_lines(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    logging_instrument = LoggingInstrument(bootstrap_config=LoggingConfig())
+    try:
+        logging_instrument.bootstrap()
+        structlog.getLogger("ordered_app").info("1")
+        logging.getLogger("ordered_lib").warning("2")
+        structlog.getLogger("ordered_app").info("3")
+
+        events = [json.loads(line)["event"] for line in capsys.readouterr().out.splitlines()]
+    finally:
+        logging_instrument.teardown()
+
+    assert events == ["1", "2", "3"]

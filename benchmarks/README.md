@@ -619,7 +619,8 @@ record per MCP message), FastStream's own "Received" and "Processed" (filtered a
 
 Linux, a 2-CPU container on the same Apple M2 under OrbStack, CPython 3.14.9, structlog 26.1.0,
 orjson 3.11.9, sentry-sdk 2.67.1, opentelemetry-sdk 1.44.0. Output to a real `/dev/null` file,
-50000 calls per round, loop overhead (0.06 µs) subtracted.
+50000 calls per round, loop overhead (0.06 µs) subtracted. The `MemoryHandler` was removed afterwards
+(#377), and 2.0 writes through the `StreamHandler` directly; the rows have not been rerun.
 
 | call | µs/call |
 |---|---:|
@@ -627,7 +628,6 @@ orjson 3.11.9, sentry-sdk 2.67.1, opentelemetry-sdk 1.44.0. Output to a real `/d
 | same with 5 keyword values | 10.4 |
 | `log.debug(...)` at INFO, filtered | 1.1 |
 | info, JSON through stdlib `json` (the fallback without orjson) | 11.5 |
-| info, `logging_buffer_capacity=1` | 10.5 |
 | info inside a recording OpenTelemetry span | 10.7 |
 | info with Sentry's LoggingIntegration, breadcrumb level INFO (default) | 15.7 |
 | info with Sentry, `sentry_logging_breadcrumb_level=None` | 10.5 |

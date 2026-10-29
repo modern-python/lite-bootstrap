@@ -183,7 +183,6 @@ def _make_test_config(**overrides: typing.Any) -> FastMcpConfig:  # noqa: ANN401
     base: dict[str, typing.Any] = {
         "service_name": "test-mcp",
         "service_version": "1.2.3",
-        "logging_buffer_capacity": 0,
     }
     base.update(overrides)
     return FastMcpConfig(**base)

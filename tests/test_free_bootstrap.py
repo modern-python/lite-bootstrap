@@ -32,7 +32,6 @@ def free_bootstrapper_config() -> FreeConfig:
         opentelemetry_instrumentors=[CustomInstrumentor()],
         opentelemetry_log_traces=True,
         sentry_dsn="https://testdsn@localhost/1",
-        logging_buffer_capacity=0,
     )
 
 
@@ -59,7 +58,6 @@ def test_free_bootstrap_passes_sampler_to_tracer_provider() -> None:
         bootstrap_config=FreeConfig(
             opentelemetry_log_traces=True,
             opentelemetry_sampler=sampler,
-            logging_buffer_capacity=0,
         ),
     )
     bootstrapper.bootstrap()
@@ -80,7 +78,6 @@ def test_free_bootstrap_logging_disabled() -> None:
             opentelemetry_log_traces=True,
             sentry_dsn="https://testdsn@localhost/1",
             sentry_additional_params={"transport": SentryTestTransport()},
-            logging_buffer_capacity=0,
         ),
     )
     skipped_classes = {cls for cls, _ in bootstrapper.skipped_instruments}
@@ -252,7 +249,6 @@ def test_build_summary_format() -> None:
             sentry_dsn="https://testdsn@localhost/1",
             sentry_additional_params={"transport": SentryTestTransport()},
             logging_enabled=False,
-            logging_buffer_capacity=0,
         ),
     )
     summary = bootstrapper.build_summary()
@@ -269,7 +265,6 @@ def test_config_skip_emits_no_warning() -> None:
         bootstrapper = FreeBootstrapper(
             bootstrap_config=FreeConfig(
                 logging_enabled=False,
-                logging_buffer_capacity=0,
             ),
         )
     assert LoggingInstrument in {cls for cls, _ in bootstrapper.skipped_instruments}
@@ -291,7 +286,7 @@ def test_only_the_silent_skip_path_lands_in_skipped_instruments() -> None:
     filtering on it would start seeing entries that mean the opposite of what it filtered for.
     """
     config_skip = FreeBootstrapper(
-        bootstrap_config=FreeConfig(logging_enabled=False, logging_buffer_capacity=0),
+        bootstrap_config=FreeConfig(logging_enabled=False),
     )
     assert LoggingInstrument in {cls for cls, _ in config_skip.skipped_instruments}
 
@@ -303,7 +298,6 @@ def test_only_the_silent_skip_path_lands_in_skipped_instruments() -> None:
             bootstrap_config=FreeConfig(
                 sentry_dsn="https://testdsn@localhost/1",
                 logging_enabled=False,
-                logging_buffer_capacity=0,
             ),
         )
 

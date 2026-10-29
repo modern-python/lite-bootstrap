@@ -1,6 +1,5 @@
 import dataclasses
 import logging
-import logging.handlers
 import sys
 import typing
 import uuid
@@ -81,7 +80,6 @@ def build_faststream_config(
         sentry_dsn="https://testdsn@localhost/1",
         sentry_additional_params={"transport": SentryTestTransport()},
         health_checks_path="/custom-health/",
-        logging_buffer_capacity=0,
         application=application,
     )
 
@@ -144,7 +142,6 @@ async def test_faststream_bootstrap_health_check_wo_broker() -> None:
 def test_faststream_logging_instrument_injects_structlog_logger(broker: RedisBroker) -> None:
     bootstrap_config = FastStreamConfig(
         service_debug=False,
-        logging_buffer_capacity=0,
         logging_log_level=logging.INFO,
         faststream_log_level=logging.WARNING,
         application=faststream.asgi.AsgiFastStream(broker),
@@ -163,7 +160,6 @@ def test_faststream_logging_replaces_faststream_stderr_handler(broker: RedisBrok
     original_handlers = faststream_logger.handlers[:]
     bootstrapper = FastStreamBootstrapper(
         bootstrap_config=FastStreamConfig(
-            logging_buffer_capacity=0,
             faststream_log_level=logging.INFO,
             application=faststream.asgi.AsgiFastStream(broker),
         )
@@ -171,7 +167,7 @@ def test_faststream_logging_replaces_faststream_stderr_handler(broker: RedisBrok
     bootstrapper.bootstrap()
     try:
         assert not [one for one in faststream_logger.handlers if getattr(one, "stream", None) is sys.stderr]
-        assert [type(one) for one in faststream_logger.handlers].count(logging.handlers.MemoryHandler) == 1
+        assert [type(one) for one in faststream_logger.handlers].count(logging.StreamHandler) == 1
     finally:
         bootstrapper.teardown()
 
@@ -396,7 +392,6 @@ def test_faststream_prometheus_is_skipped_without_metrics_path(broker: RedisBrok
     bootstrap_config = FastStreamConfig(
         application=faststream.asgi.AsgiFastStream(broker),
         prometheus_middleware_cls=RedisPrometheusMiddleware,
-        logging_buffer_capacity=0,
     )
     bootstrapper = FastStreamBootstrapper(bootstrap_config=bootstrap_config)
     skipped = dict(bootstrapper.skipped_instruments)

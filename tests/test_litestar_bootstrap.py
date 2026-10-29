@@ -71,7 +71,6 @@ def litestar_config() -> LitestarConfig:
         sentry_dsn="https://testdsn@localhost/1",
         sentry_additional_params={"transport": SentryTestTransport()},
         swagger_offline_docs=True,
-        logging_buffer_capacity=0,
     )
 
 
@@ -346,7 +345,7 @@ def test_litestar_access_log_has_one_handler(litestar_config: LitestarConfig) ->
     with TestClient(app=application) as client:
         assert client.get("/ping").status_code == status_codes.HTTP_200_OK
         litestar_handlers = logging.getLogger("litestar").handlers
-        assert [type(handler) for handler in litestar_handlers] == [logging.handlers.MemoryHandler]
+        assert [type(handler) for handler in litestar_handlers] == [logging.StreamHandler]
 
 
 def test_litestar_access_logging_disabled_by_default(litestar_config: LitestarConfig) -> None:
@@ -840,7 +839,7 @@ def test_litestar_health_check_runs_probes(
 
 
 def test_litestar_openapi_and_prometheus_fall_back_to_default_service_name() -> None:
-    application = LitestarBootstrapper(bootstrap_config=LitestarConfig(logging_buffer_capacity=0)).bootstrap()
+    application = LitestarBootstrapper(bootstrap_config=LitestarConfig()).bootstrap()
     assert application.openapi_config is not None
     assert application.openapi_config.title == "micro-service"
     assert application.openapi_config.version == "1.0.0"

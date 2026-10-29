@@ -55,7 +55,6 @@ def test_sentry_instrument_with_structlog_error(
     logging_instrument = LoggingInstrument(
         bootstrap_config=LoggingConfig(
             logging_unset_handlers=["uvicorn"],
-            logging_buffer_capacity=0,
             service_debug=False,
             logging_extra_processors=[logging_mock],
         )

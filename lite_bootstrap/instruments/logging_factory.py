@@ -1,7 +1,6 @@
 import dataclasses
 import json
 import logging
-import logging.handlers
 import sys
 import typing
 
@@ -14,8 +13,6 @@ if import_checker.is_orjson_installed:
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class _MemoryLoggerFactoryConfig:
-    logging_buffer_capacity: int
-    logging_flush_level: int
     logging_log_level: int
     # default_factory, not a bare default: a bare one binds sys.stdout at import time, so a
     # process that rebinds stdout before bootstrap would keep logging to the stale stream.
@@ -102,20 +99,15 @@ if import_checker.is_structlog_installed:
             kwargs["ignore_frame_names"] = [*(kwargs.get("ignore_frame_names") or ()), __name__]
             super().__init__(*args, **kwargs)
             self.config = config
-            self._created_handlers: dict[logging.Logger, logging.handlers.MemoryHandler] = {}
+            self._created_handlers: dict[logging.Logger, logging.StreamHandler[typing.Any]] = {}
             self._leveled_loggers: set[logging.Logger] = set()
 
         def __call__(self, *args: typing.Any) -> logging.Logger:  # noqa: ANN401
             logger: typing.Final = super().__call__(*args)
             if logger in self._created_handlers:
                 return logger
-            stream_handler: typing.Final = logging.StreamHandler(stream=self.config.log_stream)
-            stream_handler.setFormatter(_RenderedLineFormatter())
-            handler: typing.Final = logging.handlers.MemoryHandler(
-                capacity=self.config.logging_buffer_capacity,
-                flushLevel=self.config.logging_flush_level,
-                target=stream_handler,
-            )
+            handler: typing.Final = logging.StreamHandler(stream=self.config.log_stream)
+            handler.setFormatter(_RenderedLineFormatter())
             logger.addHandler(handler)
             if logger.level == logging.NOTSET:
                 logger.setLevel(self.config.logging_log_level)
@@ -130,9 +122,6 @@ if import_checker.is_structlog_installed:
                 created_logger.propagate = True
                 if created_logger in self._leveled_loggers:
                     created_logger.setLevel(logging.NOTSET)
-                target = handler.target
                 handler.close()
-                if target is not None:
-                    target.close()
             self._created_handlers.clear()
             self._leveled_loggers.clear()
