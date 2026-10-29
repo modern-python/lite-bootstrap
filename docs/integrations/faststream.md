@@ -43,7 +43,6 @@ bootstrapper_config = FastStreamConfig(
     prometheus_middleware_cls=RedisPrometheusMiddleware,
     sentry_dsn="https://testdsn@localhost/1",
     health_checks_path="/custom-health/",
-    logging_buffer_capacity=0,
     application=AsgiFastStream(broker),
 )
 bootstrapper = FastStreamBootstrapper(bootstrapper_config)

@@ -28,7 +28,7 @@ async def test_taskiq_recipe_traces_tasks_and_tears_down() -> None:
     async def add(left: int, right: int) -> int:
         return left + right
 
-    _register_recipe(broker, FreeConfig(opentelemetry_log_traces=True, logging_buffer_capacity=0))
+    _register_recipe(broker, FreeConfig(opentelemetry_log_traces=True))
 
     await broker.startup()
     try:

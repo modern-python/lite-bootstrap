@@ -132,7 +132,6 @@ def _build_config(transport: SentryTestTransport, **overrides: typing.Any) -> Li
         service_environment="test",
         sentry_dsn="https://testdsn@localhost/1",
         sentry_additional_params=sentry_additional_params,
-        logging_buffer_capacity=0,
         application_config=AppConfig(
             route_handlers=[
                 boom,
@@ -187,7 +186,6 @@ def test_lean_capture_is_the_default_while_tracing_is_off(sentry_mock: SentryTes
         bootstrap_config=LitestarConfig(
             sentry_dsn="https://testdsn@localhost/1",
             sentry_additional_params={"transport": sentry_mock},
-            logging_buffer_capacity=0,
             application_config=AppConfig(route_handlers=[boom, integrations]),
         )
     ).bootstrap()

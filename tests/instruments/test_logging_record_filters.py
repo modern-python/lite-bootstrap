@@ -85,7 +85,7 @@ def test_default_config_attaches_no_filters(
     """A config that does not ask for filters leaves loggers and rendered records untouched."""
     package_logger = logging.getLogger("default_compat.package")
     filters_before = list(package_logger.filters)
-    instrument = LoggingInstrument(bootstrap_config=LoggingConfig(logging_buffer_capacity=0))
+    instrument = LoggingInstrument(bootstrap_config=LoggingConfig())
     try:
         instrument.bootstrap()
         package_logger.error("nothing filtered here")
@@ -100,7 +100,6 @@ def test_filter_receives_records_from_its_exact_logger() -> None:
     record_filter = RecordingFilter()
     instrument = LoggingInstrument(
         bootstrap_config=LoggingConfig(
-            logging_buffer_capacity=0,
             logging_record_filters={"exact_match.package.child": (record_filter,)},
         ),
     )
@@ -125,7 +124,6 @@ def test_filter_on_parent_logger_does_not_see_child_records() -> None:
     parent_filter = RecordingFilter()
     instrument = LoggingInstrument(
         bootstrap_config=LoggingConfig(
-            logging_buffer_capacity=0,
             logging_record_filters={"no_inheritance.package": (parent_filter,)},
         ),
     )
@@ -155,7 +153,6 @@ def test_filter_demotes_level_before_handlers_render_it(
 ) -> None:
     instrument = LoggingInstrument(
         bootstrap_config=LoggingConfig(
-            logging_buffer_capacity=0,
             logging_record_filters={"demotion.target": (DemotingFilter("expected failure"),)},
         ),
     )
@@ -191,7 +188,6 @@ def test_demoted_record_creates_no_sentry_issue_event(
     """
     logging_instrument = LoggingInstrument(
         bootstrap_config=LoggingConfig(
-            logging_buffer_capacity=0,
             logging_record_filters={"sentry_demotion.target": (DemotingFilter("expected failure"),)},
         ),
     )
@@ -222,7 +218,6 @@ def test_suppressing_filter_keeps_record_from_stream_and_sentry(
 ) -> None:
     logging_instrument = LoggingInstrument(
         bootstrap_config=LoggingConfig(
-            logging_buffer_capacity=0,
             logging_record_filters={"suppression.target": (SuppressingFilter("drop me"),)},
         ),
     )
@@ -247,7 +242,6 @@ def test_non_matching_record_renders_identically_with_and_without_filters(
     def render_untouched(record_filters: dict[str, tuple[logging.Filter, ...]]) -> str:
         instrument = LoggingInstrument(
             bootstrap_config=LoggingConfig(
-                logging_buffer_capacity=0,
                 logging_time_stamper=timestamper,
                 logging_record_filters=record_filters,
             ),
@@ -271,7 +265,6 @@ def test_teardown_removes_only_the_filters_it_attached() -> None:
 
     instrument = LoggingInstrument(
         bootstrap_config=LoggingConfig(
-            logging_buffer_capacity=0,
             logging_record_filters={"teardown_isolation.target": (configured_filter,)},
         ),
     )
@@ -307,7 +300,6 @@ def test_teardown_removes_filters_even_when_a_handler_close_fails() -> None:
 
     instrument = LoggingInstrument(
         bootstrap_config=LoggingConfig(
-            logging_buffer_capacity=0,
             logging_record_filters={"teardown_despite_error.target": (configured_filter,)},
         ),
     )
@@ -329,7 +321,6 @@ def test_bootstrap_teardown_bootstrap_attaches_each_filter_once() -> None:
     target_logger = logging.getLogger("filter_lifecycle.target")
     instrument = LoggingInstrument(
         bootstrap_config=LoggingConfig(
-            logging_buffer_capacity=0,
             logging_record_filters={"filter_lifecycle.target": (configured_filter,)},
         ),
     )
@@ -355,20 +346,19 @@ BootstrapperBuilder = typing.Callable[
 
 def _build_free_bootstrapper(record_filters: dict[str, tuple[logging.Filter, ...]]) -> FreeBootstrapper:
     return FreeBootstrapper(
-        bootstrap_config=FreeConfig(logging_buffer_capacity=0, logging_record_filters=record_filters),
+        bootstrap_config=FreeConfig(logging_record_filters=record_filters),
     )
 
 
 def _build_fastapi_bootstrapper(record_filters: dict[str, tuple[logging.Filter, ...]]) -> FastAPIBootstrapper:
     return FastAPIBootstrapper(
-        bootstrap_config=FastAPIConfig(logging_buffer_capacity=0, logging_record_filters=record_filters),
+        bootstrap_config=FastAPIConfig(logging_record_filters=record_filters),
     )
 
 
 def _build_faststream_bootstrapper(record_filters: dict[str, tuple[logging.Filter, ...]]) -> FastStreamBootstrapper:
     return FastStreamBootstrapper(
         bootstrap_config=FastStreamConfig(
-            logging_buffer_capacity=0,
             logging_record_filters=record_filters,
             application=faststream.asgi.AsgiFastStream(RedisBroker()),
         ),
@@ -377,14 +367,13 @@ def _build_faststream_bootstrapper(record_filters: dict[str, tuple[logging.Filte
 
 def _build_litestar_bootstrapper(record_filters: dict[str, tuple[logging.Filter, ...]]) -> LitestarBootstrapper:
     return LitestarBootstrapper(
-        bootstrap_config=LitestarConfig(logging_buffer_capacity=0, logging_record_filters=record_filters),
+        bootstrap_config=LitestarConfig(logging_record_filters=record_filters),
     )
 
 
 def _build_fastmcp_bootstrapper(record_filters: dict[str, tuple[logging.Filter, ...]]) -> FastMcpBootstrapper:
     return FastMcpBootstrapper(
         bootstrap_config=FastMcpConfig(
-            logging_buffer_capacity=0,
             logging_record_filters=record_filters,
             application=FastMCP[typing.Any](name="microservice"),
         ),

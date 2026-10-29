@@ -61,8 +61,6 @@ __all__ = [
 @dataclasses.dataclass(kw_only=True, frozen=True)
 class LoggingConfig(BaseConfig):
     logging_log_level: int = logging.INFO
-    logging_flush_level: int = logging.ERROR
-    logging_buffer_capacity: int = 10
     logging_extra_processors: list[typing.Any] = dataclasses.field(default_factory=list)
     logging_unset_handlers: list[str] = dataclasses.field(
         default_factory=list,
@@ -150,8 +148,6 @@ class LoggingInstrument(BaseInstrument[LoggingConfigT]):
             config = self.bootstrap_config
             cached = MemoryLoggerFactory(
                 config=_MemoryLoggerFactoryConfig(
-                    logging_buffer_capacity=config.logging_buffer_capacity,
-                    logging_flush_level=config.logging_flush_level,
                     logging_log_level=config.logging_log_level,
                 ),
             )

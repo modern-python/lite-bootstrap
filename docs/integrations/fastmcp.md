@@ -36,7 +36,6 @@ bootstrapper_config = FastMcpConfig(
     sentry_dsn="https://testdsn@localhost/1",
     prometheus_metrics_path="/custom-metrics/",
     health_checks_path="/custom-health/",
-    logging_buffer_capacity=0,
 )
 bootstrapper = FastMcpBootstrapper(bootstrap_config=bootstrapper_config)
 application: FastMCP = bootstrapper.bootstrap()

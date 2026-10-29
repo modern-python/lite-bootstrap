@@ -30,7 +30,6 @@ def main() -> None:
         bootstrap_config=FastAPIConfig(
             service_name="ft-smoke",
             service_debug=False,
-            logging_buffer_capacity=0,
             health_checks_path="/health/",
         )
     )
