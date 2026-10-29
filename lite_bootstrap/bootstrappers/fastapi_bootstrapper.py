@@ -17,7 +17,7 @@ from lite_bootstrap.instruments.healthchecks_instrument import (
 )
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument
 from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryAsgiConfig, OpenTelemetryInstrument
-from lite_bootstrap.instruments.prometheus_instrument import PrometheusConfig, PrometheusInstrument
+from lite_bootstrap.instruments.prometheus_instrument import PrometheusHttpConfig, PrometheusInstrument
 from lite_bootstrap.instruments.pyroscope_instrument import PyroscopeConfig, PyroscopeInstrument
 from lite_bootstrap.instruments.sentry_instrument import (
     SentryInstrument,
@@ -65,7 +65,7 @@ class FastAPIConfig(
     HealthChecksConfig,
     LoggingConfig,
     OpenTelemetryAsgiConfig,
-    PrometheusConfig,
+    PrometheusHttpConfig,
     PyroscopeConfig,
     SentryLeanCaptureConfig,
     SwaggerConfig,
@@ -248,10 +248,12 @@ class FastAPIPrometheusInstrument(PrometheusInstrument[FastAPIConfig]):
     def bootstrap(self) -> None:
         config = self.bootstrap_config
         application = config.app
-        Instrumentator(**config.prometheus_instrumentator_additional_params).instrument(
-            application,
-            **config.prometheus_instrument_additional_params,
-        ).expose(
+        instrumentator = Instrumentator(**config.prometheus_instrumentator_additional_params)
+        if config.is_prometheus_http_metrics_on(
+            opentelemetry_records_http_metrics=FastAPIOpenTelemetryInstrument.is_recording_metrics(config)
+        ):
+            instrumentator.instrument(application, **config.prometheus_instrument_additional_params)
+        instrumentator.expose(
             application,
             endpoint=config.prometheus_metrics_path,
             include_in_schema=config.prometheus_metrics_include_in_schema,

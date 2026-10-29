@@ -8,9 +8,11 @@ from unittest.mock import MagicMock, patch
 
 import opentelemetry.metrics._internal
 import opentelemetry.trace
+import prometheus_client
 import pytest
 import sentry_sdk
 from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
+from opentelemetry.sdk.metrics.export import InMemoryMetricReader
 from opentelemetry.util._once import Once
 from sentry_sdk import integrations as sentry_integrations
 from sentry_sdk import scope as sentry_scope
@@ -23,7 +25,7 @@ from structlog.typing import EventDict, WrappedLogger
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.exceptions import InstrumentSkippedWarning
-from lite_bootstrap.instruments import healthchecks_instrument
+from lite_bootstrap.instruments import healthchecks_instrument, opentelemetry_instrument
 
 
 def pytest_configure() -> None:
@@ -235,3 +237,35 @@ def emulate_package_missing_with_module_reload(
                     for key in [k for k in mod_dict if _is_module_state(k)]:
                         del mod_dict[key]
                     mod_dict.update({k: v for k, v in snap.items() if _is_module_state(k)})
+
+
+@contextlib.contextmanager
+def in_memory_opentelemetry_metric_reader() -> Generator[InMemoryMetricReader]:
+    """Hand the MeterProvider that opentelemetry_metrics_endpoint installs an in-memory reader instead of OTLP."""
+    reader: typing.Final = InMemoryMetricReader()
+    with patch.object(opentelemetry_instrument, "PeriodicExportingMetricReader", return_value=reader):
+        yield reader
+
+
+def opentelemetry_recorded_http_server_metrics(reader: InMemoryMetricReader) -> bool:
+    metrics_data: typing.Final = reader.get_metrics_data()
+    if metrics_data is None:
+        return False
+    return any(
+        metric.name.startswith("http.server.")
+        for resource_metrics in metrics_data.resource_metrics
+        for scope_metrics in resource_metrics.scope_metrics
+        for metric in scope_metrics.metrics
+    )
+
+
+def prometheus_recorded_path(path: str) -> bool:
+    return f'"{path}"' in prometheus_client.generate_latest().decode()
+
+
+def unregister_prometheus_request_metrics() -> None:
+    """Unregister the instrumentator's request metrics: a second registration is skipped, not reused."""
+    registered_collectors: typing.Final = dict(prometheus_client.REGISTRY._collector_to_names)  # noqa: SLF001
+    for collector, names in registered_collectors.items():
+        if any(name.startswith(("http_request", "http_response")) for name in names):
+            prometheus_client.REGISTRY.unregister(collector)

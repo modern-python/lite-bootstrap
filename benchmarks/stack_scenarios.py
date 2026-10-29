@@ -23,6 +23,7 @@ from lite_bootstrap import FastAPIBootstrapper, FastAPIConfig
 
 OTLP_PORT: typing.Final = int(os.environ.get("STUB_OTLP_PORT", "8139"))
 OTLP_ENDPOINT: typing.Final = f"http://127.0.0.1:{OTLP_PORT}/v1/traces"
+OTLP_METRICS_ENDPOINT: typing.Final = f"http://127.0.0.1:{OTLP_PORT}/v1/metrics"
 SAMPLE_RATIO: typing.Final = 0.01
 
 APPS: typing.Final = ("async", "structlog")
@@ -41,7 +42,9 @@ _OTEL: typing.Final = {
 }
 _OTEL_EXCLUDE_SPANS: typing.Final = {"opentelemetry_exclude_spans": ["receive", "send"]}
 _OTEL_SAMPLER: typing.Final = {"opentelemetry_sampler": ParentBased(TraceIdRatioBased(SAMPLE_RATIO))}
+_OTEL_METRICS: typing.Final = {"opentelemetry_metrics_endpoint": OTLP_METRICS_ENDPOINT}
 _PROMETHEUS: typing.Final = {"prometheus_metrics_path": "/metrics"}
+_PROMETHEUS_HTTP_METRICS: typing.Final = {"prometheus_http_metrics_enabled": True}
 _LOGGING: typing.Final = {"logging_enabled": True}
 _SENTRY: typing.Final = {
     "sentry_dsn": DSN,
@@ -86,6 +89,9 @@ SCENARIOS: dict[str, typing.Callable[[], dict[str, typing.Any]]] = {
     "full_no_sentry": lambda: config(_OTEL, _PROMETHEUS, _LOGGING),
     "full_sentry_tuned": lambda: config(_OTEL, _PROMETHEUS, _LOGGING, _sentry_tuned()),
     "otel_exclude_spans": lambda: config(_OTEL, _OTEL_EXCLUDE_SPANS),
+    "otel_metrics": lambda: config(_OTEL, _OTEL_METRICS),
+    "otel_metrics_prom": lambda: config(_OTEL, _OTEL_METRICS, _PROMETHEUS),
+    "otel_metrics_prom_both": lambda: config(_OTEL, _OTEL_METRICS, _PROMETHEUS, _PROMETHEUS_HTTP_METRICS),
     "otel_sampler": lambda: config(_OTEL, _OTEL_SAMPLER),
     "otel_tuned": lambda: config(_OTEL, _OTEL_EXCLUDE_SPANS, _OTEL_SAMPLER),
     "full_all_tuned": lambda: config(_OTEL, _OTEL_EXCLUDE_SPANS, _OTEL_SAMPLER, _PROMETHEUS, _LOGGING, _sentry_tuned()),

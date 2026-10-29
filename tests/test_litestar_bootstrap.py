@@ -6,6 +6,7 @@ import logging
 import logging.handlers
 import sys
 import typing
+import uuid
 import warnings
 from collections.abc import Generator
 
@@ -45,6 +46,9 @@ from tests.conftest import (
     emulate_package_missing,
     emulate_package_missing_with_module_reload,
     failed_probe_names,
+    in_memory_opentelemetry_metric_reader,
+    opentelemetry_recorded_http_server_metrics,
+    prometheus_recorded_path,
 )
 
 
@@ -612,6 +616,63 @@ def _bootstrap_with_span_exporter(config: LitestarConfig) -> tuple[litestar.Lite
 
 def _server_spans(exporter: InMemorySpanExporter) -> list[ReadableSpan]:
     return [span for span in exporter.get_finished_spans() if span.kind == SpanKind.SERVER]
+
+
+def _http_metric_sets_one_request_moves(config: LitestarConfig) -> tuple[bool, bool]:
+    """Return whether one request reached OpenTelemetry's HTTP metrics and Prometheus's, in that order."""
+    path: typing.Final = f"/items-{uuid.uuid4().hex}"
+
+    async def get_items() -> list[int]:
+        return [1]
+
+    config = dataclasses.replace(config, application_config=AppConfig(route_handlers=[litestar.get(path)(get_items)]))
+    with in_memory_opentelemetry_metric_reader() as reader:
+        bootstrapper = LitestarBootstrapper(bootstrap_config=config)
+        application = bootstrapper.bootstrap()
+    try:
+        with TestClient(app=application) as client:
+            assert client.get(path).status_code == status_codes.HTTP_200_OK
+        return opentelemetry_recorded_http_server_metrics(reader), prometheus_recorded_path(path)
+    finally:
+        bootstrapper.teardown()
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected"),
+    [
+        pytest.param({"opentelemetry_metrics_endpoint": "localhost:4317"}, (True, False), id="both-keeps-otel"),
+        pytest.param(
+            {"opentelemetry_metrics_endpoint": "localhost:4317", "prometheus_http_metrics_enabled": True},
+            (True, True),
+            id="both-restored",
+        ),
+        pytest.param({}, (False, True), id="prometheus-alone"),
+        pytest.param(
+            {"opentelemetry_metrics_endpoint": "localhost:4317", "prometheus_metrics_path": ""},
+            (True, False),
+            id="otel-alone",
+        ),
+        pytest.param({"prometheus_http_metrics_enabled": False}, (False, False), id="prometheus-http-off"),
+    ],
+)
+def test_litestar_http_metrics_are_recorded_once(
+    litestar_config: LitestarConfig, overrides: dict[str, typing.Any], expected: tuple[bool, bool]
+) -> None:
+    assert _http_metric_sets_one_request_moves(dataclasses.replace(litestar_config, **overrides)) == expected
+
+
+def test_litestar_prometheus_still_serves_metrics_while_opentelemetry_records_http_metrics(
+    litestar_config: LitestarConfig,
+) -> None:
+    config = dataclasses.replace(litestar_config, opentelemetry_metrics_endpoint="localhost:4317")
+    with in_memory_opentelemetry_metric_reader():
+        bootstrapper = LitestarBootstrapper(bootstrap_config=config)
+        application = bootstrapper.bootstrap()
+    try:
+        with TestClient(app=application) as client:
+            assert client.get(config.prometheus_metrics_path).status_code == status_codes.HTTP_200_OK
+    finally:
+        bootstrapper.teardown()
 
 
 def test_litestar_otel_registers_litestars_own_plugin(litestar_config: LitestarConfig) -> None:

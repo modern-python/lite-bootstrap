@@ -12,7 +12,7 @@ from lite_bootstrap.bootstrappers.base import BaseBootstrapper
 from lite_bootstrap.instruments.healthchecks_instrument import HealthChecksConfig, HealthChecksInstrument
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument
 from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryAsgiConfig, OpenTelemetryInstrument
-from lite_bootstrap.instruments.prometheus_instrument import PrometheusConfig, PrometheusInstrument
+from lite_bootstrap.instruments.prometheus_instrument import PrometheusHttpConfig, PrometheusInstrument
 from lite_bootstrap.instruments.pyroscope_instrument import PyroscopeConfig, PyroscopeInstrument
 from lite_bootstrap.instruments.sentry_instrument import (
     SentryInstrument,
@@ -204,7 +204,7 @@ class FastMcpConfig(
     HealthChecksConfig,
     LoggingConfig,
     OpenTelemetryAsgiConfig,
-    PrometheusConfig,
+    PrometheusHttpConfig,
     PyroscopeConfig,
     SentryLeanCaptureConfig,
 ):
@@ -328,7 +328,10 @@ class FastMcpPrometheusInstrument(PrometheusInstrument[FastMcpConfig]):
 
     def bootstrap(self) -> None:
         config = self.bootstrap_config
-        self._restore_http_app = _postprocess_http_apps(config.application, self._instrument_http_app)
+        if config.is_prometheus_http_metrics_on(
+            opentelemetry_records_http_metrics=FastMcpOpenTelemetryInstrument.is_recording_metrics(config)
+        ):
+            self._restore_http_app = _postprocess_http_apps(config.application, self._instrument_http_app)
         if config.fastmcp_prometheus_tool_metrics_enabled:
             config.application.add_middleware(FastMcpPrometheusMiddleware(*_build_tool_call_metrics()))
 

@@ -194,6 +194,15 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfigT]):
             or bootstrap_config.opentelemetry_log_traces
         )
 
+    @classmethod
+    def is_recording_metrics(cls, bootstrap_config: "OpenTelemetryConfig") -> bool:
+        """Whether bootstrap() installs a MeterProvider, which the framework's HTTP instrumentation records into."""
+        if not bootstrap_config.opentelemetry_metrics_endpoint or not cls.dependencies_installed():
+            return False
+        if bootstrap_config.opentelemetry_exporter_protocol == "grpc":
+            return import_checker.is_otlp_grpc_exporter_installed
+        return import_checker.is_otlp_http_exporter_installed
+
     @staticmethod
     def dependencies_installed() -> bool:
         # The instrument imports from both the api (opentelemetry.trace/.context) and

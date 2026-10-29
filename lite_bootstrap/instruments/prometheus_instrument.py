@@ -13,6 +13,17 @@ class PrometheusConfig(BaseConfig):
     prometheus_metrics_include_in_schema: bool = False
 
 
+@dataclasses.dataclass(kw_only=True, frozen=True)
+class PrometheusHttpConfig(PrometheusConfig):
+    prometheus_http_metrics_enabled: bool | None = None
+
+    def is_prometheus_http_metrics_on(self, *, opentelemetry_records_http_metrics: bool) -> bool:
+        """Left None, Prometheus records HTTP metrics unless OpenTelemetry already records them."""
+        if self.prometheus_http_metrics_enabled is not None:
+            return self.prometheus_http_metrics_enabled
+        return not opentelemetry_records_http_metrics
+
+
 PrometheusConfigT = typing.TypeVar("PrometheusConfigT", bound=PrometheusConfig)
 
 

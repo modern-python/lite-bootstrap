@@ -251,6 +251,28 @@ OpenTelemetry rows record the `receive` and `send` spans, which 2.0 leaves out b
 4a). Its `sentry_nosess` row now has the same config as `sentry`, and `sentry_noauto` no longer stops request
 capture, because lean capture needs no auto-enabling integration.
 
+Since 2.0, the Prometheus instrument leaves its HTTP middleware out while OpenTelemetry records HTTP
+metrics. Rerun in-process on the M2 host (macOS, CPython 3.14.7, opentelemetry-sdk 1.45.1,
+instrumentation-asgi and -fastapi 0.66b1, prometheus-client 0.26.0,
+prometheus-fastapi-instrumentator 8.1.0, fastapi 0.162.0, litestar 2.25.0), with
+`bench.py <suite> bare,otel_0,otel_0_metrics,otel_0_prom,otel_0_metrics_prom_both,otel_0_metrics_prom --repeat 3`,
+in µs over each suite's bare app:
+
+| scenario | FastAPI | Litestar |
+|---|---:|---:|
+| `otel_0`: OTel at 0% | +47.4 | +38.8 |
+| `otel_0_metrics`: + OTel HTTP metrics | +83.3 | +72.8 |
+| `otel_0_prom`: + Prometheus | +71.8 | +56.4 |
+| `otel_0_metrics_prom_both`: both, `prometheus_http_metrics_enabled=True` (1.x) | +106.4 | +90.2 |
+| `otel_0_metrics_prom`: both configured, the 2.0 default | +84.5 | +73.4 |
+
+Every row's rounds were within 2%. Configuring both now costs what OTel HTTP metrics cost alone,
+21.9 µs less on FastAPI and 16.8 µs less on Litestar. On this host the OTel HTTP metrics cost 34 to
+36 µs and Prometheus's 18 to 25 µs, the reverse of the Linux table above, where OTel's were the
+cheaper set at about 12 µs. The stack suite (`run.py stack async otel,otel_metrics,otel_metrics_prom_both,otel_metrics_prom`,
+100% sampling) agrees: +44.4 µs for OTel HTTP metrics, +71.8 for both sets and +48.1 for the 2.0
+default, over `otel` at 109.0 µs per request.
+
 FastAPI real-server runs under uvicorn in the container were unstable (bare repeat medians of 8235
 and 6341 RPS, over 100% spread on the full stack), so the Linux real-server numbers below are
 Litestar on Granian only.
@@ -656,6 +678,9 @@ cd benchmarks
 
 # the two OpenTelemetry knobs (section 4a)
 ../.venv/bin/python run.py stack async otel,otel_exclude_spans,otel_sampler,otel_tuned
+
+# HTTP metrics recorded once against both sets (section 4d)
+../.venv/bin/python run.py stack async otel,otel_metrics,otel_metrics_prom_both,otel_metrics_prom
 
 # the Sentry ablation, where every familiar knob turns out to be a no-op (section 4b)
 ../.venv/bin/python run.py sentry async off,errors_only,errors_only_lean,errors_only_no_integrations,errors_only_no_txn
