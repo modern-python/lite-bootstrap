@@ -7,7 +7,7 @@ import urllib.parse
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.exceptions import InstrumentDependencyMissingWarning, collect_teardown_errors
-from lite_bootstrap.helpers.warn import deprecated_module_getattr, warn_at_caller
+from lite_bootstrap.helpers.warn import warn_at_caller
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 
 
@@ -387,9 +387,3 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfigT]):
                         self._meter_provider.shutdown()
                 finally:
                     self._meter_provider = None
-
-
-if typing.TYPE_CHECKING:
-    OpentelemetryConfig = OpenTelemetryConfig
-
-__getattr__ = deprecated_module_getattr(__name__, {"OpentelemetryConfig": (OpenTelemetryConfig, "OpenTelemetryConfig")})

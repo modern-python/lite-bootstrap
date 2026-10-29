@@ -6,6 +6,7 @@ import warnings
 
 _DATACLASS_GENERATED_INIT: typing.Final = "<string>"
 _INTERNAL_MODULES: typing.Final = frozenset({__name__.split(".")[0], "dataclasses"})
+NEXT_MAJOR_VERSION: typing.Final = "3.0"
 
 
 def _is_internal_frame(frame: types.FrameType) -> bool:
@@ -52,7 +53,7 @@ def deprecated_module_getattr(
         target, replacement = aliases[name]
         advice = f"use {replacement} instead" if replacement else "nothing replaces it"
         warn_at_caller(
-            f"{name} is deprecated and will be removed in lite-bootstrap 2.0; {advice}.",
+            f"{name} is deprecated and will be removed in lite-bootstrap {NEXT_MAJOR_VERSION}; {advice}.",
             category=DeprecationWarning,
         )
         return target
