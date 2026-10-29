@@ -271,7 +271,7 @@ class FastAPISwaggerInstrument(SwaggerInstrument[FastAPIConfig]):
             enable_offline_docs(application, static_path=config.swagger_static_path)
 
 
-class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI"]):
+class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI", FastAPIConfig]):
     __slots__ = "bootstrap_config", "instruments"
 
     instruments_types: typing.ClassVar = [
@@ -284,7 +284,6 @@ class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI"]):
         FastAPIPrometheusInstrument,
         FastAPISwaggerInstrument,
     ]
-    bootstrap_config: FastAPIConfig  # ty: ignore[invalid-mutable-override]
     not_ready_message = "fastapi is not installed"
 
     @contextlib.asynccontextmanager

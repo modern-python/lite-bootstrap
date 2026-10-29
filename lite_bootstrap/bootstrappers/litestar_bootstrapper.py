@@ -479,7 +479,7 @@ class LitestarSwaggerInstrument(SwaggerInstrument[LitestarConfig]):
             )
 
 
-class LitestarBootstrapper(BaseBootstrapper["litestar.Litestar"]):
+class LitestarBootstrapper(BaseBootstrapper["litestar.Litestar", LitestarConfig]):
     __slots__ = "bootstrap_config", "instruments"
 
     instruments_types: typing.ClassVar = [
@@ -492,7 +492,6 @@ class LitestarBootstrapper(BaseBootstrapper["litestar.Litestar"]):
         LitestarPrometheusInstrument,
         LitestarSwaggerInstrument,
     ]
-    bootstrap_config: LitestarConfig  # ty: ignore[invalid-mutable-override]
     not_ready_message = "litestar is not installed"
 
     def __init__(self, bootstrap_config: LitestarConfig) -> None:
