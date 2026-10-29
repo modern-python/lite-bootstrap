@@ -94,12 +94,12 @@ event either way.
 
 Measured in-process on a do-nothing handler, over the same app without Sentry:
 
-| Sentry setup | sentry-sdk 2.73.0 | 3.0.0b2 |
-|---|---:|---:|
-| lean capture, the default | +6.1 µs | +5.1 µs |
-| the same, request carries a sampled `sentry-trace` | +11.5 µs | +10.9 µs |
-| `sentry_lean_error_capture=False` | +57.1 µs | +47.0 µs |
-| the same, request carries a sampled `sentry-trace` | +59.2 µs | +113.2 µs |
+| Sentry setup | sentry-sdk 2.73.0 |
+|---|---:|
+| lean capture, the default | +6.1 µs |
+| the same, request carries a sampled `sentry-trace` | +11.5 µs |
+| `sentry_lean_error_capture=False` | +57.1 µs |
+| the same, request carries a sampled `sentry-trace` | +59.2 µs |
 
 sentry-sdk records installed integrations for the whole process, and `disabled_integrations`
 cannot remove one that an earlier `sentry_sdk.init` installed. That matters only with

@@ -19,8 +19,6 @@ if import_checker.is_sentry_installed:
     from sentry_sdk.integrations.logging import LoggingIntegration
     from sentry_sdk.utils import event_from_exception
 
-    IS_SENTRY_SDK_2: typing.Final = sentry_sdk.VERSION.startswith("2.")
-
 
 _PII_KEY_DENYLIST: typing.Final = {"mode": "denylist", "terms": ["forwarded", "-ip", "remote-", "via", "-user"]}
 DEFAULT_DATA_COLLECTION: typing.Final[dict[str, typing.Any]] = {
@@ -128,9 +126,10 @@ def capture_request_exception(
     handled: bool,
     enrich: typing.Callable[["sentry_types.Event"], "sentry_types.Event"] = lambda event: event,
 ) -> None:
-    client_options: typing.Final = {"client_options": sentry_sdk.get_client().options} if IS_SENTRY_SDK_2 else {}
     event, hint = event_from_exception(
-        exception, mechanism={"type": mechanism_type, "handled": handled}, **client_options
+        exception,
+        client_options=sentry_sdk.get_client().options,
+        mechanism={"type": mechanism_type, "handled": handled},
     )
     sentry_sdk.capture_event(enrich(event), hint=hint)
 
@@ -223,13 +222,8 @@ class SentryInstrument(BaseInstrument[SentryConfigT]):
         if not config.sentry_default_integrations:
             self._warn_breadcrumb_level_ignored("sentry_default_integrations is False")
             return config.sentry_integrations
-        breadcrumb_level = config.sentry_logging_breadcrumb_level
-        logging_integration_kwargs: dict[str, typing.Any] = (
-            {"level": breadcrumb_level, "sentry_logs_level": None}
-            if IS_SENTRY_SDK_2
-            else {"breadcrumb_level": breadcrumb_level, "event_level": logging.ERROR, "level": None}
-        )
-        return [*config.sentry_integrations, LoggingIntegration(**logging_integration_kwargs)]
+        logging_integration = LoggingIntegration(level=config.sentry_logging_breadcrumb_level, sentry_logs_level=None)
+        return [*config.sentry_integrations, logging_integration]
 
     def _build_init_params(self) -> dict[str, typing.Any]:
         config = self.bootstrap_config
