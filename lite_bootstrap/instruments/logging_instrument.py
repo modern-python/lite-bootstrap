@@ -6,22 +6,33 @@ import typing
 from lite_bootstrap import import_checker
 from lite_bootstrap.exceptions import collect_teardown_errors
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
-from lite_bootstrap.instruments.logging_factory import (
-    _MemoryLoggerFactoryConfig,
-    _serialize_log_to_string,
-)
+from lite_bootstrap.instruments.logging_factory import _serialize_log_to_string
 
 
 if typing.TYPE_CHECKING:
     from structlog.typing import EventDict, WrappedLogger
 
-    from lite_bootstrap.instruments.logging_factory import MemoryLoggerFactory
+
+class _RenderedLine(str):
+    """A line structlog's chain already rendered, which the root handler's formatter emits as is."""
+
+    __slots__ = ()
+
+
+def _mark_rendered(_: "WrappedLogger", __: str, rendered_line: str) -> _RenderedLine:
+    return _RenderedLine(rendered_line)
 
 
 if import_checker.is_structlog_installed:
     import structlog
 
-    from lite_bootstrap.instruments.logging_factory import MemoryLoggerFactory
+    class _RenderedLinePassthroughFormatter(structlog.stdlib.ProcessorFormatter):
+        """Render stdlib records through the foreign chain, and emit structlog's rendered lines verbatim."""
+
+        def format(self, record: logging.LogRecord) -> str:
+            if type(record.msg) is _RenderedLine:
+                return record.msg
+            return super().format(record)
 
 
 if import_checker.is_opentelemetry_installed:
@@ -53,7 +64,6 @@ else:  # pragma: no cover - only without opentelemetry, i.e. neither the [otl] n
 __all__ = [
     "LoggingConfig",
     "LoggingInstrument",
-    "MemoryLoggerFactory",
     "tracer_injection",
 ]
 
@@ -77,9 +87,6 @@ LoggingConfigT = typing.TypeVar("LoggingConfigT", bound=LoggingConfig)
 class LoggingInstrument(BaseInstrument[LoggingConfigT]):
     not_configured_reason = "logging_enabled is False"
     missing_dependency_message = "structlog is not installed"
-    _logger_factory: "MemoryLoggerFactory | None" = dataclasses.field(
-        default_factory=lambda: None, init=False, repr=False, compare=False
-    )
     _attached_filters: list[tuple[logging.Logger, logging.Filter]] = dataclasses.field(
         default_factory=list, init=False, repr=False, compare=False
     )
@@ -139,26 +146,14 @@ class LoggingInstrument(BaseInstrument[LoggingConfigT]):
             *self.structlog_pre_chain_processors,
             *self.bootstrap_config.logging_extra_processors,
             structlog.processors.JSONRenderer(serializer=_serialize_log_to_string),
+            _mark_rendered,
         ]
-
-    @property
-    def memory_logger_factory(self) -> "MemoryLoggerFactory":
-        cached: MemoryLoggerFactory | None = self._logger_factory
-        if cached is None:
-            config = self.bootstrap_config
-            cached = MemoryLoggerFactory(
-                config=_MemoryLoggerFactoryConfig(
-                    logging_log_level=config.logging_log_level,
-                ),
-            )
-            self._logger_factory = cached
-        return cached
 
     def _configure_structlog_loggers(self) -> None:
         structlog.configure(
             processors=self.structlog_processors,
             context_class=dict,
-            logger_factory=self.memory_logger_factory,
+            logger_factory=structlog.stdlib.LoggerFactory(),
             wrapper_class=structlog.stdlib.BoundLogger,
             cache_logger_on_first_use=True,
         )
@@ -167,7 +162,7 @@ class LoggingInstrument(BaseInstrument[LoggingConfigT]):
         root_logger: typing.Final = logging.getLogger()
         stream_handler: typing.Final = logging.StreamHandler(sys.stdout)
         stream_handler.setFormatter(
-            structlog.stdlib.ProcessorFormatter(
+            _RenderedLinePassthroughFormatter(
                 foreign_pre_chain=self.structlog_pre_chain_processors,
                 processors=[
                     structlog.stdlib.ProcessorFormatter.remove_processors_meta,
@@ -207,11 +202,9 @@ class LoggingInstrument(BaseInstrument[LoggingConfigT]):
         Filters from ``logging_record_filters`` are removed one pair at a time, so a filter the
         application or another library put on the same logger survives.
 
-        Best-effort cleanup: errors from individual ``handler.close()`` calls and from the memory
-        logger factory's ``close_handlers()`` are collected and re-raised together via
-        :class:`~lite_bootstrap.exceptions.TeardownError` after the rest of teardown completes,
-        so no single misbehaving cleanup step prevents the instrument from releasing the
-        rest of its resources.
+        Best-effort cleanup: errors from individual ``handler.close()`` calls are collected and
+        re-raised together via :class:`~lite_bootstrap.exceptions.TeardownError` after the rest of
+        teardown completes, so no single misbehaving handler keeps the others open.
         """
         structlog.reset_defaults()
         root_logger = logging.getLogger()
@@ -224,9 +217,3 @@ class LoggingInstrument(BaseInstrument[LoggingConfigT]):
                 root_logger.setLevel(logging.WARNING)
             finally:
                 self._detach_record_filters()
-                if self._logger_factory is not None:
-                    try:
-                        with teardown_errors.capture("MemoryLoggerFactory"):
-                            self._logger_factory.close_handlers()
-                    finally:
-                        self._logger_factory = None

@@ -155,6 +155,7 @@ class FastStreamLoggingInstrument(LoggingInstrument[FastStreamConfig]):
     _prior_faststream_handlers: list[logging.Handler] | None = dataclasses.field(
         default=None, init=False, repr=False, compare=False
     )
+    _prior_faststream_propagate: bool = dataclasses.field(default=False, init=False, repr=False, compare=False)
 
     def bootstrap(self) -> None:
         super().bootstrap()
@@ -162,7 +163,9 @@ class FastStreamLoggingInstrument(LoggingInstrument[FastStreamConfig]):
         if brokers and import_checker.is_structlog_installed and import_checker.is_faststream_installed:
             faststream_stdlib_logger = logging.getLogger("faststream")
             self._prior_faststream_handlers = faststream_stdlib_logger.handlers
+            self._prior_faststream_propagate = faststream_stdlib_logger.propagate
             faststream_stdlib_logger.handlers = []
+            faststream_stdlib_logger.propagate = True
             logger = structlog.get_logger("faststream")
             logger.setLevel(self.bootstrap_config.faststream_log_level)
             for broker in brokers:
@@ -179,7 +182,9 @@ class FastStreamLoggingInstrument(LoggingInstrument[FastStreamConfig]):
                 super().teardown()
             finally:
                 if self._prior_faststream_handlers is not None:
-                    logging.getLogger("faststream").handlers = self._prior_faststream_handlers
+                    faststream_stdlib_logger = logging.getLogger("faststream")
+                    faststream_stdlib_logger.handlers = self._prior_faststream_handlers
+                    faststream_stdlib_logger.propagate = self._prior_faststream_propagate
                     self._prior_faststream_handlers = None
 
 

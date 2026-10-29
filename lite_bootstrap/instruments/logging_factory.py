@@ -1,7 +1,5 @@
 import dataclasses
 import json
-import logging
-import sys
 import typing
 
 from lite_bootstrap import import_checker
@@ -9,14 +7,6 @@ from lite_bootstrap import import_checker
 
 if import_checker.is_orjson_installed:
     import orjson
-
-
-@dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
-class _MemoryLoggerFactoryConfig:
-    logging_log_level: int
-    # default_factory, not a bare default: a bare one binds sys.stdout at import time, so a
-    # process that rebinds stdout before bootstrap would keep logging to the stale stream.
-    log_stream: typing.Any = dataclasses.field(default_factory=lambda: sys.stdout)
 
 
 def _dumps_orjson(value: typing.Any, **kwargs: typing.Any) -> str:  # noqa: ANN401
@@ -77,51 +67,3 @@ class StructuredLogPayload:
         message = loaded.get("event")
         extra = {key: value for key, value in loaded.items() if key not in STRUCTLOG_META_KEYS}
         return cls(message=message, extra=extra, skip_sentry=skip_sentry)
-
-
-class _RenderedLineFormatter(logging.Formatter):
-    """Emit the rendered line verbatim; stdlib appends nothing after it."""
-
-    def format(self, record: logging.LogRecord) -> str:
-        return record.getMessage()
-
-
-if import_checker.is_structlog_installed:
-    import structlog
-
-    class MemoryLoggerFactory(structlog.stdlib.LoggerFactory):
-        def __init__(
-            self,
-            *args: typing.Any,  # noqa: ANN401
-            config: "_MemoryLoggerFactoryConfig",
-            **kwargs: typing.Any,  # noqa: ANN401
-        ) -> None:
-            kwargs["ignore_frame_names"] = [*(kwargs.get("ignore_frame_names") or ()), __name__]
-            super().__init__(*args, **kwargs)
-            self.config = config
-            self._created_handlers: dict[logging.Logger, logging.StreamHandler[typing.Any]] = {}
-            self._leveled_loggers: set[logging.Logger] = set()
-
-        def __call__(self, *args: typing.Any) -> logging.Logger:  # noqa: ANN401
-            logger: typing.Final = super().__call__(*args)
-            if logger in self._created_handlers:
-                return logger
-            handler: typing.Final = logging.StreamHandler(stream=self.config.log_stream)
-            handler.setFormatter(_RenderedLineFormatter())
-            logger.addHandler(handler)
-            if logger.level == logging.NOTSET:
-                logger.setLevel(self.config.logging_log_level)
-                self._leveled_loggers.add(logger)
-            logger.propagate = False
-            self._created_handlers[logger] = handler
-            return logger
-
-        def close_handlers(self) -> None:
-            for created_logger, handler in self._created_handlers.items():
-                created_logger.removeHandler(handler)
-                created_logger.propagate = True
-                if created_logger in self._leveled_loggers:
-                    created_logger.setLevel(logging.NOTSET)
-                handler.close()
-            self._created_handlers.clear()
-            self._leveled_loggers.clear()

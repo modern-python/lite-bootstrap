@@ -290,8 +290,7 @@ def _recorded_litestar_logs() -> Generator[list[str]]:
     """Record Litestar's rendered log lines.
 
     Enter this inside the TestClient context: Litestar's StructLoggingConfig runs dictConfig at
-    startup, which drops handlers attached earlier, and MemoryLoggerFactory sets propagate=False,
-    so the handler has to sit on the "litestar" logger itself.
+    startup, which drops handlers attached to the "litestar" logger earlier.
     """
     handler = _RecordingHandler()
     litestar_logger = logging.getLogger("litestar")
@@ -331,7 +330,9 @@ def test_litestar_logging_keeps_lite_bootstrap_root_handler(litestar_config: Lit
         assert any(isinstance(handler.formatter, structlog.stdlib.ProcessorFormatter) for handler in root_handlers)
 
 
-def test_litestar_access_log_has_one_handler(litestar_config: LitestarConfig) -> None:
+def test_litestar_access_log_is_written_once(
+    litestar_config: LitestarConfig, capsys: pytest.CaptureFixture[str]
+) -> None:
     @litestar.get("/ping")
     async def _ping_handler() -> dict[str, bool]:
         return {"ok": True}
@@ -343,9 +344,12 @@ def test_litestar_access_log_has_one_handler(litestar_config: LitestarConfig) ->
     )
     application = LitestarBootstrapper(bootstrap_config=config).bootstrap()
     with TestClient(app=application) as client:
+        capsys.readouterr()
         assert client.get("/ping").status_code == status_codes.HTTP_200_OK
-        litestar_handlers = logging.getLogger("litestar").handlers
-        assert [type(handler) for handler in litestar_handlers] == [logging.StreamHandler]
+        assert logging.getLogger("litestar").handlers == []
+
+    access_events = [record["event"] for record in _access_log_records(capsys.readouterr().out.splitlines())]
+    assert sorted(access_events) == ["HTTP Request", "HTTP Response"]
 
 
 def test_litestar_access_logging_disabled_by_default(litestar_config: LitestarConfig) -> None:

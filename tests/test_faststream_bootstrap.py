@@ -1,4 +1,5 @@
 import dataclasses
+import json
 import logging
 import sys
 import typing
@@ -155,9 +156,12 @@ def test_faststream_logging_instrument_injects_structlog_logger(broker: RedisBro
         bootstrapper.teardown()
 
 
-def test_faststream_logging_replaces_faststream_stderr_handler(broker: RedisBroker) -> None:
+def test_faststream_logging_replaces_faststream_stderr_handler(
+    broker: RedisBroker, capsys: pytest.CaptureFixture[str]
+) -> None:
     faststream_logger = logging.getLogger("faststream")
     original_handlers = faststream_logger.handlers[:]
+    original_propagate = faststream_logger.propagate
     bootstrapper = FastStreamBootstrapper(
         bootstrap_config=FastStreamConfig(
             faststream_log_level=logging.INFO,
@@ -167,11 +171,17 @@ def test_faststream_logging_replaces_faststream_stderr_handler(broker: RedisBrok
     bootstrapper.bootstrap()
     try:
         assert not [one for one in faststream_logger.handlers if getattr(one, "stream", None) is sys.stderr]
-        assert [type(one) for one in faststream_logger.handlers].count(logging.StreamHandler) == 1
+        capsys.readouterr()
+        structlog.get_logger("faststream").info("from structlog")
+        faststream_logger.info("from stdlib")
+        logging.getLogger("faststream.child").info("from stdlib child")
+        payloads = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
     finally:
         bootstrapper.teardown()
 
+    assert [payload["event"] for payload in payloads] == ["from structlog", "from stdlib", "from stdlib child"]
     assert faststream_logger.handlers == original_handlers
+    assert faststream_logger.propagate is original_propagate
 
 
 def test_faststream_config_default_application() -> None:
