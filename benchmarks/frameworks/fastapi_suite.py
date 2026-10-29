@@ -64,6 +64,9 @@ SCENARIOS: typing.Final = {
     ),
     "health": Scenario(config=base_config(**HEALTH), path="/health/"),
     "health_otel": Scenario(config=base_config(**HEALTH, **OTEL), path="/health/"),
+    "health_otel_spans": Scenario(
+        config=base_config(**HEALTH, **OTEL, opentelemetry_generate_health_check_spans=True), path="/health/"
+    ),
     "health_otel_nospan": Scenario(
         config=base_config(**HEALTH, **OTEL, opentelemetry_generate_health_check_spans=False), path="/health/"
     ),

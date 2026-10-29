@@ -602,6 +602,17 @@ def test_fastapi_otel_excludes_derived_paths_only_where_they_match_whole_segment
     assert sorted(span_names) == ["GET /api/custom-metrics/report", "GET /custom-healthy"]
 
 
+def test_fastapi_otel_leaves_the_health_check_untraced_by_default() -> None:
+    config = FastAPIConfig(
+        service_name="microservice",
+        health_checks_path="/custom-health/",
+        logging_buffer_capacity=0,
+        opentelemetry_log_traces=True,
+    )
+
+    assert _server_span_names_for(config, ["/custom-health/", "/custom-healthy"]) == ["GET /custom-healthy"]
+
+
 @pytest.mark.parametrize("environment_variable", ["OTEL_PYTHON_FASTAPI_EXCLUDED_URLS", "OTEL_PYTHON_EXCLUDED_URLS"])
 def test_fastapi_otel_honors_excluded_urls_from_environment(
     fastapi_config: FastAPIConfig, monkeypatch: pytest.MonkeyPatch, environment_variable: str

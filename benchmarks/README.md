@@ -228,7 +228,7 @@ structlog 26.1.0. In-process, baseline 17.7 µs per request. The handler does no
 | Sentry, `sentry_auto_session_tracking=False` | +51.8 | |
 | Sentry, `auto_enabling_integrations=False` | +0.1 | the Starlette and FastAPI integrations are auto-enabling, so nothing captures request errors |
 | health check `/health/` | +22.6 | noisy, 16% spread |
-| health check with OpenTelemetry, spans on (default) / off | +162.3 / +28.9 | noisy, 32 to 50% spread |
+| health check with OpenTelemetry, spans on (1.x default) / off | +162.3 / +28.9 | noisy, 32 to 50% spread |
 | CORS, request with a matching Origin | +3.8 | |
 | full: OTel + Prometheus + logging + Sentry + health, defaults | +259.6 | |
 <!-- --8<-- [end:fastapilinux] -->
@@ -272,6 +272,18 @@ Every row's rounds were within 2%. Configuring both now costs what OTel HTTP met
 cheaper set at about 12 µs. The stack suite (`run.py stack async otel,otel_metrics,otel_metrics_prom_both,otel_metrics_prom`,
 100% sampling) agrees: +44.4 µs for OTel HTTP metrics, +71.8 for both sets and +48.1 for the 2.0
 default, over `otel` at 109.0 µs per request.
+
+Since 2.0, health checks are untraced by default (`opentelemetry_generate_health_check_spans=False`).
+Rerun on the same host with `bench.py <suite> health,health_otel,health_otel_spans --repeat 3`, at 100%
+sampling, in µs per `/health/` request over the health check without OpenTelemetry:
+
+| scenario | FastAPI | Litestar |
+|---|---:|---:|
+| `health_otel`: the 2.0 default, no span | +5.1 | +1.9 |
+| `health_otel_spans`: `opentelemetry_generate_health_check_spans=True`, the 1.x default | +99.2 | +82.4 |
+
+Litestar's rounds differed by up to 24%. At one probe every few seconds per pod this is far below
+a percent of a core either way. What the default saves is one trace per probe per pod.
 
 FastAPI real-server runs under uvicorn in the container were unstable (bare repeat medians of 8235
 and 6341 RPS, over 100% spread on the full stack), so the Linux real-server numbers below are
@@ -431,7 +443,7 @@ prometheus-client 0.26.0, structlog 26.1.0. In-process, baseline 12.1 µs per re
 | CORS, simple request with a matching Origin | +7.2 | against bare with the same header |
 | Swagger (`/docs`), online or offline | -0.2 | registers routes only |
 | health check `/health/`, against an equivalent `/ping` handler | +7.1 | `asyncio.gather` of one coroutine |
-| health check with OpenTelemetry, spans on (default) | +134.0 | against health without OpenTelemetry |
+| health check with OpenTelemetry, spans on (1.x default) | +134.0 | against health without OpenTelemetry |
 | health check with OpenTelemetry, `opentelemetry_generate_health_check_spans=False` | +9.2 | |
 | full: OTel + Prometheus + logging + Sentry + health, defaults | +297.7 | |
 | full, 3 structlog records per request | +377.8 | |
@@ -741,6 +753,7 @@ cd benchmarks/frameworks
 ../../.venv/bin/python bench.py fastapi bare,log_mw,prom,otel,otel_excl,otel_0,sentry,health,full --repeat 2
 ../../.venv/bin/python bench.py litestar bare,log_log3,log_mw,prom,otel,otel_excl,otel_1_excl,otel_0,sentry,full --repeat 2
 ../../.venv/bin/python bench.py litestar health_ping,health,health_otel,health_otel_nospan --repeat 2
+../../.venv/bin/python bench.py fastapi health,health_otel,health_otel_spans --repeat 3
 
 # Litestar on Granian, over real sockets (section 8c); needs granian in the environment and `ab` on PATH
 ../../.venv/bin/python run_http.py litestar bare,otel,otel_excl,prom,log_mw,sentry,health,full --repeat 2

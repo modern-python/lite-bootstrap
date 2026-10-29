@@ -68,7 +68,7 @@ request, every request then pays the per-record cost measured here:
 
 --8<-- "benchmarks/README.md:logging"
 
-lite-bootstrap already applies seven savings for you. It turns Sentry Logs off in the logging
+lite-bootstrap already applies eight savings for you. It turns Sentry Logs off in the logging
 integration, because it never enables them and on 2.x the handler formats every record before
 checking whether they are enabled; that one costs nothing. Since 2.0 it also leaves release-health
 sessions off and starts breadcrumbs at `WARNING`, so an `INFO` record skips the breadcrumb handler.
@@ -82,7 +82,9 @@ which costs you their SQL, Redis and outgoing-HTTP breadcrumbs; set
 records no span for the ASGI `receive` and `send` events, which costs you those spans; set
 `opentelemetry_exclude_spans=[]` to get them back. With `opentelemetry_metrics_endpoint` set it
 records HTTP metrics only through OpenTelemetry, which costs you the Prometheus HTTP metrics; set
-`prometheus_http_metrics_enabled=True` to keep both. The numbers on this page were measured before
+`prometheus_http_metrics_enabled=True` to keep both. It also leaves health checks untraced, which
+costs you probe traces; set `opentelemetry_generate_health_check_spans=True` to get them back. The
+numbers on this page were measured before
 2.0, against the old defaults.
 
 ## What each saving costs you

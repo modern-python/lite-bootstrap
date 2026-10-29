@@ -210,7 +210,11 @@ Additional parameters:
 - `opentelemetry_instrumentors` - a list of extra instrumentors.
 - `opentelemetry_log_traces` - traces will be logged to stdout.
 - `opentelemetry_sampler` - an `opentelemetry.sdk.trace.sampling.Sampler` deciding which traces are recorded. Unset, the SDK's own default applies: `parentbased_always_on`, which records every trace that is not the child of a non-recording remote parent, unless `OTEL_TRACES_SAMPLER` / `OTEL_TRACES_SAMPLER_ARG` say otherwise.
-- `opentelemetry_generate_health_check_spans` - generate spans for health check handlers if `True`.
+- `opentelemetry_generate_health_check_spans` - trace health-check requests. Defaults to `False`
+  since 2.0, so a probe sends no trace, the same as the access log, which never records the
+  health-check path. While it is `False`, OpenTelemetry's HTTP metrics also leave health-check
+  requests out, because the instrumentation skips an excluded URL entirely. Set it to `True` to
+  trace probes, for example to watch their latency.
 - `opentelemetry_excluded_urls` - extra regexes for URLs excluded from tracing; the metrics path and (unless health-check spans are enabled) the health-check path are excluded automatically. Litestar searches them in the request path, FastAPI and FastMCP in the full URL. The environment variable OpenTelemetry defines for the framework (`OTEL_PYTHON_LITESTAR_EXCLUDED_URLS`, `OTEL_PYTHON_FASTAPI_EXCLUDED_URLS` or `OTEL_PYTHON_STARLETTE_EXCLUDED_URLS` for FastMCP), falling back to `OTEL_PYTHON_EXCLUDED_URLS`, adds to them.
 - `opentelemetry_metrics_endpoint` - will be passed to `OTLPMetricExporter` as endpoint, and turns on the metrics signal. Its own field rather than a flag on `opentelemetry_endpoint`, so upgrading never starts exporting metrics you did not ask for. Under `opentelemetry_exporter_protocol="http"` this is a full URL (e.g. `http://collector:4318/v1/metrics`); `opentelemetry_exporter_protocol` and `opentelemetry_insecure` are shared with traces.
 
@@ -265,7 +269,7 @@ For FastStream there is additionally:
   `faststream.redis.opentelemetry.RedisTelemetryMiddleware`, or a mapping from broker class to
   middleware class (see [multiple brokers](../integrations/faststream.md#multiple-brokers)). You must
   provide it to trace broker messages. Without it the rest of the configuration above still applies: the exporter is built, the
-  health-check span is recorded unless `opentelemetry_generate_health_check_spans` is False, and any
+  health-check span is recorded when `opentelemetry_generate_health_check_spans` is True, and any
   `opentelemetry_instrumentors` are applied.
 
 ### Resource

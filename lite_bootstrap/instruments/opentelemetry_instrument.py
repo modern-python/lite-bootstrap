@@ -83,7 +83,7 @@ class OpenTelemetryConfig(OpenTelemetryServiceFieldsConfig):
     # Left None, the SDK picks its own default, which reads OTEL_TRACES_SAMPLER; see ADR-0008
     # (docs/adr/0008-otel-sampling-is-a-sampler-object.md).
     opentelemetry_sampler: "Sampler | None" = None
-    opentelemetry_generate_health_check_spans: bool = True
+    opentelemetry_generate_health_check_spans: bool = False
     opentelemetry_excluded_urls: list[str] = dataclasses.field(default_factory=list)
 
     def __post_init__(self) -> None:
