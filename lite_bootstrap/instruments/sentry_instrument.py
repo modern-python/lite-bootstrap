@@ -4,9 +4,9 @@ import typing
 from collections.abc import Mapping
 
 from lite_bootstrap import import_checker
-from lite_bootstrap.helpers.warn import deprecated_module_getattr, warn_at_caller
+from lite_bootstrap.helpers.warn import warn_at_caller
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
-from lite_bootstrap.instruments.logging_factory import STRUCTLOG_META_KEYS, StructuredLogPayload
+from lite_bootstrap.instruments.logging_factory import StructuredLogPayload
 
 
 if typing.TYPE_CHECKING:
@@ -269,12 +269,3 @@ class SentryInstrument(BaseInstrument[SentryConfigT]):
             sentry_sdk.flush(timeout=2)
         finally:
             sentry_sdk.init()
-
-
-if typing.TYPE_CHECKING:
-    IGNORED_STRUCTLOG_ATTRIBUTES: typing.Final = STRUCTLOG_META_KEYS
-
-__getattr__ = deprecated_module_getattr(
-    __name__,
-    {"IGNORED_STRUCTLOG_ATTRIBUTES": (STRUCTLOG_META_KEYS, "STRUCTLOG_META_KEYS")},
-)

@@ -20,7 +20,6 @@ from lite_bootstrap.instruments.sentry_instrument import (
     disable_sentry_integrations,
     warn_about_sentry_integrations_installed_earlier,
 )
-from lite_bootstrap.types import UNSET, UnsetType
 
 
 if import_checker.is_fastmcp_installed:
@@ -214,19 +213,6 @@ class FastMcpConfig(
     prometheus_instrumentator_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     prometheus_instrument_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     _sentry_lean_replaced_integrations: typing.ClassVar[Mapping[str, str]] = {"starlette": "StarletteIntegration"}
-    # Deprecated names, removed in 2.0.
-    _renamed_fields: typing.ClassVar[Mapping[str, str]] = {
-        "fastmcp_logging_middleware_enabled": "logging_access_log_enabled",
-        "prometheus_instrumentator_params": "prometheus_instrumentator_additional_params",
-        "prometheus_instrument_params": "prometheus_instrument_additional_params",
-    }
-    fastmcp_logging_middleware_enabled: bool | UnsetType = dataclasses.field(default=UNSET, repr=False, compare=False)
-    prometheus_instrumentator_params: dict[str, typing.Any] | UnsetType = dataclasses.field(
-        default=UNSET, repr=False, compare=False
-    )
-    prometheus_instrument_params: dict[str, typing.Any] | UnsetType = dataclasses.field(
-        default=UNSET, repr=False, compare=False
-    )
 
 
 @dataclasses.dataclass(kw_only=True)

@@ -6,37 +6,10 @@ import sys
 import typing
 
 from lite_bootstrap import import_checker
-from lite_bootstrap.helpers.warn import deprecated_module_getattr
 
 
 if import_checker.is_orjson_installed:
     import orjson
-
-
-_ScopeType = typing.MutableMapping[str, typing.Any]
-
-
-class _AddressProtocol(typing.Protocol):
-    host: str
-    port: int
-
-
-class _RequestProtocol(typing.Protocol):
-    client: _AddressProtocol
-    scope: _ScopeType
-    method: str
-
-
-if typing.TYPE_CHECKING:
-    ScopeType = _ScopeType
-    AddressProtocol = _AddressProtocol
-    RequestProtocol = _RequestProtocol
-
-_DEPRECATED_PROTOCOLS: typing.Final = {
-    "AddressProtocol": (_AddressProtocol, None),
-    "RequestProtocol": (_RequestProtocol, None),
-    "ScopeType": (_ScopeType, None),
-}
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
@@ -163,6 +136,3 @@ if import_checker.is_structlog_installed:
                     target.close()
             self._created_handlers.clear()
             self._leveled_loggers.clear()
-
-
-__getattr__ = deprecated_module_getattr(__name__, _DEPRECATED_PROTOCOLS)

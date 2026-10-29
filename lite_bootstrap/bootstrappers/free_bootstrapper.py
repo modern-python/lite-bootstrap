@@ -2,7 +2,6 @@ import dataclasses
 import typing
 
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
-from lite_bootstrap.helpers.warn import deprecated_module_getattr
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument
 from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryConfig, OpenTelemetryInstrument
 from lite_bootstrap.instruments.pyroscope_instrument import PyroscopeConfig, PyroscopeInstrument
@@ -33,9 +32,3 @@ class FreeBootstrapper(BaseBootstrapper[None]):
 
     def _prepare_application(self) -> None:
         return None
-
-
-if typing.TYPE_CHECKING:
-    FreeBootstrapperConfig = FreeConfig
-
-__getattr__ = deprecated_module_getattr(__name__, {"FreeBootstrapperConfig": (FreeConfig, "FreeConfig")})

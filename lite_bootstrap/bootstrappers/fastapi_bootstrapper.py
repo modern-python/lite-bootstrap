@@ -80,23 +80,6 @@ class FastAPIConfig(
         "starlette": "StarletteIntegration",
         "fastapi": "FastApiIntegration",
     }
-    # Deprecated names, removed in 2.0.
-    _renamed_fields: typing.ClassVar[Mapping[str, str]] = {
-        "prometheus_instrumentator_params": "prometheus_instrumentator_additional_params",
-        "prometheus_instrument_params": "prometheus_instrument_additional_params",
-        "prometheus_expose_params": "prometheus_expose_additional_params",
-        "fastapi_logging_middleware_enabled": "logging_access_log_enabled",
-    }
-    prometheus_instrumentator_params: dict[str, typing.Any] | UnsetType = dataclasses.field(
-        default=UNSET, repr=False, compare=False
-    )
-    prometheus_instrument_params: dict[str, typing.Any] | UnsetType = dataclasses.field(
-        default=UNSET, repr=False, compare=False
-    )
-    prometheus_expose_params: dict[str, typing.Any] | UnsetType = dataclasses.field(
-        default=UNSET, repr=False, compare=False
-    )
-    fastapi_logging_middleware_enabled: bool | UnsetType = dataclasses.field(default=UNSET, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         # @dataclass(slots=True) replaces the class object, breaking bare super().

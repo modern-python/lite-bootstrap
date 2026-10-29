@@ -28,7 +28,6 @@ from lite_bootstrap.instruments.sentry_instrument import (
     warn_about_sentry_integrations_installed_earlier,
 )
 from lite_bootstrap.instruments.swagger_instrument import SwaggerConfig, SwaggerInstrument
-from lite_bootstrap.types import UNSET, UnsetType
 
 
 if typing.TYPE_CHECKING:
@@ -262,16 +261,7 @@ class LitestarConfig(
     # Bounds path-label cardinality (Litestar defaults False -> raw URLs leak memory). See litestar#4891.
     prometheus_group_path: bool = True
     swagger_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
-    # Deprecated names, removed in 2.0.
     _sentry_lean_replaced_integrations: typing.ClassVar[Mapping[str, str]] = {"litestar": "LitestarIntegration"}
-    _renamed_fields: typing.ClassVar[Mapping[str, str]] = {
-        "litestar_logging_middleware_enabled": "logging_access_log_enabled",
-        "swagger_extra_params": "swagger_additional_params",
-    }
-    litestar_logging_middleware_enabled: bool | UnsetType = dataclasses.field(default=UNSET, repr=False, compare=False)
-    swagger_extra_params: dict[str, typing.Any] | UnsetType = dataclasses.field(
-        default=UNSET, repr=False, compare=False
-    )
 
     def __post_init__(self) -> None:
         # @dataclass(slots=True) replaces the class object, breaking bare super().
