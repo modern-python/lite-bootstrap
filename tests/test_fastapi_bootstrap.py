@@ -33,6 +33,10 @@ from tests.conftest import (
     emulate_package_missing,
     emulate_package_missing_with_module_reload,
     failed_probe_names,
+    in_memory_opentelemetry_metric_reader,
+    opentelemetry_recorded_http_server_metrics,
+    prometheus_recorded_path,
+    unregister_prometheus_request_metrics,
     warning_source_files,
 )
 
@@ -476,6 +480,84 @@ def test_fastapi_otel_hands_the_instrumentor_the_meter_provider(fastapi_config: 
 
     assert mock_instrument_app.call_args.kwargs["meter_provider"] is get_meter_provider()
     assert isinstance(get_meter_provider(), SDKMeterProvider)
+
+
+def _http_metric_sets_one_request_moves(config: FastAPIConfig) -> tuple[bool, bool]:
+    """Return whether one request reached OpenTelemetry's HTTP metrics and Prometheus's, in that order."""
+    path: typing.Final = f"/items-{uuid.uuid4().hex}"
+    application: typing.Final = config.app
+    unregister_prometheus_request_metrics()
+
+    @application.get(path)
+    async def items() -> str:
+        return "ok"
+
+    with in_memory_opentelemetry_metric_reader() as reader:
+        bootstrapper = FastAPIBootstrapper(bootstrap_config=config)
+        bootstrapper.bootstrap()
+    try:
+        with TestClient(application) as client:
+            assert client.get(path).status_code == status.HTTP_200_OK
+        return opentelemetry_recorded_http_server_metrics(reader), prometheus_recorded_path(path)
+    finally:
+        bootstrapper.teardown()
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected"),
+    [
+        pytest.param({"opentelemetry_metrics_endpoint": "localhost:4317"}, (True, False), id="both-keeps-otel"),
+        pytest.param(
+            {
+                "opentelemetry_metrics_endpoint": "http://localhost:4318/v1/metrics",
+                "opentelemetry_exporter_protocol": "http",
+            },
+            (True, False),
+            id="both-keeps-otel-over-http",
+        ),
+        pytest.param(
+            {"opentelemetry_metrics_endpoint": "localhost:4317", "prometheus_http_metrics_enabled": True},
+            (True, True),
+            id="both-restored",
+        ),
+        pytest.param({}, (False, True), id="prometheus-alone"),
+        pytest.param(
+            {"opentelemetry_metrics_endpoint": "localhost:4317", "prometheus_metrics_path": ""},
+            (True, False),
+            id="otel-alone",
+        ),
+        pytest.param({"prometheus_http_metrics_enabled": False}, (False, False), id="prometheus-http-off"),
+    ],
+)
+def test_fastapi_http_metrics_are_recorded_once(
+    fastapi_config: FastAPIConfig, overrides: dict[str, typing.Any], expected: tuple[bool, bool]
+) -> None:
+    assert _http_metric_sets_one_request_moves(dataclasses.replace(fastapi_config, **overrides)) == expected
+
+
+def test_fastapi_prometheus_keeps_http_metrics_when_the_otlp_metric_exporter_is_missing(
+    fastapi_config: FastAPIConfig,
+) -> None:
+    config = dataclasses.replace(fastapi_config, opentelemetry_metrics_endpoint="localhost:4317")
+    with (
+        patch.object(import_checker, "is_otlp_grpc_exporter_installed", new=False),
+        pytest.warns(InstrumentDependencyMissingWarning, match="gRPC OTLP exporter is not installed"),
+    ):
+        assert _http_metric_sets_one_request_moves(config) == (False, True)
+
+
+def test_fastapi_prometheus_still_serves_metrics_while_opentelemetry_records_http_metrics(
+    fastapi_config: FastAPIConfig,
+) -> None:
+    config = dataclasses.replace(fastapi_config, opentelemetry_metrics_endpoint="localhost:4317")
+    with in_memory_opentelemetry_metric_reader():
+        bootstrapper = FastAPIBootstrapper(bootstrap_config=config)
+        application = bootstrapper.bootstrap()
+    try:
+        with TestClient(application) as client:
+            assert client.get(config.prometheus_metrics_path).status_code == status.HTTP_200_OK
+    finally:
+        bootstrapper.teardown()
 
 
 def _server_span_names_for(config: FastAPIConfig, paths: typing.Iterable[str]) -> list[str]:

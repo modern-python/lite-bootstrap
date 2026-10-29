@@ -37,6 +37,10 @@ from tests.conftest import (
     emulate_package_missing,
     emulate_package_missing_with_module_reload,
     failed_probe_names,
+    in_memory_opentelemetry_metric_reader,
+    opentelemetry_recorded_http_server_metrics,
+    prometheus_recorded_path,
+    unregister_prometheus_request_metrics,
 )
 
 
@@ -514,11 +518,56 @@ def test_fastmcp_otel_is_skipped_without_asgi_instrumentation() -> None:
 
 @pytest.fixture(autouse=True)
 def _unregister_request_metrics() -> None:
-    """Give each test unregistered request metrics: a second registration is skipped, not reused."""
-    registered_collectors = dict(prometheus_client.REGISTRY._collector_to_names)  # noqa: SLF001
-    for collector, names in registered_collectors.items():
-        if any(name.startswith(("http_request", "http_response")) for name in names):
-            prometheus_client.REGISTRY.unregister(collector)
+    unregister_prometheus_request_metrics()
+
+
+def _http_metric_sets_one_request_moves(**overrides: typing.Any) -> tuple[bool, bool]:  # noqa: ANN401
+    """Return whether one request reached OpenTelemetry's HTTP metrics and Prometheus's, in that order."""
+    config: typing.Final = _make_test_config(**overrides)
+    with in_memory_opentelemetry_metric_reader() as reader:
+        bootstrapper = FastMcpBootstrapper(bootstrap_config=config)
+        application = bootstrapper.bootstrap()
+    try:
+        with TestClient(application.http_app()) as client:
+            assert client.get(config.health_checks_path).status_code == status.HTTP_200_OK
+        return opentelemetry_recorded_http_server_metrics(reader), prometheus_recorded_path(config.health_checks_path)
+    finally:
+        bootstrapper.teardown()
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected"),
+    [
+        pytest.param({"opentelemetry_metrics_endpoint": "localhost:4317"}, (True, False), id="both-keeps-otel"),
+        pytest.param(
+            {"opentelemetry_metrics_endpoint": "localhost:4317", "prometheus_http_metrics_enabled": True},
+            (True, True),
+            id="both-restored",
+        ),
+        pytest.param({}, (False, True), id="prometheus-alone"),
+        pytest.param(
+            {"opentelemetry_metrics_endpoint": "localhost:4317", "prometheus_metrics_path": ""},
+            (True, False),
+            id="otel-alone",
+        ),
+        pytest.param({"prometheus_http_metrics_enabled": False}, (False, False), id="prometheus-http-off"),
+    ],
+)
+def test_fastmcp_http_metrics_are_recorded_once(overrides: dict[str, typing.Any], expected: tuple[bool, bool]) -> None:
+    assert _http_metric_sets_one_request_moves(**overrides) == expected
+
+
+def test_fastmcp_prometheus_keeps_tool_metrics_and_metrics_route_while_opentelemetry_records_http_metrics() -> None:
+    config: typing.Final = _make_test_config(opentelemetry_metrics_endpoint="localhost:4317")
+    with in_memory_opentelemetry_metric_reader():
+        bootstrapper = FastMcpBootstrapper(bootstrap_config=config)
+        application = bootstrapper.bootstrap()
+    try:
+        assert any(isinstance(middleware, FastMcpPrometheusMiddleware) for middleware in application.middleware)
+        with TestClient(application.http_app()) as client:
+            assert client.get(config.prometheus_metrics_path).status_code == status.HTTP_200_OK
+    finally:
+        bootstrapper.teardown()
 
 
 def _sample_value(name: str, labels: dict[str, str]) -> float:

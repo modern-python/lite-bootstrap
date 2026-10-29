@@ -46,6 +46,9 @@ SCENARIOS: typing.Final = {
     "otel_0_metrics": Scenario(config=base_config(**OTEL, **OTEL_METRICS, **ratio(0.0))),
     "otel_0_prom": Scenario(config=base_config(**OTEL, **ratio(0.0), **PROM)),
     "otel_0_metrics_prom": Scenario(config=base_config(**OTEL, **OTEL_METRICS, **ratio(0.0), **PROM)),
+    "otel_0_metrics_prom_both": Scenario(
+        config=base_config(**OTEL, **OTEL_METRICS, **ratio(0.0), **PROM, prometheus_http_metrics_enabled=True)
+    ),
     "sentry": Scenario(config=base_config(**sentry())),
     "sentry_nosess": Scenario(config=base_config(**sentry(), sentry_auto_session_tracking=False)),
     "sentry_noauto": Scenario(config=base_config(**sentry(auto_enabling_integrations=False))),

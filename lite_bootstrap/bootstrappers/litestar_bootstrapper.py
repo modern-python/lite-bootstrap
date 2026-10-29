@@ -16,12 +16,7 @@ from lite_bootstrap.instruments.healthchecks_instrument import (
 )
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument
 from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryAsgiConfig, OpenTelemetryInstrument
-from lite_bootstrap.instruments.prometheus_instrument import (
-    PrometheusConfig as PrometheusBootstrapperConfig,
-)
-from lite_bootstrap.instruments.prometheus_instrument import (
-    PrometheusInstrument,
-)
+from lite_bootstrap.instruments.prometheus_instrument import PrometheusHttpConfig, PrometheusInstrument
 from lite_bootstrap.instruments.pyroscope_instrument import PyroscopeConfig, PyroscopeInstrument
 from lite_bootstrap.instruments.sentry_instrument import (
     SENTRY_FAILED_REQUEST_STATUS_CODES,
@@ -255,7 +250,7 @@ class LitestarConfig(
     HealthChecksConfig,
     LoggingConfig,
     OpenTelemetryAsgiConfig,
-    PrometheusBootstrapperConfig,
+    PrometheusHttpConfig,
     PyroscopeConfig,
     SentryLeanCaptureConfig,
     SwaggerConfig,
@@ -432,7 +427,10 @@ class LitestarPrometheusInstrument(PrometheusInstrument[LitestarConfig]):
         litestar_prometheus_config = PrometheusConfig(app_name=config.service_name, **prometheus_params)
 
         config.application_config.route_handlers.append(LitestarPrometheusController)
-        config.application_config.middleware.append(litestar_prometheus_config.middleware)
+        if config.is_prometheus_http_metrics_on(
+            opentelemetry_records_http_metrics=LitestarOpenTelemetryInstrument.is_recording_metrics(config)
+        ):
+            config.application_config.middleware.append(litestar_prometheus_config.middleware)
 
 
 @dataclasses.dataclass(kw_only=True, slots=True)
