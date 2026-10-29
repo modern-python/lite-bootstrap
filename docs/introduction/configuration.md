@@ -129,7 +129,8 @@ every removed option.
 Prometheus is the cheapest of the three non-logging instruments; see [Performance](performance.md).
 
 Prometheus is on by default when its extra is installed, serving metrics at `prometheus_metrics_path`
-(default: `/metrics`). Set `prometheus_metrics_path` to an empty string to disable it.
+(default: `/metrics`). Set `prometheus_metrics_path` to an empty string to disable it. FastStream is
+the exception: its default is empty; see [Prometheus FastStream](#prometheus-faststream).
 
 Additional parameters:
 
@@ -164,20 +165,18 @@ Additional parameters for Litestar integration:
 
 Prometheus's integration for FastStream requires `prometheus_client` package.
 
-To bootstrap Prometheus for FastStream, you must provide at least one of:
+On FastStream `prometheus_metrics_path` defaults to an empty string since 2.0, so the metrics endpoint
+is off until you set one. Once set, it serves `prometheus_client.REGISTRY`, the registry FastAPI,
+Litestar and FastMCP serve too. That includes the default process and platform collectors and any
+collector you register without naming a registry.
 
 - `prometheus_middleware_cls` - the broker metrics middleware, e.g.
   `faststream.redis.prometheus.RedisPrometheusMiddleware`. It is constructed with the instrument's
   registry and added to every broker of the first broker's type. For an application with brokers of
   different types, pass a mapping from broker class to middleware class instead; see
   [multiple brokers](../integrations/faststream.md#multiple-brokers).
-- `prometheus_collector_registry` - a `prometheus_client.CollectorRegistry` of your own, used in
-  place of the fresh one the instrument would otherwise build.
-
-With neither, nothing would populate the registry, so the metrics endpoint is not mounted and the
-instrument is skipped. Unlike the other frameworks, FastStream serves a private registry rather than
-`prometheus_client.REGISTRY`, so an endpoint with no middleware and no injected registry would have
-nothing to report.
+- `prometheus_collector_registry` - a `prometheus_client.CollectorRegistry` of your own, served and
+  passed to the middleware in place of `prometheus_client.REGISTRY`.
 
 ### Prometheus FastAPI
 
