@@ -15,7 +15,7 @@ from lite_bootstrap.instruments.healthchecks_instrument import (
     HealthCheckTypedDict,
 )
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument
-from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryConfig, OpenTelemetryInstrument
+from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryAsgiConfig, OpenTelemetryInstrument
 from lite_bootstrap.instruments.prometheus_instrument import (
     PrometheusConfig as PrometheusBootstrapperConfig,
 )
@@ -254,7 +254,7 @@ class LitestarConfig(
     CorsConfig,
     HealthChecksConfig,
     LoggingConfig,
-    OpenTelemetryConfig,
+    OpenTelemetryAsgiConfig,
     PrometheusBootstrapperConfig,
     PyroscopeConfig,
     SentryLeanCaptureConfig,
@@ -263,7 +263,6 @@ class LitestarConfig(
     application_config: "AppConfig" = dataclasses.field(default_factory=lambda: AppConfig())  # noqa: PLW0108
     litestar_logging_middleware_config: "LoggingMiddlewareConfig | None" = None
     logging_access_log_enabled: bool = False
-    opentelemetry_exclude_spans: list[typing.Literal["receive", "send"]] = dataclasses.field(default_factory=list)
     prometheus_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     # Bounds path-label cardinality (Litestar defaults False -> raw URLs leak memory). See litestar#4891.
     prometheus_group_path: bool = True

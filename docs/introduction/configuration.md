@@ -233,12 +233,13 @@ config = FastAPIConfig(
 )
 ```
 
-For FastAPI and Litestar there is additionally:
+For FastAPI, Litestar and FastMCP there is additionally:
 
-- `opentelemetry_exclude_spans` - drops the ASGI `receive` and/or `send` spans, leaving only the
-  server span. Empty by default, which records all three. `["receive", "send"]` is worth ~34 µs per
-  request on the benchmark endpoint, at the cost of two thirds of the spans disappearing from your
-  trace view.
+- `opentelemetry_exclude_spans` - the ASGI events that get no span of their own. Defaults to
+  `["receive", "send"]` since 2.0, so each request records only its server span. At 100% sampling
+  the two event spans cost about 36 to 66 µs per request on FastAPI and Litestar, and about 98 µs
+  per FastMCP tool call. Set it to `[]` to record them again, or to `["receive"]` or `["send"]` to
+  keep one kind.
 
 For FastStream there is additionally:
 

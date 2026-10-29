@@ -72,15 +72,16 @@ def _instrument_app_kwargs(config: FastAPIConfig) -> dict[str, typing.Any]:
             bootstrapper.teardown()
 
 
-def test_fastapi_opentelemetry_exclude_spans_defaults_to_recording_them(fastapi_config: FastAPIConfig) -> None:
-    """The default keeps every span a trace view shows today; dropping two of three is opt-in."""
-    assert _instrument_app_kwargs(fastapi_config)["exclude_spans"] == []
+def test_fastapi_opentelemetry_exclude_spans_defaults_to_dropping_the_event_spans(
+    fastapi_config: FastAPIConfig,
+) -> None:
+    assert _instrument_app_kwargs(fastapi_config)["exclude_spans"] == ["receive", "send"]
 
 
 def test_fastapi_opentelemetry_exclude_spans_reaches_the_instrumentor(fastapi_config: FastAPIConfig) -> None:
-    config = dataclasses.replace(fastapi_config, opentelemetry_exclude_spans=["receive", "send"])
+    config = dataclasses.replace(fastapi_config, opentelemetry_exclude_spans=[])
 
-    assert _instrument_app_kwargs(config)["exclude_spans"] == ["receive", "send"]
+    assert _instrument_app_kwargs(config)["exclude_spans"] == []
 
 
 def test_fastapi_bootstrap(fastapi_config: FastAPIConfig) -> None:

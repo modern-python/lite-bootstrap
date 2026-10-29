@@ -16,7 +16,7 @@ from lite_bootstrap.instruments.healthchecks_instrument import (
     HealthCheckTypedDict,
 )
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument
-from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryConfig, OpenTelemetryInstrument
+from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryAsgiConfig, OpenTelemetryInstrument
 from lite_bootstrap.instruments.prometheus_instrument import PrometheusConfig, PrometheusInstrument
 from lite_bootstrap.instruments.pyroscope_instrument import PyroscopeConfig, PyroscopeInstrument
 from lite_bootstrap.instruments.sentry_instrument import (
@@ -64,7 +64,7 @@ class FastAPIConfig(
     CorsConfig,
     HealthChecksConfig,
     LoggingConfig,
-    OpenTelemetryConfig,
+    OpenTelemetryAsgiConfig,
     PrometheusConfig,
     PyroscopeConfig,
     SentryLeanCaptureConfig,
@@ -72,8 +72,6 @@ class FastAPIConfig(
 ):
     application: "fastapi.FastAPI | UnsetType" = UNSET
     application_kwargs: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
-    # Not on OpenTelemetryConfig: only the FastAPI and Litestar instrumentors take `exclude_spans`.
-    opentelemetry_exclude_spans: list[typing.Literal["receive", "send"]] = dataclasses.field(default_factory=list)
     prometheus_instrumentator_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     prometheus_instrument_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     prometheus_expose_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)

@@ -52,7 +52,7 @@ In rough order of what they return:
 |---|---|---|
 | [`opentelemetry_sampler`](configuration.md#opentelemetry), 1% ratio | ~55 µs/req | 99% of your traces |
 | `http_methods_to_capture=()` on the Sentry ASGI integrations | ~35 µs/req | Sentry-side trace correlation |
-| [`opentelemetry_exclude_spans`](configuration.md#opentelemetry), FastAPI and Litestar | ~34 µs/req | the two ASGI event spans |
+| [`opentelemetry_exclude_spans=["receive", "send"]`](configuration.md#opentelemetry), the default since 2.0 | ~34 µs/req | the two ASGI event spans |
 | [`sentry_auto_session_tracking=False`](configuration.md#sentry), the default since 2.0 | ~7.7 µs/req | Sentry release health |
 | [`sentry_logging_breadcrumb_level=None`](configuration.md#sentry-logging-integration) | ~7 µs per log record | log breadcrumbs on errors |
 
@@ -68,7 +68,7 @@ request, every request then pays the per-record cost measured here:
 
 --8<-- "benchmarks/README.md:logging"
 
-lite-bootstrap already applies five savings for you. It turns Sentry Logs off in the logging
+lite-bootstrap already applies six savings for you. It turns Sentry Logs off in the logging
 integration, because it never enables them and on 2.x the handler formats every record before
 checking whether they are enabled; that one costs nothing. Since 2.0 it also leaves release-health
 sessions off and starts breadcrumbs at `WARNING`, so an `INFO` record skips the breadcrumb handler.
@@ -78,8 +78,10 @@ back. And while Sentry tracing is off it reports request errors without sentry-s
 integration, which costs you request transactions and bodies the handler never read; set `sentry_lean_error_capture=False` to keep the integration. With tracing off it also turns
 sentry-sdk's [auto-enabling integrations](configuration.md#sentry-auto-enabling-integrations) off,
 which costs you their SQL, Redis and outgoing-HTTP breadcrumbs; set
-`sentry_auto_enabling_integrations=True` to keep them. The numbers on this page were measured
-before 2.0, against the old defaults.
+`sentry_auto_enabling_integrations=True` to keep them. On FastAPI, Litestar and FastMCP it also
+records no span for the ASGI `receive` and `send` events, which costs you those spans; set
+`opentelemetry_exclude_spans=[]` to get them back. The numbers on this page were measured before
+2.0, against the old defaults.
 
 ## What each saving costs you
 
@@ -148,7 +150,8 @@ about +21 µs per tool call ([FastMCP: Sentry](../integrations/fastmcp.md#sentry
 --8<-- "benchmarks/README.md:otelfloor"
 
 If you sample down to save CPU, this floor is what you keep paying. Excluding the `receive` and `send`
-spans lowers it: Litestar's 1% row with them excluded sits below its 0% row with them kept.
+spans lowers it: Litestar's 1% row with them excluded sits below its 0% row with them kept. Since 2.0
+they are excluded by default.
 
 ## Reproducing on macOS
 

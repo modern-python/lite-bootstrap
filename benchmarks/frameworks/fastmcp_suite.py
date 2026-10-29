@@ -9,6 +9,7 @@ import typing
 
 import fastmcp.server.telemetry
 from common import (
+    ALL_SPANS,
     LOG,
     OTEL,
     PROM,
@@ -46,6 +47,7 @@ SCENARIOS: typing.Final = {
     "log_mw": Scenario(config=base_config(**LOG, logging_access_log_enabled=True)),
     "prom": Scenario(config=base_config(**PROM)),
     "otel": Scenario(config=base_config(**OTEL)),
+    "otel_all_spans": Scenario(config=base_config(**OTEL, **ALL_SPANS)),
     "otel_nofastmcp_spans": Scenario(config=base_config(**OTEL), patch=no_fastmcp_spans),
     "otel_10": Scenario(config=base_config(**OTEL, **ratio(0.1))),
     "sentry": Scenario(config=base_config(**sentry())),

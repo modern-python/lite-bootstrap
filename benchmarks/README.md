@@ -101,20 +101,34 @@ Sentry +57.1, OpenTelemetry +122.4 and all four +228.2. The table holds.
 
 | scenario | RPS | µs/req | gain |
 |---|---:|---:|---|
-| `otel` as lite-bootstrap configures it | 7267 | 137.6 | - |
+| `otel` as lite-bootstrap 1.x configured it | 7267 | 137.6 | - |
 | `+ opentelemetry_exclude_spans=["receive", "send"]` | 9651 | 103.6 | −34.0 µs |
 | `+ opentelemetry_sampler=ParentBased(TraceIdRatioBased(0.01))` | 12154 | 82.3 | −55.3 µs |
 | both | 15518 | 64.4 | **2.14x** |
 
 1. `FastAPIInstrumentor.instrument_app` accepts `exclude_spans: list[Literal["receive","send"]]`,
-   which `FastAPIConfig.opentelemetry_exclude_spans` passes through. It is empty by default, so
-   **every request still produces three spans** - the server span plus one each for the ASGI
-   `receive` and `send` events. Two thirds of the spans, one quarter of the cost, and almost
-   nobody looks at them. Set it to `["receive", "send"]` to drop the two event spans.
+   which `FastAPIConfig.opentelemetry_exclude_spans` passes through. In 1.x it was empty by
+   default, so every request produced three spans: the server span plus one each for the ASGI
+   `receive` and `send` events. Those two were two thirds of the spans and a quarter of the cost.
+   Since 2.0 it defaults to `["receive", "send"]` on FastAPI, Litestar and FastMCP.
 2. `OpenTelemetryConfig.opentelemetry_sampler` is passed to the `TracerProvider`. Left unset, the
    SDK default `parentbased_always_on` applies and every request is recorded, serialized and
    shipped. A 1% ratio sampler is worth 55 µs/req here. The default stays always-on deliberately:
    sampling rate is a user decision, not something to pick on a service's behalf.
+
+Rerun for 2.0 in-process on the M2 host (macOS, CPython 3.14.7, opentelemetry-sdk 1.45.1,
+opentelemetry-instrumentation-asgi 0.66b1, fastapi 0.162.0, litestar 2.25.0, fastmcp 4.1.4),
+100% sampling, with `bench.py <suite> bare,otel,otel_all_spans --repeat 3` (FastMCP with
+`--ops 1500 --warmup 300`). `otel` is the 2.0 default and `otel_all_spans` sets
+`opentelemetry_exclude_spans=[]`, the 1.x default:
+
+| suite | `otel` | `otel_all_spans` | saved |
+|---|---:|---:|---:|
+| FastAPI, per request | +91.8 | +127.8 | 36.0 |
+| Litestar, per request | +79.3 | +116.1 | 36.8 |
+| FastMCP, per `tools/call` | +175.4 | +273.8 | 98.4 |
+
+FastMCP's rounds differed by up to 9%, FastAPI's `otel` row by 17%.
 
 ### 4b. Sentry: the cost is one thing, and it is not the one people tune
 
@@ -233,7 +247,8 @@ Since 2.0, lite-bootstrap reports FastAPI request errors itself while Sentry tra
 | `sentry_integration_sampled_trace` | +59.2 | +113.2 |
 
 The last row on 3.0.0b2 varied by 40% between rounds. The table above was measured before 2.0. Its
-`sentry_nosess` row now has the same config as `sentry`, and `sentry_noauto` no longer stops request
+OpenTelemetry rows record the `receive` and `send` spans, which 2.0 leaves out by default (section
+4a). Its `sentry_nosess` row now has the same config as `sentry`, and `sentry_noauto` no longer stops request
 capture, because lean capture needs no auto-enabling integration.
 
 FastAPI real-server runs under uvicorn in the container were unstable (bare repeat medians of 8235
@@ -281,13 +296,13 @@ FastAPIConfig(
     ],
     sentry_logging_breadcrumb_level=None,
     # OpenTelemetry: sampling is the single biggest saving here
-    opentelemetry_exclude_spans=["receive", "send"],
     opentelemetry_sampler=ParentBased(TraceIdRatioBased(0.01)),
 )
 ```
 <!-- --8<-- [end:tuned] -->
 
-The tuned runs also set `sentry_auto_session_tracking=False`, which is the default since 2.0.
+The tuned runs also set `sentry_auto_session_tracking=False` and
+`opentelemetry_exclude_spans=["receive", "send"]`, which are the defaults since 2.0.
 
 Trade-offs, in order of what you give up: log breadcrumbs on Sentry errors, Sentry release health,
 Sentry-side trace correlation, 99% of OTel traces, ASGI event spans.
@@ -418,7 +433,8 @@ On 3.0 an incoming sampled `sentry-trace` makes `LitestarIntegration` record a r
 tracing off. `sentry_nointegration`, which disables `LitestarIntegration` and turns lean capture off,
 so nothing captures request errors, measured +0.3 and +0.0 in a later run that put `sentry` at
 +6.7 and +6.8. The table above was measured before 2.0. Its `sentry_nosess` scenario now has the same
-config as `sentry`, because sessions are off by default since 2.0.
+config as `sentry`, because sessions are off by default since 2.0. Its OpenTelemetry rows record the
+`receive` and `send` spans, which 2.0 leaves out by default (section 4a).
 
 lite-bootstrap's Litestar defaults with no endpoint configured (Prometheus, health, logging and
 Swagger on) cost +11.7 µs on `/ping`, all of it Prometheus. The access-log middleware writes each record
@@ -554,6 +570,9 @@ over a baseline of about 620 µs per tool call:
 | `sentry_integration_sampled_trace` | +82.3 | +216.4 |
 
 Rounds differed by up to 15%, so the lean rows are not resolved from each other.
+
+The OpenTelemetry rows in the first table record the ASGI `receive` and `send` spans, which 2.0
+leaves out by default: section 4a has the rerun.
 
 ### 8f. Logging, per call
 
