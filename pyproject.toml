@@ -174,11 +174,10 @@ faststream-all = [
     "lite-bootstrap[sentry,otl,logging,faststream,faststream-metrics,pyroscope]"
 ]
 fastmcp = [
-    # >=3.0 for fastmcp.server.providers.Provider and FastMCP.add_provider()
-    # (FastMcpBootstrapper registers its teardown through them --
-    # docs/adr/0001-fastmcp-teardown-via-provider-lifespan.md).
-    "fastmcp>=3.0",
-    # fastmcp 3.0 pulls py-key-value-aio, which requires typing-extensions>=4.15.
+    # >=4.0 so one middleware dispatch model is supported: from 4.0 the access log's on_message sees
+    # every inbound message, notifications included. <5 until 5.x is tested.
+    "fastmcp>=4.0,<5",
+    # fastmcp 4.0 pulls py-key-value-aio 0.4.4, which requires typing-extensions>=4.15.
     "typing-extensions>=4.15",
 ]
 fastmcp-otl = [
@@ -188,7 +187,7 @@ fastmcp-otl = [
 fastmcp-metrics = [
     "lite-bootstrap[fastmcp]",
     "prometheus-client>=0.20",
-    # >=8.0.1 to share the fastapi-metrics floor; it requires starlette>=1.0, which fastmcp 3.0 already pulls.
+    # >=8.0.1 to share the fastapi-metrics floor; it requires starlette>=1.0, which fastmcp 4.0 already pulls.
     "prometheus-fastapi-instrumentator>=8.0.1",
 ]
 fastmcp-all = [
