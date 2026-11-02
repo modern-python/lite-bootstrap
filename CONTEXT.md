@@ -15,7 +15,8 @@ The user-facing entry point, one class per framework. It owns exactly one applic
 of the process; it is not a builder you can run twice. A second bootstrapper on the same application (or,
 for Litestar, the same `AppConfig`) warns at construction and raises `ConfigurationError` from
 `bootstrap()`. Once torn down, a bootstrapper cannot bootstrap again: `bootstrap()` after
-`teardown()` raises `ConfigurationError`.
+`teardown()` raises `ConfigurationError`. A failed bootstrapper cannot be reused either; it
+cleans up instruments that started successfully, but cannot guarantee an unchanged application.
 
 **Instrument**:
 One observability or middleware concern: logging, tracing, metrics, profiling, CORS, Swagger, or

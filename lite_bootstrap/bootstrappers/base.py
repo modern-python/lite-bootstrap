@@ -7,6 +7,7 @@ from lite_bootstrap.exceptions import (
     BootstrapperNotReadyError,
     ConfigurationError,
     InstrumentDependencyMissingWarning,
+    TeardownErrorCollector,
     collect_teardown_errors,
 )
 from lite_bootstrap.instruments.base import BaseInstrument, ConfigT
@@ -141,10 +142,23 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT, ConfigT]):
             raise ConfigurationError(msg)
         if self.is_bootstrapped:
             return self._application
+        started_instruments: list[BaseInstrument] = []
+        try:
+            for one_instrument in self.instruments:
+                one_instrument.bootstrap()
+                started_instruments.append(one_instrument)
+            application = self._prepare_application()
+        except BaseException as error:
+            self._torn_down = True
+            teardown_errors = TeardownErrorCollector(logger)
+            for one_instrument in reversed(started_instruments):
+                with teardown_errors.capture(type(one_instrument).__name__):
+                    one_instrument.teardown()
+            for name, teardown_error in teardown_errors.errors:
+                error.add_note(f"Error rolling back {name}: {teardown_error}")
+            raise
+        self._application = application
         self.is_bootstrapped = True
-        for one_instrument in self.instruments:
-            one_instrument.bootstrap()
-        self._application = self._prepare_application()
         return self._application
 
     def teardown(self) -> None:

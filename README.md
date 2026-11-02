@@ -46,6 +46,7 @@ A few constraints that aren't obvious from the API:
 - **One bootstrapper per application instance.** Constructing two `FastAPIBootstrapper`s around the same `fastapi.FastAPI` (or two `FastMcpBootstrapper`s around the same `FastMCP`) is not supported. The second bootstrapper warns at construction, and its `bootstrap()` raises `ConfigurationError`.
 - **One `OpenTelemetryInstrument` per process.** `bootstrap()` calls `opentelemetry.trace.set_tracer_provider(...)`, which the OTel SDK enforces as set-once: later calls log a warning and have no effect. `teardown()` flushes spans and closes exporters but can't reset the process-global pointer.
 - **`teardown()` is idempotent.** `BaseBootstrapper.teardown()` short-circuits if not bootstrapped; per-instrument teardown methods are safe to call multiple times.
+- **Failed bootstrap is terminal.** If an instrument or application preparation raises, successfully started instruments are torn down in reverse order. Cleanup failures are attached as notes to the original exception. The bootstrapper cannot be reused, and a later `teardown()` does nothing. Rollback does not undo arbitrary changes made by the instrument that raised.
 - **Partial teardown failures are aggregated.** If an instrument's teardown raises, the bootstrapper continues with the rest of the instruments and raises `TeardownError` at the end with all collected failures.
 
 ---

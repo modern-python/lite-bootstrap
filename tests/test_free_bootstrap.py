@@ -1,5 +1,6 @@
 import logging
 import types
+import typing
 import warnings
 from unittest.mock import MagicMock
 
@@ -15,6 +16,7 @@ from lite_bootstrap import (
     TeardownError,
 )
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
+from lite_bootstrap.instruments.base import BaseInstrument
 from lite_bootstrap.instruments.logging_instrument import LoggingInstrument
 from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryInstrument
 from lite_bootstrap.instruments.pyroscope_instrument import PyroscopeInstrument
@@ -348,3 +350,84 @@ def test_two_free_bootstrappers_both_bootstrap(free_bootstrapper_config: FreeCon
     finally:
         second.teardown()
         first.teardown()
+
+
+@pytest.mark.parametrize("failure_type", [RuntimeError, KeyboardInterrupt, SystemExit])
+def test_failed_bootstrap_rolls_back_only_started_instruments(failure_type: type[BaseException]) -> None:
+    events: list[str] = []
+    failure = failure_type("bootstrap failed")
+
+    class First(BaseInstrument):
+        def bootstrap(self) -> None:
+            events.append(f"start {type(self).__name__.lower()}")
+
+        def teardown(self) -> None:
+            events.append(f"stop {type(self).__name__.lower()}")
+
+    class Second(First): ...
+
+    class Boom(First):
+        def bootstrap(self) -> None:
+            raise failure
+
+    class After(First): ...
+
+    class Bootstrapper(FreeBootstrapper):
+        instruments_types: typing.ClassVar = [First, Second, Boom, After]
+
+    bootstrapper = Bootstrapper(FreeConfig())
+    with pytest.raises(failure_type, match="bootstrap failed") as excinfo:
+        bootstrapper.bootstrap()
+
+    assert excinfo.value is failure
+    assert events == ["start first", "start second", "stop second", "stop first"]
+    assert not bootstrapper.is_bootstrapped
+    bootstrapper.teardown()
+    assert events == ["start first", "start second", "stop second", "stop first"]
+    with pytest.raises(ConfigurationError, match="cannot bootstrap again"):
+        bootstrapper.bootstrap()
+
+
+@pytest.mark.parametrize("fail_preparation", [False, True])
+@pytest.mark.parametrize("failure_type", [ValueError, KeyboardInterrupt, SystemExit])
+def test_failed_bootstrap_preserves_error_when_rollback_fails(
+    failure_type: type[BaseException], *, fail_preparation: bool
+) -> None:
+    stopped: list[str] = []
+    failure = failure_type("original startup failure")
+
+    class First(BaseInstrument):
+        def teardown(self) -> None:
+            stopped.append("first")
+            msg = "first cleanup failed"
+            raise RuntimeError(msg)
+
+    class Second(BaseInstrument):
+        def teardown(self) -> None:
+            stopped.append("second")
+            msg = "second cleanup failed"
+            raise RuntimeError(msg)
+
+    class Boom(BaseInstrument):
+        def bootstrap(self) -> None:
+            raise failure
+
+    class Bootstrapper(FreeBootstrapper):
+        instruments_types = [First, Second] if fail_preparation else [First, Second, Boom]
+
+        def _prepare_application(self) -> None:
+            raise failure
+
+    bootstrapper = Bootstrapper(FreeConfig())
+    with pytest.raises(failure_type, match="original startup failure") as excinfo:
+        bootstrapper.bootstrap()
+
+    assert excinfo.value is failure
+    assert stopped == ["second", "first"]
+    assert any("Second" in note and "second cleanup failed" in note for note in failure.__notes__)
+    assert any("First" in note and "first cleanup failed" in note for note in failure.__notes__)
+    assert not bootstrapper.is_bootstrapped
+    bootstrapper.teardown()
+    assert stopped == ["second", "first"]
+    with pytest.raises(ConfigurationError, match="cannot bootstrap again"):
+        bootstrapper.bootstrap()

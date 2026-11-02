@@ -3,7 +3,7 @@ from lite_bootstrap.instruments.swagger_instrument import SwaggerConfig, Swagger
 
 def test_swagger_instrument_configured_by_default() -> None:
     config = SwaggerConfig()
-    assert SwaggerInstrument.is_configured(config)
+    assert SwaggerInstrument[SwaggerConfig].is_configured(config)
 
 
 def test_swagger_config_defaults() -> None:
