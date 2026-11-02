@@ -148,7 +148,7 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT, ConfigT]):
                 one_instrument.bootstrap()
                 started_instruments.append(one_instrument)
             application = self._prepare_application()
-        except Exception as error:
+        except BaseException as error:
             self._torn_down = True
             teardown_errors = TeardownErrorCollector(logger)
             for one_instrument in reversed(started_instruments):

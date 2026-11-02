@@ -29,7 +29,7 @@ if import_checker.is_starlette_installed and import_checker.is_sentry_installed:
     from starlette.datastructures import Headers
     from starlette.middleware.exceptions import ExceptionMiddleware
     from starlette.requests import HTTPConnection
-    from starlette.routing import Match, Mount, Route, WebSocketRoute
+    from starlette.routing import Host, Match, Mount, Route, WebSocketRoute
 
 
 _CAPTURED_SCOPE_TYPES: typing.Final = frozenset({"http", "websocket"})
@@ -86,9 +86,6 @@ def enrich_sentry_event_from_starlette_scope(
     event["request"] = {**event.get("request", {}), **request_data}
     if data_collection["user_info"] and (user := _read_user(scope)):
         event.setdefault("user", user)
-    if "transaction" not in event and (route_path := getattr(scope.get("route"), "path", None)) is not None:
-        event["transaction"] = route_path
-        event["transaction_info"] = {"source": "route"}
     return event
 
 
@@ -134,18 +131,21 @@ def _find_route_path(scope: "Scope", routes: "typing.Sequence[BaseRoute]") -> st
         match, child_scope = route.matches(scope)
         if match != Match.FULL:
             continue
+        if isinstance(route, Host):
+            return _find_route_path({**scope, **child_scope}, route.routes)
         if isinstance(route, Mount):
             child_path = _find_route_path({**scope, **child_scope}, route.routes)
             return None if child_path is None else route.path + child_path
         if isinstance(route, (Route, WebSocketRoute)):
             return route.path
+        return None
     return None
 
 
 class StarletteSentryCaptureMiddleware:
     """Report request errors to Sentry without ``StarletteIntegration``, pure ASGI."""
 
-    def __init__(self, app: "ASGIApp", routes: "typing.Sequence[BaseRoute]" = ()) -> None:
+    def __init__(self, app: "ASGIApp", routes: "typing.Sequence[BaseRoute] | None" = None) -> None:
         self.app = app
         self.routes = routes
         _report_handled_server_errors(app)
@@ -170,12 +170,15 @@ class StarletteSentryCaptureMiddleware:
 
             def enrich(event: "sentry_types.Event", _: "sentry_types.Hint") -> "sentry_types.Event":
                 event = enrich_sentry_event_from_starlette_scope(event, scope, received_body)
-                if (
-                    "transaction" not in event
-                    and (route_path := _find_route_path(routing_scope, self.routes)) is not None
-                ):
-                    event["transaction"] = route_path
-                    event["transaction_info"] = {"source": "route"}
+                if "transaction" not in event:
+                    route_path = (
+                        _find_route_path(routing_scope, self.routes)
+                        if self.routes is not None
+                        else getattr(scope.get("route"), "path", None)
+                    )
+                    if route_path is not None:
+                        event["transaction"] = route_path
+                        event["transaction_info"] = {"source": "route"}
                 return event
 
             sentry_scope.add_event_processor(enrich)

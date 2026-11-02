@@ -352,9 +352,10 @@ def test_two_free_bootstrappers_both_bootstrap(free_bootstrapper_config: FreeCon
         first.teardown()
 
 
-def test_failed_bootstrap_rolls_back_only_started_instruments() -> None:
+@pytest.mark.parametrize("failure_type", [RuntimeError, KeyboardInterrupt, SystemExit])
+def test_failed_bootstrap_rolls_back_only_started_instruments(failure_type: type[BaseException]) -> None:
     events: list[str] = []
-    failure = RuntimeError("bootstrap failed")
+    failure = failure_type("bootstrap failed")
 
     class First(BaseInstrument):
         def bootstrap(self) -> None:
@@ -375,7 +376,7 @@ def test_failed_bootstrap_rolls_back_only_started_instruments() -> None:
         instruments_types: typing.ClassVar = [First, Second, Boom, After]
 
     bootstrapper = Bootstrapper(FreeConfig())
-    with pytest.raises(RuntimeError) as excinfo:
+    with pytest.raises(failure_type, match="bootstrap failed") as excinfo:
         bootstrapper.bootstrap()
 
     assert excinfo.value is failure
@@ -388,9 +389,12 @@ def test_failed_bootstrap_rolls_back_only_started_instruments() -> None:
 
 
 @pytest.mark.parametrize("fail_preparation", [False, True])
-def test_failed_bootstrap_preserves_error_when_rollback_fails(*, fail_preparation: bool) -> None:
+@pytest.mark.parametrize("failure_type", [ValueError, KeyboardInterrupt, SystemExit])
+def test_failed_bootstrap_preserves_error_when_rollback_fails(
+    failure_type: type[BaseException], *, fail_preparation: bool
+) -> None:
     stopped: list[str] = []
-    failure = ValueError("original startup failure")
+    failure = failure_type("original startup failure")
 
     class First(BaseInstrument):
         def teardown(self) -> None:
@@ -415,7 +419,7 @@ def test_failed_bootstrap_preserves_error_when_rollback_fails(*, fail_preparatio
             raise failure
 
     bootstrapper = Bootstrapper(FreeConfig())
-    with pytest.raises(ValueError, match="original startup failure") as excinfo:
+    with pytest.raises(failure_type, match="original startup failure") as excinfo:
         bootstrapper.bootstrap()
 
     assert excinfo.value is failure

@@ -24,7 +24,7 @@ from starlette.authentication import AuthCredentials, AuthenticationBackend, Sim
 from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.requests import HTTPConnection, Request
 from starlette.responses import JSONResponse, Response
-from starlette.routing import Mount, Route
+from starlette.routing import BaseRoute, Host, Match, Mount, Route
 from starlette.testclient import TestClient
 from starlette.types import ASGIApp, Receive, Scope, Send
 from starlette.websockets import WebSocket
@@ -745,8 +745,10 @@ async def test_lean_capture_runs_a_sync_exception_handler_in_a_worker_thread(sen
     assert _exception_types(sentry_mock) == ["CarriesUnavailableStatusError"]
 
 
-@pytest.mark.parametrize("mounted", [False, True])
-def test_fastmcp_lean_capture_uses_route_templates(sentry_mock: SentryTestTransport, *, mounted: bool) -> None:
+@pytest.mark.parametrize(("child_framework", "mounted"), [("starlette", False), ("starlette", True), ("fastapi", True)])
+def test_fastmcp_lean_capture_uses_route_templates(
+    sentry_mock: SentryTestTransport, child_framework: str, *, mounted: bool
+) -> None:
     config = _build_fastmcp_config(sentry_mock)
     bootstrapper = FastMcpBootstrapper(config)
     application = bootstrapper.bootstrap()
@@ -756,9 +758,12 @@ def test_fastmcp_lean_capture_uses_route_templates(sentry_mock: SentryTestTransp
 
     http_app = application.http_app()
     if mounted:
-        http_app.router.routes.append(
-            Mount("/shops/{shop_id}", app=Starlette(routes=[Route("/items/{item_id}", fail)]))
-        )
+        if child_framework == "fastapi":
+            child_app = fastapi.FastAPI()
+            child_app.get("/items/{item_id}")(fail)
+        else:
+            child_app = Starlette(routes=[Route("/items/{item_id}", fail)])
+        http_app.router.routes.append(Mount("/shops/{shop_id}", app=child_app))
         path = "/shops/12/items/7"
         expected_transaction = "/shops/{shop_id}/items/{item_id}"
     else:
@@ -794,7 +799,10 @@ def test_fastmcp_lean_capture_preserves_existing_transaction(sentry_mock: Sentry
     assert event["transaction_info"] == {"source": "custom"}
 
 
-def test_fastmcp_lean_capture_does_not_name_opaque_mounts_from_raw_paths(sentry_mock: SentryTestTransport) -> None:
+@pytest.mark.parametrize("container", ["mount", "host", "custom"])
+def test_fastmcp_lean_capture_does_not_name_opaque_routes_from_siblings(
+    sentry_mock: SentryTestTransport, container: str
+) -> None:
     config = _build_fastmcp_config(sentry_mock)
     bootstrapper = FastMcpBootstrapper(config)
     application = bootstrapper.bootstrap()
@@ -803,11 +811,48 @@ def test_fastmcp_lean_capture_does_not_name_opaque_mounts_from_raw_paths(sentry_
         message = "boom"
         raise RuntimeError(message)
 
+    class OpaqueRoute(BaseRoute):
+        def matches(self, scope: Scope) -> tuple[Match, Scope]:
+            return Route("/opaque/{path:path}", fail).matches(scope)
+
+        async def handle(self, scope: Scope, receive: Receive, send: Send) -> None:
+            await fail(scope, receive, send)
+
     http_app = application.http_app()
-    http_app.router.routes.append(Mount("/opaque", app=fail))
+    if container == "mount":
+        opaque_route = Mount("/opaque", app=fail)
+    elif container == "host":
+        opaque_route = Host("testserver", app=fail)
+    else:
+        opaque_route = OpaqueRoute()
+    http_app.router.routes.extend([opaque_route, Route("/opaque/private-id", fail)])
     with TestClient(http_app, raise_server_exceptions=False) as client:
         response = client.get("/opaque/private-id")
 
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     [event] = _error_events(sentry_mock)
     assert "transaction" not in event
+
+
+def test_fastmcp_lean_capture_resolves_host_before_sibling_route(sentry_mock: SentryTestTransport) -> None:
+    config = _build_fastmcp_config(sentry_mock)
+    bootstrapper = FastMcpBootstrapper(config)
+    application = bootstrapper.bootstrap()
+
+    async def fail(request: Request) -> Response:
+        raise RuntimeError(request.path_params["item_id"])
+
+    http_app = application.http_app()
+    http_app.router.routes.extend(
+        [
+            Host("tenant.example", app=Starlette(routes=[Route("/items/{item_id}", fail)])),
+            Route("/items/7", fail),
+        ]
+    )
+    with TestClient(http_app, base_url="http://tenant.example", raise_server_exceptions=False) as client:
+        response = client.get("/items/7")
+
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    [event] = _error_events(sentry_mock)
+    assert event["transaction"] == "/items/{item_id}"
+    assert event["transaction_info"] == {"source": "route"}
