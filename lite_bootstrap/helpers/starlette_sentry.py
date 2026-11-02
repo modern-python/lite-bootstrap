@@ -15,6 +15,7 @@ from lite_bootstrap.instruments.sentry_instrument import (
 
 if typing.TYPE_CHECKING:
     from sentry_sdk import _types as sentry_types
+    from starlette.routing import BaseRoute
     from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 if import_checker.is_starlette_installed and import_checker.is_sentry_installed:
@@ -28,6 +29,7 @@ if import_checker.is_starlette_installed and import_checker.is_sentry_installed:
     from starlette.datastructures import Headers
     from starlette.middleware.exceptions import ExceptionMiddleware
     from starlette.requests import HTTPConnection
+    from starlette.routing import Match, Mount, Route, WebSocketRoute
 
 
 _CAPTURED_SCOPE_TYPES: typing.Final = frozenset({"http", "websocket"})
@@ -127,11 +129,25 @@ def _report_handled_server_errors(application: "ASGIApp") -> None:
         handlers[exception_class] = _reporting_server_errors(handler)
 
 
+def _find_route_path(scope: "Scope", routes: "typing.Sequence[BaseRoute]") -> str | None:
+    for route in routes:
+        match, child_scope = route.matches(scope)
+        if match != Match.FULL:
+            continue
+        if isinstance(route, Mount):
+            child_path = _find_route_path({**scope, **child_scope}, route.routes)
+            return None if child_path is None else route.path + child_path
+        if isinstance(route, (Route, WebSocketRoute)):
+            return route.path
+    return None
+
+
 class StarletteSentryCaptureMiddleware:
     """Report request errors to Sentry without ``StarletteIntegration``, pure ASGI."""
 
-    def __init__(self, app: "ASGIApp") -> None:
+    def __init__(self, app: "ASGIApp", routes: "typing.Sequence[BaseRoute]" = ()) -> None:
         self.app = app
+        self.routes = routes
         _report_handled_server_errors(app)
 
     async def __call__(self, scope: "Scope", receive: "Receive", send: "Send") -> None:
@@ -139,6 +155,7 @@ class StarletteSentryCaptureMiddleware:
             await self.app(scope, receive, send)
             return
 
+        routing_scope = dict(scope)
         received_body: _ReceivedBody | None = None
         if "incoming_request" in sentry_sdk.get_client().options["data_collection"]["http_bodies"]:
             received_body = _ReceivedBody()
@@ -150,9 +167,18 @@ class StarletteSentryCaptureMiddleware:
         ):
             sentry_scope.clear_breadcrumbs()
             sentry_scope.generate_propagation_context(read_sentry_trace_headers(scope["headers"]))
-            sentry_scope.add_event_processor(
-                lambda event, _: enrich_sentry_event_from_starlette_scope(event, scope, received_body)
-            )
+
+            def enrich(event: "sentry_types.Event", _: "sentry_types.Hint") -> "sentry_types.Event":
+                event = enrich_sentry_event_from_starlette_scope(event, scope, received_body)
+                if (
+                    "transaction" not in event
+                    and (route_path := _find_route_path(routing_scope, self.routes)) is not None
+                ):
+                    event["transaction"] = route_path
+                    event["transaction_info"] = {"source": "route"}
+                return event
+
+            sentry_scope.add_event_processor(enrich)
             try:
                 await self.app(scope, receive, send)
             except Exception as exception:

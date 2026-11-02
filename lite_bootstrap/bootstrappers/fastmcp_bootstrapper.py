@@ -351,7 +351,7 @@ class FastMcpSentryInstrument(SentryInstrument[FastMcpConfig]):
 
     @staticmethod
     def _capture_errors_of_http_app(http_application: "StarletteWithLifespan") -> "StarletteWithLifespan":
-        http_application.add_middleware(StarletteSentryCaptureMiddleware)
+        http_application.add_middleware(StarletteSentryCaptureMiddleware, routes=http_application.routes)
         return http_application
 
     def bootstrap(self) -> None:

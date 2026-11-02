@@ -19,10 +19,12 @@ from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.httpx import HttpxIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
 from starlette import status
+from starlette.applications import Starlette
 from starlette.authentication import AuthCredentials, AuthenticationBackend, SimpleUser
 from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.requests import HTTPConnection, Request
 from starlette.responses import JSONResponse, Response
+from starlette.routing import Mount, Route
 from starlette.testclient import TestClient
 from starlette.types import ASGIApp, Receive, Scope, Send
 from starlette.websockets import WebSocket
@@ -741,3 +743,71 @@ async def test_lean_capture_runs_a_sync_exception_handler_in_a_worker_thread(sen
     assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
     assert handler_threads != [threading.current_thread()]
     assert _exception_types(sentry_mock) == ["CarriesUnavailableStatusError"]
+
+
+@pytest.mark.parametrize("mounted", [False, True])
+def test_fastmcp_lean_capture_uses_route_templates(sentry_mock: SentryTestTransport, *, mounted: bool) -> None:
+    config = _build_fastmcp_config(sentry_mock)
+    bootstrapper = FastMcpBootstrapper(config)
+    application = bootstrapper.bootstrap()
+
+    async def fail(request: Request) -> Response:
+        raise RuntimeError(request.path_params["item_id"])
+
+    http_app = application.http_app()
+    if mounted:
+        http_app.router.routes.append(
+            Mount("/shops/{shop_id}", app=Starlette(routes=[Route("/items/{item_id}", fail)]))
+        )
+        path = "/shops/12/items/7"
+        expected_transaction = "/shops/{shop_id}/items/{item_id}"
+    else:
+        http_app.router.routes.append(Route("/items/{item_id}", fail))
+        path = "/items/7"
+        expected_transaction = "/items/{item_id}"
+
+    with TestClient(http_app, raise_server_exceptions=False) as client:
+        response = client.get(path)
+
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    [event] = _error_events(sentry_mock)
+    assert event["transaction"] == expected_transaction
+    assert event["transaction_info"] == {"source": "route"}
+
+
+def test_fastmcp_lean_capture_preserves_existing_transaction(sentry_mock: SentryTestTransport) -> None:
+    config = _build_fastmcp_config(sentry_mock)
+
+    @config.application.custom_route("/named", methods=["GET"])
+    async def named(_: Request) -> Response:
+        sentry_sdk.get_isolation_scope().set_transaction_name("user transaction", source="custom")
+        message = "boom"
+        raise RuntimeError(message)
+
+    bootstrapper = FastMcpBootstrapper(config)
+    application = bootstrapper.bootstrap()
+    with TestClient(application.http_app(), raise_server_exceptions=False) as client:
+        client.get("/named")
+
+    [event] = _error_events(sentry_mock)
+    assert event["transaction"] == "user transaction"
+    assert event["transaction_info"] == {"source": "custom"}
+
+
+def test_fastmcp_lean_capture_does_not_name_opaque_mounts_from_raw_paths(sentry_mock: SentryTestTransport) -> None:
+    config = _build_fastmcp_config(sentry_mock)
+    bootstrapper = FastMcpBootstrapper(config)
+    application = bootstrapper.bootstrap()
+
+    async def fail(_scope: Scope, _receive: Receive, _send: Send) -> None:
+        message = "boom"
+        raise RuntimeError(message)
+
+    http_app = application.http_app()
+    http_app.router.routes.append(Mount("/opaque", app=fail))
+    with TestClient(http_app, raise_server_exceptions=False) as client:
+        response = client.get("/opaque/private-id")
+
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    [event] = _error_events(sentry_mock)
+    assert "transaction" not in event
