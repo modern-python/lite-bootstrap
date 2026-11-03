@@ -26,7 +26,6 @@ if import_checker.is_fastmcp_installed:
     from fastmcp import FastMCP
     from fastmcp.server.http import StarletteWithLifespan
     from fastmcp.server.middleware import Middleware, MiddlewareContext
-    from fastmcp.server.providers import Provider
     from starlette import status
     from starlette.requests import Request
     from starlette.responses import JSONResponse, Response
@@ -126,20 +125,6 @@ def build_fastmcp_route_details_from_scope(
 
 
 if import_checker.is_fastmcp_installed:
-
-    class _TeardownProvider(Provider):
-        # FastMCP exposes no on_shutdown-style API; Provider.lifespan is the only public
-        # post-construction hook whose async-cm runs during ASGI startup/shutdown.
-        def __init__(self, teardown: typing.Callable[[], None]) -> None:
-            super().__init__()
-            self._teardown = teardown
-
-        @contextlib.asynccontextmanager
-        async def lifespan(self) -> AsyncGenerator[None]:
-            try:
-                yield
-            finally:
-                self._teardown()
 
     class FastMcpPrometheusMiddleware(Middleware):
         def __init__(
@@ -400,7 +385,21 @@ class FastMcpBootstrapper(BaseBootstrapper["FastMCP[typing.Any]", FastMcpConfig]
     def __init__(self, bootstrap_config: FastMcpConfig) -> None:
         super().__init__(bootstrap_config)
         application = self.bootstrap_config.application
-        self._attach_teardown_once(application, lambda: application.add_provider(_TeardownProvider(self.teardown)))
+        self._attach_teardown_once(application, lambda: self._wrap_lifespan(application))
+
+    def _wrap_lifespan(self, application: "FastMCP[typing.Any]") -> None:
+        # FastMCP unwinds provider lifespans before its user lifespan.
+        user_lifespan = application._lifespan  # noqa: SLF001
+
+        @contextlib.asynccontextmanager
+        async def lifespan(server: "FastMCP[typing.Any]") -> AsyncGenerator[typing.Any]:
+            try:
+                async with user_lifespan(server) as result:
+                    yield result
+            finally:
+                self.teardown()
+
+        application._lifespan = lifespan  # noqa: SLF001
 
     def _prepare_application(self) -> "FastMCP[typing.Any]":
         return self.bootstrap_config.application

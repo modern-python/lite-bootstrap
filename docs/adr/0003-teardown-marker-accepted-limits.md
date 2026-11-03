@@ -17,3 +17,6 @@ Two consequences are accepted:
   `Litestar.from_config()`. Two configs sharing one `AppConfig` collide, but that pattern is already
   broken anyway, since instrument bootstrap mutates the shared config's `cors_config`,
   `route_handlers` and `openapi_config`.
+
+[ADR 0009](0009-fastmcp-teardown-wraps-user-lifespan.md) supersedes the FastMCP provider-list
+example above. The marker still guards against attaching a second bootstrapper.
