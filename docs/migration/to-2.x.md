@@ -20,3 +20,9 @@ metrics. Existing user-defined exclusions still apply. Dashboards and alerts
 that previously included these requests may show lower request totals and
 different latency percentiles. Review thresholds that were based on the old
 traffic mix.
+
+## Trace context in JSON logs
+
+JSON log lines include `tracing` only when emitted inside a recording
+OpenTelemetry span. The object contains `span_id` and `trace_id`.
+Update log parsers to treat `tracing` as optional.

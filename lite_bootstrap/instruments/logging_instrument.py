@@ -41,7 +41,7 @@ if import_checker.is_opentelemetry_installed:
     def tracer_injection(_: "WrappedLogger", __: str, event_dict: "EventDict") -> "EventDict":
         current_span = trace.get_current_span()
         if not current_span.is_recording():
-            event_dict["tracing"] = {}
+            event_dict.pop("tracing", None)
             return event_dict
 
         current_span_context = current_span.get_span_context()
