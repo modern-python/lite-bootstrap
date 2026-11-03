@@ -740,3 +740,11 @@ def test_built_app_title_and_version_fall_back_when_unset() -> None:
     application = FastAPIConfig().app
     assert application.title == "micro-service"
     assert application.version == "1.0.0"
+
+
+def test_empty_observability_paths_disable_routes() -> None:
+    config = FastAPIConfig(health_checks_path="", prometheus_metrics_path="")
+    with _bootstrapped(config) as application, TestClient(application) as client:
+        assert client.get("/health/").status_code == status.HTTP_404_NOT_FOUND
+        assert client.get("/metrics").status_code == status.HTTP_404_NOT_FOUND
+        assert client.get("/").status_code == status.HTTP_404_NOT_FOUND

@@ -6,6 +6,8 @@ from collections.abc import Awaitable, Callable, Mapping
 
 import typing_extensions
 
+from lite_bootstrap.exceptions import ConfigurationError
+from lite_bootstrap.helpers.path import is_valid_path
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 
 
@@ -27,6 +29,13 @@ class HealthChecksConfig(BaseConfig):
     health_checks_include_in_schema: bool = False
     health_checks_probes: Mapping[str, HealthProbe] = dataclasses.field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        path = self.health_checks_path
+        if path and path != "/" and not is_valid_path(path):
+            msg = f"Invalid health_checks_path: {path!r}"
+            raise ConfigurationError(msg)
+
     @property
     def health_check_data(self) -> HealthCheckTypedDict:
         return {
@@ -41,11 +50,11 @@ HealthChecksConfigT = typing.TypeVar("HealthChecksConfigT", bound=HealthChecksCo
 
 @dataclasses.dataclass(kw_only=True, slots=True)
 class HealthChecksInstrument(BaseInstrument[HealthChecksConfigT]):
-    not_configured_reason = "health_checks_enabled is False"
+    not_configured_reason = "health_checks_enabled is False or health_checks_path is empty"
 
     @classmethod
     def is_configured(cls, bootstrap_config: "HealthChecksConfig") -> bool:
-        return bootstrap_config.health_checks_enabled
+        return bootstrap_config.health_checks_enabled and bool(bootstrap_config.health_checks_path)
 
     def render_health_check_data(self, *, health_status: bool = True) -> HealthCheckTypedDict:
         health_check_data = self.bootstrap_config.health_check_data

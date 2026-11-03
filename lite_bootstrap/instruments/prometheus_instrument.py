@@ -3,6 +3,7 @@
 import dataclasses
 import typing
 
+from lite_bootstrap.exceptions import ConfigurationError
 from lite_bootstrap.helpers.path import is_valid_path
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 
@@ -11,6 +12,13 @@ from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 class PrometheusConfig(BaseConfig):
     prometheus_metrics_path: str = "/metrics"
     prometheus_metrics_include_in_schema: bool = False
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        path = self.prometheus_metrics_path
+        if path and not is_valid_path(path):
+            msg = f"Invalid prometheus_metrics_path: {path!r}"
+            raise ConfigurationError(msg)
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
@@ -29,10 +37,8 @@ PrometheusConfigT = typing.TypeVar("PrometheusConfigT", bound=PrometheusConfig)
 
 @dataclasses.dataclass(kw_only=True, slots=True)
 class PrometheusInstrument(BaseInstrument[PrometheusConfigT]):
-    not_configured_reason = "prometheus_metrics_path is empty or not valid"
+    not_configured_reason = "prometheus_metrics_path is empty"
 
     @classmethod
     def is_configured(cls, bootstrap_config: "PrometheusConfig") -> bool:
-        return bool(bootstrap_config.prometheus_metrics_path) and is_valid_path(
-            bootstrap_config.prometheus_metrics_path
-        )
+        return bool(bootstrap_config.prometheus_metrics_path)

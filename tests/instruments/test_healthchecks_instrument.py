@@ -16,7 +16,9 @@ def test_healthchecks_instrument_configured_by_default() -> None:
 def test_healthchecks_instrument_not_configured_when_disabled() -> None:
     config = HealthChecksConfig(health_checks_enabled=False)
     assert not HealthChecksInstrument.is_configured(config)
-    assert HealthChecksInstrument.not_configured_reason == "health_checks_enabled is False"
+    assert (
+        HealthChecksInstrument.not_configured_reason == "health_checks_enabled is False or health_checks_path is empty"
+    )
 
 
 def test_healthchecks_render_data_default() -> None:
