@@ -346,8 +346,13 @@ def test_lean_capture_attaches_only_a_body_the_handler_already_read(
     assert event["request"].get("data") == expected_data
 
 
-@pytest.mark.parametrize(("policy", "size"), [("never", 4), ("small", 1001)])
-def test_lean_capture_honors_body_limit(sentry_mock: SentryTestTransport, policy: str, size: int) -> None:
+@pytest.mark.parametrize(
+    ("policy", "size", "declared_size"),
+    [("never", 4, "4"), ("small", 1001, "1001"), ("small", 1001, "1")],
+)
+def test_lean_capture_honors_body_limit(
+    sentry_mock: SentryTestTransport, policy: str, size: int, declared_size: str
+) -> None:
     params = {
         "data_collection": {**DEFAULT_DATA_COLLECTION, "http_bodies": ["incoming_request"]},
         "max_request_body_size": policy,
@@ -356,7 +361,7 @@ def test_lean_capture_honors_body_limit(sentry_mock: SentryTestTransport, policy
         bootstrap_config=_build_config(sentry_mock, sentry_additional_params=params)
     ).bootstrap()
     with TestClient(app=application, raise_server_exceptions=False) as test_client:
-        test_client.post("/read-raw-body-then-boom", content=b"x" * size)
+        test_client.post("/read-raw-body-then-boom", content=b"x" * size, headers={"content-length": declared_size})
 
     [event] = _error_events(sentry_mock)
     assert "data" not in event["request"]

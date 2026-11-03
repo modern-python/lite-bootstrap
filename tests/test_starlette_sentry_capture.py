@@ -376,7 +376,10 @@ def test_lean_capture_honors_body_limit(sentry_mock: SentryTestTransport, policy
     assert "data" not in event["request"]
 
 
-async def test_lean_capture_drops_streamed_body_over_limit(sentry_mock: SentryTestTransport) -> None:
+@pytest.mark.parametrize("length_headers", [[], [(b"content-length", b"invalid")]])
+async def test_lean_capture_drops_streamed_body_over_limit(
+    sentry_mock: SentryTestTransport, length_headers: list[tuple[bytes, bytes]]
+) -> None:
     application = _bootstrap(
         sentry_mock,
         sentry_additional_params={
@@ -395,7 +398,7 @@ async def test_lean_capture_drops_streamed_body_over_limit(sentry_mock: SentryTe
         "raw_path": path.encode(),
         "root_path": "",
         "query_string": b"",
-        "headers": [(b"host", b"testserver")],
+        "headers": [(b"host", b"testserver"), *length_headers],
         "server": ("testserver", 80),
     }
     chunks = [b"a" * 600, b"b" * 600, b"c"]
