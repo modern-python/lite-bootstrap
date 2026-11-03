@@ -17,6 +17,8 @@ if typing.TYPE_CHECKING:
 if import_checker.is_sentry_installed:
     import sentry_sdk
     from sentry_sdk.integrations.logging import LoggingIntegration
+    from sentry_sdk.scrubber import EventScrubber
+    from sentry_sdk.serializer import serialize
     from sentry_sdk.utils import event_from_exception
 
 
@@ -149,6 +151,13 @@ def warn_about_sentry_integrations_installed_earlier(integrations: typing.Sequen
         )
 
 
+def _scrub_structlog_extra(extra: dict[str, typing.Any]) -> dict[str, typing.Any]:
+    options = sentry_sdk.get_client().options
+    scrubber = options["event_scrubber"] or EventScrubber(recursive=True, send_default_pii=options["send_default_pii"])
+    scrubber.scrub_dict(extra)
+    return serialize({"extra": extra})["extra"]
+
+
 def enrich_sentry_event_from_structlog_log(
     event: "sentry_types.Event", _: "sentry_types.Hint"
 ) -> typing.Optional["sentry_types.Event"]:
@@ -165,12 +174,17 @@ def enrich_sentry_event_from_structlog_log(
         return event
     if payload.skip_sentry:
         return None
-    if not payload.message:
+    if not isinstance(payload.message, str):
         return event
 
-    event["logentry"]["formatted"] = payload.message  # ty: ignore[invalid-assignment]
+    event["logentry"] = {**logentry, "formatted": payload.message, "message": payload.message, "params": []}
     if payload.extra:
-        event["contexts"]["structlog"] = payload.extra
+        event["contexts"]["structlog"] = _scrub_structlog_extra(payload.extra)
+    # Logging frames can retain the original rendered line in their locals.
+    for group in ("threads", "exception"):
+        for value in event.get(group, {}).get("values", []):
+            for frame in value.get("stacktrace", {}).get("frames", []):
+                frame.pop("vars", None)
     return event
 
 
@@ -192,6 +206,27 @@ def wrap_before_send_callbacks(
         return event
 
     return run_before_send
+
+
+def wrap_before_breadcrumb(
+    callback: "sentry_types.BreadcrumbProcessor | None",
+) -> "sentry_types.BreadcrumbProcessor":
+    def run_before_breadcrumb(
+        breadcrumb: "sentry_types.Breadcrumb", hint: "sentry_types.BreadcrumbHint"
+    ) -> "sentry_types.Breadcrumb | None":
+        message = breadcrumb.get("message")
+        if "log_record" in hint and isinstance(message, str):
+            payload = StructuredLogPayload.parse(message)
+            if payload is not None:
+                if payload.skip_sentry:
+                    return None
+                if isinstance(payload.message, str):
+                    breadcrumb["message"] = payload.message
+                    if payload.extra:
+                        breadcrumb["data"] = {**breadcrumb.get("data", {}), **_scrub_structlog_extra(payload.extra)}
+        return callback(breadcrumb, hint) if callback is not None else breadcrumb
+
+    return run_before_breadcrumb
 
 
 SentryConfigT = typing.TypeVar("SentryConfigT", bound=SentryConfig)
@@ -240,13 +275,15 @@ class SentryInstrument(BaseInstrument[SentryConfigT]):
             "default_integrations": config.sentry_default_integrations,
             "auto_enabling_integrations": config.is_sentry_auto_enabling_integrations_on(),
             "data_collection": DEFAULT_DATA_COLLECTION,
-            "before_send": wrap_before_send_callbacks(
-                enrich_sentry_event_from_structlog_log, config.sentry_before_send
-            ),
+            "before_send": config.sentry_before_send,
         }
         if config.service_version:
             init_params["release"] = config.service_version
         init_params.update(config.sentry_additional_params)
+        init_params["before_send"] = wrap_before_send_callbacks(
+            enrich_sentry_event_from_structlog_log, init_params["before_send"]
+        )
+        init_params["before_breadcrumb"] = wrap_before_breadcrumb(init_params.get("before_breadcrumb"))
         return init_params
 
     def bootstrap(self) -> None:

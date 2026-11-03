@@ -2,6 +2,7 @@ import copy
 import dataclasses
 import logging
 import typing
+import uuid
 from unittest.mock import patch
 
 import pytest
@@ -114,7 +115,7 @@ class TestSentryEnrichEventFromStructlog:
         [
             (
                 {"logentry": {"formatted": '{"event": "event name"}'}, "contexts": {}},
-                {"logentry": {"formatted": "event name"}, "contexts": {}},
+                {"logentry": {"formatted": "event name", "message": "event name", "params": []}, "contexts": {}},
             ),
             (
                 {
@@ -124,7 +125,7 @@ class TestSentryEnrichEventFromStructlog:
                     "contexts": {},
                 },
                 {
-                    "logentry": {"formatted": "event name"},
+                    "logentry": {"formatted": "event name", "message": "event name", "params": []},
                     "contexts": {"structlog": {"foo": "bar"}},
                 },
             ),
@@ -493,3 +494,65 @@ def test_sentry_release_follows_service_version(
         assert sentry_sdk.get_client().options["release"] == expected_release
     finally:
         instrument.teardown()
+
+
+@pytest.mark.parametrize("attach_stacktrace", [False, True])
+def test_structlog_envelope_redacts_kwargs_and_excludes_skipped_breadcrumbs(
+    minimal_sentry_config: SentryConfig, sentry_mock: SentryTestTransport, *, attach_stacktrace: bool
+) -> None:
+    def before_breadcrumb(
+        crumb: "sentry_types.Breadcrumb", _: "sentry_types.BreadcrumbHint"
+    ) -> "sentry_types.Breadcrumb | None":
+        if crumb.get("message") == "dropped by hook":
+            return None
+        return crumb
+
+    def before_send(event: "sentry_types.Event", _: "sentry_types.Hint") -> "sentry_types.Event":
+        event.setdefault("tags", {})["hook"] = "called"
+        return event
+
+    config = dataclasses.replace(
+        minimal_sentry_config,
+        sentry_attach_stacktrace=attach_stacktrace,
+        sentry_additional_params={
+            **minimal_sentry_config.sentry_additional_params,
+            "before_breadcrumb": before_breadcrumb,
+            "before_send": before_send,
+        },
+    )
+    sentry = SentryInstrument(bootstrap_config=config)
+    logs = LoggingInstrument(bootstrap_config=LoggingConfig())
+    sentry.bootstrap()
+    logs.bootstrap()
+    try:
+        marker = uuid.uuid4().hex
+        skipped = uuid.uuid4().hex
+        logger.warning("breadcrumb", password=marker, component="worker")
+        logger.warning(skipped, skip_sentry=True)
+        std_logger.warning("dropped by hook")
+        logger.error("error", password=marker, component="worker")
+        logger.error("error", component="other-worker")
+        logger.error("")
+        first, repeated, second = sentry_mock.mock_envelopes
+        for envelope in sentry_mock.mock_envelopes:
+            assert marker.encode() not in envelope.serialize()
+            assert skipped.encode() not in envelope.serialize()
+        event = first.get_event()
+        assert event is not None
+        assert ("threads" in event) == attach_stacktrace
+        repeated_event = repeated.get_event()
+        assert repeated_event is not None
+        assert repeated_event["logentry"] == event["logentry"]
+        assert event["tags"]["hook"] == "called"
+        assert event["logentry"] == {"message": "error", "formatted": "error", "params": []}
+        assert event["contexts"]["structlog"]["component"] == "worker"
+        breadcrumbs = event["breadcrumbs"]
+        assert isinstance(breadcrumbs, dict)
+        assert not any(crumb.get("message") == "dropped by hook" for crumb in breadcrumbs["values"])
+        assert any(crumb.get("data", {}).get("component") == "worker" for crumb in breadcrumbs["values"])
+        empty = second.get_event()
+        assert empty is not None
+        assert empty["logentry"] == {"message": "", "formatted": "", "params": []}
+    finally:
+        logs.teardown()
+        sentry.teardown()
