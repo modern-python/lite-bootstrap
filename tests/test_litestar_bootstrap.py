@@ -55,6 +55,27 @@ from tests.conftest import (
 logger = structlog.getLogger(__name__)
 
 
+def test_origins_only_cors_allows_json_post_preflight() -> None:
+    origin = "https://a.example"
+    config = LitestarConfig(cors_allowed_origins=[origin])
+    application = LitestarBootstrapper(bootstrap_config=config).bootstrap()
+
+    with TestClient(application) as client:
+        response = client.options(
+            "/x",
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type",
+            },
+        )
+
+    assert response.is_success
+    assert response.headers["access-control-allow-origin"] == origin
+    assert "POST" in response.headers["access-control-allow-methods"].split(", ")
+    assert "content-type" in response.headers["access-control-allow-headers"].lower().split(", ")
+
+
 @pytest.fixture
 def litestar_config() -> LitestarConfig:
     return LitestarConfig(

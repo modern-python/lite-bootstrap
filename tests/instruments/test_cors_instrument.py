@@ -31,7 +31,7 @@ def test_cors_instrument_configured_with_both() -> None:
 def test_cors_instrument_config_defaults() -> None:
     config = CorsConfig()
     assert config.cors_allowed_origins == []
-    assert config.cors_allowed_methods == []
+    assert config.cors_allowed_methods == ["*"]
     assert config.cors_allowed_headers == []
     assert config.cors_exposed_headers == []
     assert config.cors_allowed_credentials is False

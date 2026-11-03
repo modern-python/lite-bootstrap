@@ -10,6 +10,8 @@ nav:
       - Installation: introduction/installation.md
       - Configuration: introduction/configuration.md
       - Performance: introduction/performance.md
+  - Migration:
+      - Upgrading to 2.x: migration/to-2.x.md
   - Integrations:
       - Litestar: integrations/litestar.md
       - FastStream: integrations/faststream.md
