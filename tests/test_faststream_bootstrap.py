@@ -23,6 +23,7 @@ from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
 from opentelemetry.metrics import MeterProvider, get_meter_provider
 from opentelemetry.sdk import resources
 from opentelemetry.sdk.metrics import MeterProvider as SDKMeterProvider
+from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace import TracerProvider as SDKTracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
@@ -309,7 +310,7 @@ def test_faststream_bootstrap_without_prometheus_client(broker: RedisBroker) -> 
         bootstrapper.bootstrap()
 
 
-def _span_names_for_one_health_check(config: FastStreamConfig) -> list[str]:
+def _spans_for_one_health_check(config: FastStreamConfig) -> tuple[ReadableSpan, ...]:
     bootstrapper = FastStreamBootstrapper(bootstrap_config=config)
     # The module's tracer stays bound to the first provider a test installed; this one resolves to this test's.
     with patch.object(faststream_bootstrapper, "tracer", get_tracer(__name__)):
@@ -322,17 +323,37 @@ def _span_names_for_one_health_check(config: FastStreamConfig) -> list[str]:
         TestClient(app=application).get(config.health_checks_path)
     finally:
         bootstrapper.teardown()
-    return [span.name for span in exporter.get_finished_spans()]
+    return exporter.get_finished_spans()
 
 
 def test_faststream_health_check_records_no_span_by_default() -> None:
-    assert _span_names_for_one_health_check(build_faststream_config()) == []
+    assert not _spans_for_one_health_check(build_faststream_config())
 
 
-def test_faststream_health_check_span_is_recorded_when_turned_on() -> None:
+def test_faststream_health_check_span_parents_async_probe_span() -> None:
+    async def probe() -> bool:
+        with get_tracer(__name__).start_as_current_span("dependency probe"):
+            return True
+
+    config = dataclasses.replace(
+        build_faststream_config(),
+        opentelemetry_generate_health_check_spans=True,
+        health_checks_probes={"dependency": probe},
+    )
+
+    spans = {span.name: span for span in _spans_for_one_health_check(config)}
+    health_span = spans[f"GET {config.health_checks_path}"]
+    assert health_span.context is not None
+    assert spans["dependency probe"].parent == health_span.context
+
+
+def test_faststream_traced_health_check_mounts_http_handler() -> None:
     config = dataclasses.replace(build_faststream_config(), opentelemetry_generate_health_check_spans=True)
 
-    assert _span_names_for_one_health_check(config) == [f"GET {config.health_checks_path}"]
+    _spans_for_one_health_check(config)
+
+    routes = dict(config.application.routes)
+    assert isinstance(routes[config.health_checks_path], faststream.asgi.HttpHandler)
 
 
 def test_faststream_bootstrap_without_opentelemetry(broker: RedisBroker) -> None:
