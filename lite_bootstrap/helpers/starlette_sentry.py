@@ -10,6 +10,7 @@ from lite_bootstrap.instruments.sentry_instrument import (
     SENTRY_FAILED_REQUEST_STATUS_CODES,
     capture_request_exception,
     read_sentry_trace_headers,
+    should_collect_request_body,
 )
 
 
@@ -23,6 +24,7 @@ if import_checker.is_starlette_installed and import_checker.is_sentry_installed:
     from sentry_sdk import sessions
     from sentry_sdk.data_collection import _apply_key_value_collection_filtering
     from sentry_sdk.integrations._asgi_common import _get_request_data, _RootPathInPath
+    from sentry_sdk.integrations._wsgi_common import request_body_within_bounds
     from sentry_sdk.integrations.starlette import StarletteIntegration
     from sentry_sdk.utils import AnnotatedValue
     from starlette.concurrency import run_in_threadpool
@@ -40,13 +42,23 @@ _USER_ATTRIBUTES: typing.Final = ("username", "id", "email")
 class _ReceivedBody:
     chunks: list[bytes] = dataclasses.field(default_factory=list)
     complete: bool = False
+    size: int = 0
+    exceeded_limit: bool = False
 
     def recording(self, receive: "Receive") -> "Receive":
         async def receive_and_record() -> "Message":
             message: typing.Final = await receive()
-            if message["type"] == "http.request":
-                self.chunks.append(message.get("body", b""))
-                self.complete = not message.get("more_body", False)
+            if message["type"] == "http.request" and not self.exceeded_limit:
+                chunk = message.get("body", b"")
+                self.size += len(chunk)
+                if request_body_within_bounds(sentry_sdk.get_client(), self.size):
+                    if chunk:
+                        self.chunks.append(chunk)
+                    self.complete = not message.get("more_body", False)
+                else:
+                    self.chunks.clear()
+                    self.complete = False
+                    self.exceeded_limit = True
             return message
 
         return receive_and_record
@@ -157,7 +169,7 @@ class StarletteSentryCaptureMiddleware:
 
         routing_scope = dict(scope)
         received_body: _ReceivedBody | None = None
-        if "incoming_request" in sentry_sdk.get_client().options["data_collection"]["http_bodies"]:
+        if scope["type"] == "http" and should_collect_request_body(Headers(scope=scope).get("content-length")):
             received_body = _ReceivedBody()
             receive = received_body.recording(receive)
 

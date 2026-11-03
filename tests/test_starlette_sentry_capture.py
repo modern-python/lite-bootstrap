@@ -362,6 +362,61 @@ def test_lean_capture_attaches_only_a_body_the_handler_already_read(
     assert event["request"].get("data") == expected_data
 
 
+@pytest.mark.parametrize(("policy", "size"), [("never", 4), ("small", 1001)])
+def test_lean_capture_honors_body_limit(sentry_mock: SentryTestTransport, policy: str, size: int) -> None:
+    params = {
+        "data_collection": {**DEFAULT_DATA_COLLECTION, "http_bodies": ["incoming_request"]},
+        "max_request_body_size": policy,
+    }
+    application = _bootstrap(sentry_mock, sentry_additional_params=params)
+    with TestClient(app=application, raise_server_exceptions=False) as test_client:
+        test_client.post("/read-raw-body-then-boom", content=b"x" * size)
+
+    [event] = _error_events(sentry_mock)
+    assert "data" not in event["request"]
+
+
+@pytest.mark.parametrize("length_headers", [[], [(b"content-length", b"invalid")]])
+async def test_lean_capture_drops_streamed_body_over_limit(
+    sentry_mock: SentryTestTransport, length_headers: list[tuple[bytes, bytes]]
+) -> None:
+    application = _bootstrap(
+        sentry_mock,
+        sentry_additional_params={
+            "data_collection": {**DEFAULT_DATA_COLLECTION, "http_bodies": ["incoming_request"]},
+            "max_request_body_size": "small",
+        },
+    )
+    path = "/read-raw-body-then-boom"
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": path,
+        "raw_path": path.encode(),
+        "root_path": "",
+        "query_string": b"",
+        "headers": [(b"host", b"testserver"), *length_headers],
+        "server": ("testserver", 80),
+    }
+    chunks = [b"a" * 600, b"b" * 600, b"c"]
+    receive = AsyncMock(
+        side_effect=[
+            {"type": "http.request", "body": chunk, "more_body": index < len(chunks) - 1}
+            for index, chunk in enumerate(chunks)
+        ]
+    )
+
+    with pytest.raises(RuntimeError) as error:
+        await application(scope, receive, AsyncMock())
+
+    assert str(error.value) == b"".join(chunks).decode()
+    [event] = _error_events(sentry_mock)
+    assert "data" not in event["request"]
+
+
 async def test_lean_capture_continues_an_incoming_sentry_trace(sentry_mock: SentryTestTransport) -> None:
     # Called without TestClient: sentry-sdk's httpx integration would overwrite the outgoing sentry-trace.
     trace_id = "771a43a4192642f0b136d5159a501700"
