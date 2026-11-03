@@ -147,7 +147,6 @@ class FastStreamHealthChecksInstrument(HealthChecksInstrument[FastStreamConfig])
     def bootstrap(self) -> None:
         config = self.bootstrap_config
 
-        @handle_get
         async def check_health(_: object) -> "AsgiResponse":
             health_status = await self.define_health_status()
             return AsgiResponse(
@@ -159,6 +158,7 @@ class FastStreamHealthChecksInstrument(HealthChecksInstrument[FastStreamConfig])
         if config.opentelemetry_generate_health_check_spans and import_checker.is_opentelemetry_installed:
             check_health = tracer.start_as_current_span(f"GET {config.health_checks_path}")(check_health)
 
+        handler = handle_get(check_health)
         for path in _route_path_variants(config.health_checks_path):
             if (
                 path != config.health_checks_path
@@ -166,7 +166,7 @@ class FastStreamHealthChecksInstrument(HealthChecksInstrument[FastStreamConfig])
                 and FastStreamPrometheusInstrument.dependencies_installed()
             ):
                 continue
-            config.application.mount(path, check_health)
+            config.application.mount(path, handler)
 
     async def _define_framework_health_status(self) -> bool:
         config = self.bootstrap_config
