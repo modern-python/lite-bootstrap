@@ -4,6 +4,7 @@ import json
 import logging
 import typing
 from collections.abc import Mapping, Sequence
+from types import TracebackType
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
@@ -20,6 +21,24 @@ if import_checker.is_faststream_installed:
     from faststream._internal.logger.params_storage import ManualLoggerStorage
     from faststream.asgi import AsgiFastStream, AsgiResponse
     from faststream.asgi import get as handle_get
+    from faststream.middlewares import BaseMiddleware
+
+    class _SentryIsolationMiddleware(BaseMiddleware[typing.Any, typing.Any]):
+        async def on_receive(self) -> None:
+            self._scope_context = sentry_sdk.isolation_scope()
+            self._scope_context.__enter__()
+
+        async def after_processed(
+            self,
+            exc_type: type[BaseException] | None = None,
+            exc_val: BaseException | None = None,
+            exc_tb: TracebackType | None = None,
+        ) -> None:
+            self._scope_context.__exit__(exc_type, exc_val, exc_tb)
+
+
+if import_checker.is_sentry_installed:
+    import sentry_sdk
 
 if import_checker.is_structlog_installed:
     import structlog
@@ -227,13 +246,20 @@ class FastStreamPrometheusInstrument(PrometheusInstrument[FastStreamConfig]):
                 broker.add_middleware(middleware_cls(registry=self.collector_registry))
 
 
+class FastStreamSentryInstrument(SentryInstrument["FastStreamConfig"]):
+    def bootstrap(self) -> None:
+        super().bootstrap()
+        for broker in self.bootstrap_config.application.brokers:
+            broker.insert_middleware(_SentryIsolationMiddleware)
+
+
 class FastStreamBootstrapper(BaseBootstrapper["AsgiFastStream", FastStreamConfig]):
     __slots__ = "bootstrap_config", "instruments"
 
     instruments_types: typing.ClassVar = [
         FastStreamOpenTelemetryInstrument,
         PyroscopeInstrument,
-        SentryInstrument,
+        FastStreamSentryInstrument,
         FastStreamHealthChecksInstrument,
         FastStreamLoggingInstrument,
         FastStreamPrometheusInstrument,

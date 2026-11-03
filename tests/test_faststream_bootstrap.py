@@ -5,14 +5,17 @@ import sys
 import typing
 import uuid
 import warnings
+from types import TracebackType
 from unittest.mock import AsyncMock, patch
 
 import faststream.asgi
 import prometheus_client
 import pytest
+import sentry_sdk
 import structlog
 from faststream._internal.broker import BrokerUsecase
 from faststream._internal.logger.params_storage import ManualLoggerStorage
+from faststream.middlewares import BaseMiddleware
 from faststream.redis import RedisBroker, TestRedisBroker
 from faststream.redis.opentelemetry import RedisTelemetryMiddleware
 from faststream.redis.prometheus import RedisPrometheusMiddleware
@@ -122,6 +125,58 @@ async def test_faststream_bootstrap(broker: RedisBroker) -> None:
             assert response.status_code == status.HTTP_200_OK
 
     assert not bootstrapper.is_bootstrapped
+
+
+async def test_faststream_sentry_context_is_isolated_per_message(broker: RedisBroker) -> None:
+    transport = SentryTestTransport()
+    config = FastStreamConfig(
+        application=faststream.asgi.AsgiFastStream(broker),
+        sentry_dsn="https://testdsn@localhost/1",
+        sentry_additional_params={"transport": transport},
+    )
+    bootstrapper = FastStreamBootstrapper(bootstrap_config=config)
+
+    class CaptureFailure(BaseMiddleware[typing.Any, typing.Any]):
+        async def after_processed(
+            self,
+            exc_type: type[BaseException] | None = None,
+            exc_val: BaseException | None = None,
+            exc_tb: TracebackType | None = None,
+        ) -> None:
+            if exc_type is not None and exc_val is not None:
+                sentry_sdk.capture_exception((exc_type, exc_val, exc_tb))
+
+    broker.add_middleware(CaptureFailure)
+
+    @broker.subscriber("messages")
+    async def consume(message: str) -> None:
+        if message == "first":
+            sentry_sdk.set_tag("customer", "alice")
+            sentry_sdk.add_breadcrumb(message="first message breadcrumb")
+            return
+        sentry_sdk.set_tag("message", "second")
+        sentry_sdk.add_breadcrumb(message="second message breadcrumb")
+        msg = "second message failed"
+        raise ValueError(msg)
+
+    with sentry_sdk.isolation_scope():
+        bootstrapper.bootstrap()
+        try:
+            async with TestRedisBroker(broker):
+                await broker.publish("first", "messages")
+                with pytest.raises(ValueError, match="second message failed"):
+                    await broker.publish("second", "messages")
+        finally:
+            bootstrapper.teardown()
+
+    (event,) = [event for envelope in transport.mock_envelopes if (event := envelope.get_event())]
+    assert event["exception"]["values"][-1]["value"] == "second message failed"
+    assert event["tags"] == {"message": "second"}
+    breadcrumbs = event.get("breadcrumbs")
+    assert isinstance(breadcrumbs, dict)
+    messages = [crumb.get("message") for crumb in breadcrumbs["values"]]
+    assert "second message breadcrumb" in messages
+    assert "first message breadcrumb" not in messages
 
 
 async def test_faststream_bootstrap_health_check_wo_broker() -> None:
@@ -624,7 +679,7 @@ def _middleware_types(broker: BrokerUsecase[typing.Any, typing.Any, typing.Any])
 def _bootstrap_with_brokers(
     brokers: list[BrokerUsecase[typing.Any, typing.Any, typing.Any]], **overrides: object
 ) -> FastStreamBootstrapper:
-    config = dataclasses.replace(build_faststream_config(broker=brokers[0]), **overrides)
+    config = dataclasses.replace(build_faststream_config(broker=brokers[0]), sentry_dsn=None, **overrides)
     for extra in brokers[1:]:
         config.application.add_broker(extra)
     bootstrapper = FastStreamBootstrapper(bootstrap_config=config)
