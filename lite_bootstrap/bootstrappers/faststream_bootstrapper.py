@@ -114,6 +114,11 @@ def _middleware_targets(
     return targets
 
 
+def _route_path_variants(path: str) -> tuple[str, ...]:
+    alternate_path = path.removesuffix("/") if path.endswith("/") else f"{path}/"
+    return (path, alternate_path) if alternate_path else (path,)
+
+
 def _make_asgi_faststream() -> "AsgiFastStream":
     return AsgiFastStream()
 
@@ -154,7 +159,14 @@ class FastStreamHealthChecksInstrument(HealthChecksInstrument[FastStreamConfig])
         if config.opentelemetry_generate_health_check_spans and import_checker.is_opentelemetry_installed:
             check_health = tracer.start_as_current_span(f"GET {config.health_checks_path}")(check_health)
 
-        config.application.mount(config.health_checks_path, check_health)
+        for path in _route_path_variants(config.health_checks_path):
+            if (
+                path != config.health_checks_path
+                and path == config.prometheus_metrics_path
+                and FastStreamPrometheusInstrument.dependencies_installed()
+            ):
+                continue
+            config.application.mount(path, check_health)
 
     async def _define_framework_health_status(self) -> bool:
         config = self.bootstrap_config
@@ -236,9 +248,9 @@ class FastStreamPrometheusInstrument(PrometheusInstrument[FastStreamConfig]):
 
     def bootstrap(self) -> None:
         config = self.bootstrap_config
-        config.application.mount(
-            config.prometheus_metrics_path, prometheus_client.make_asgi_app(self.collector_registry)
-        )
+        metrics_app = prometheus_client.make_asgi_app(self.collector_registry)
+        for path in _route_path_variants(config.prometheus_metrics_path):
+            config.application.mount(path, metrics_app)
         if config.prometheus_middleware_cls and config.application.brokers:
             for broker, middleware_cls in _middleware_targets(
                 config.application.brokers, config.prometheus_middleware_cls, "prometheus_middleware_cls"

@@ -127,6 +127,37 @@ async def test_faststream_bootstrap(broker: RedisBroker) -> None:
     assert not bootstrapper.is_bootstrapped
 
 
+@pytest.mark.parametrize("path", ["/health", "/health/", "/metrics", "/metrics/"])
+async def test_faststream_route_paths_accept_both_slash_forms(broker: RedisBroker, path: str) -> None:
+    config = dataclasses.replace(
+        build_faststream_config(broker=broker), health_checks_path="/health/", prometheus_metrics_path="/metrics"
+    )
+    application = FastStreamBootstrapper(bootstrap_config=config).bootstrap()
+
+    with TestClient(app=application) as test_client:
+        async with TestRedisBroker(broker):
+            response = test_client.get(path, follow_redirects=False)
+
+    assert response.status_code == status.HTTP_200_OK
+
+
+async def test_faststream_configured_metrics_path_takes_precedence_over_health_alias(broker: RedisBroker) -> None:
+    config = dataclasses.replace(
+        build_faststream_config(broker=broker), health_checks_path="/health/", prometheus_metrics_path="/health"
+    )
+    application = FastStreamBootstrapper(bootstrap_config=config).bootstrap()
+
+    with TestClient(app=application) as test_client:
+        async with TestRedisBroker(broker):
+            response = test_client.get("/health")
+            health_response = test_client.get("/health/")
+
+    assert health_response.status_code == status.HTTP_200_OK
+    assert health_response.json()["health_status"] is True
+    assert response.status_code == status.HTTP_200_OK
+    assert response.headers["content-type"].startswith("text/plain")
+
+
 async def test_faststream_sentry_context_is_isolated_per_message(broker: RedisBroker) -> None:
     transport = SentryTestTransport()
     config = FastStreamConfig(

@@ -51,6 +51,13 @@ application = bootstrapper.bootstrap()
 
 Read more about available configuration options [here](../introduction/configuration.md).
 
+## Health and metrics routes
+
+When configured, FastStream health and Prometheus metrics routes accept requests with or without
+the trailing slash. For example, both `/health` and `/health/` reach the same health check, and a
+metrics path configured as `/metrics` also serves `/metrics/`. If the two configured paths differ only by a trailing slash, each
+route keeps its explicitly configured path.
+
 ## Multiple brokers
 
 Tracing, metrics and logging cover every broker the application has when `bootstrap()` runs. Add
