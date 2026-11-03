@@ -284,7 +284,7 @@ def test_faststream_bootstrapper_not_ready() -> None:
 @pytest.mark.parametrize(
     "package_name",
     [
-        "opentelemetry",
+        "opentelemetry.trace",
         "sentry_sdk",
         "structlog",
         "prometheus_client",
@@ -292,7 +292,7 @@ def test_faststream_bootstrapper_not_ready() -> None:
 )
 def test_faststream_bootstrapper_with_missing_instrument_dependency(broker: RedisBroker, package_name: str) -> None:
     bootstrap_config = build_faststream_config(broker=broker)
-    with emulate_package_missing(package_name), pytest.warns(UserWarning, match=package_name):
+    with emulate_package_missing(package_name), pytest.warns(UserWarning, match=package_name.removesuffix(".trace")):
         FastStreamBootstrapper(bootstrap_config=bootstrap_config)
 
 
@@ -364,7 +364,7 @@ def test_faststream_bootstrap_without_opentelemetry(broker: RedisBroker) -> None
         build_faststream_config(broker=broker), opentelemetry_generate_health_check_spans=True
     )
     with emulate_package_missing_with_module_reload(
-        "opentelemetry",
+        "opentelemetry.trace",
         ["lite_bootstrap.bootstrappers.faststream_bootstrapper"],
     ):
         with pytest.warns(UserWarning, match="opentelemetry"):

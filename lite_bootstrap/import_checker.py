@@ -14,7 +14,7 @@ def _safe_find_spec(module_name: str) -> bool:
         return False
 
 
-is_opentelemetry_installed = find_spec("opentelemetry") is not None
+is_opentelemetry_installed = _safe_find_spec("opentelemetry.trace")
 # opentelemetry-api provides the `opentelemetry` namespace (trace, metrics) without the
 # sdk. The OTel instrument imports opentelemetry.sdk.* and needs this stricter check;
 # api-only consumers (logging trace-injection, framework get_tracer_provider) use the

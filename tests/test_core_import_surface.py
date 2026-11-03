@@ -1,6 +1,10 @@
 import ast
 import pathlib
+import shutil
+import subprocess
 import sys
+
+import typing_extensions
 
 import lite_bootstrap
 
@@ -46,3 +50,48 @@ def test_importing_lite_bootstrap_needs_only_the_stdlib_and_typing_extensions() 
     }
 
     assert offenders == {}
+
+
+def test_import_with_bare_opentelemetry_namespace(tmp_path: pathlib.Path) -> None:
+    (tmp_path / "opentelemetry").mkdir()
+    shutil.copyfile(typing_extensions.__file__, tmp_path / "typing_extensions.py")
+
+    result = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            "-I",
+            "-S",
+            "-c",
+            """
+import sys
+from importlib.util import find_spec
+
+sys.path.extend(sys.argv[1:])
+assert find_spec("opentelemetry") is not None
+assert find_spec("opentelemetry.trace") is None
+
+import lite_bootstrap
+from lite_bootstrap.bootstrappers.fastapi_bootstrapper import FastAPIOpenTelemetryInstrument
+from lite_bootstrap.bootstrappers.fastmcp_bootstrapper import FastMcpOpenTelemetryInstrument
+from lite_bootstrap.bootstrappers.faststream_bootstrapper import FastStreamOpenTelemetryInstrument
+from lite_bootstrap.bootstrappers.litestar_bootstrapper import LitestarOpenTelemetryInstrument
+from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryInstrument
+
+for instrument in (
+    OpenTelemetryInstrument,
+    FastAPIOpenTelemetryInstrument,
+    FastMcpOpenTelemetryInstrument,
+    FastStreamOpenTelemetryInstrument,
+    LitestarOpenTelemetryInstrument,
+):
+    assert not instrument.dependencies_installed(), instrument.__name__
+""",
+            str(tmp_path),
+            str(PACKAGE_ROOT.parent),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr

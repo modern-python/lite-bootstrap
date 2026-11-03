@@ -143,7 +143,7 @@ def test_litestar_bootstrapper_not_ready() -> None:
 @pytest.mark.parametrize(
     "package_name",
     [
-        "opentelemetry",
+        "opentelemetry.trace",
         "sentry_sdk",
         "structlog",
         "prometheus_client",
@@ -152,7 +152,7 @@ def test_litestar_bootstrapper_not_ready() -> None:
 def test_litestar_bootstrapper_with_missing_instrument_dependency(
     litestar_config: LitestarConfig, package_name: str
 ) -> None:
-    with emulate_package_missing(package_name), pytest.warns(UserWarning, match=package_name):
+    with emulate_package_missing(package_name), pytest.warns(UserWarning, match=package_name.removesuffix(".trace")):
         LitestarBootstrapper(bootstrap_config=litestar_config)
 
 
