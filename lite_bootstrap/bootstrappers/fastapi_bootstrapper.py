@@ -52,7 +52,11 @@ if import_checker.is_opentelemetry_installed:
     from opentelemetry.trace import get_tracer_provider
 
 if import_checker.is_fastapi_opentelemetry_installed:
+    from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+    from starlette.middleware.errors import ServerErrorMiddleware
+
+    from lite_bootstrap.helpers.opentelemetry_asgi import ExcludeInfrastructureTelemetry
 
 if import_checker.is_prometheus_fastapi_instrumentator_installed:
     from prometheus_fastapi_instrumentator import Instrumentator
@@ -213,6 +217,21 @@ class FastAPIOpenTelemetryInstrument(OpenTelemetryInstrument[FastAPIConfig]):
             excluded_urls=",".join(self._build_excluded_url_patterns("FASTAPI")),
             exclude_spans=self.bootstrap_config.opentelemetry_exclude_spans,
         )
+        self._install_infrastructure_exclusions()
+
+    def _install_infrastructure_exclusions(self) -> None:
+        app = self.bootstrap_config.app
+        build_stack = app.build_middleware_stack
+        excluded_paths = self._build_infrastructure_excluded_paths()
+
+        def build_middleware_stack() -> "ASGIApp":
+            stack = build_stack()
+            # FastAPIInstrumentor places its OTel middleware inside an outer error handler.
+            if isinstance(stack, ServerErrorMiddleware) and isinstance(stack.app, OpenTelemetryMiddleware):
+                stack.app = ExcludeInfrastructureTelemetry(stack.app, excluded_paths)
+            return stack
+
+        app.build_middleware_stack = build_middleware_stack  # ty: ignore[invalid-assignment]
 
     def teardown(self) -> None:
         FastAPIInstrumentor.uninstrument_app(self.bootstrap_config.app)

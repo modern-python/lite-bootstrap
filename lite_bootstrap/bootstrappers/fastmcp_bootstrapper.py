@@ -31,11 +31,12 @@ if import_checker.is_fastmcp_installed:
     from starlette.responses import JSONResponse, Response
 
 if import_checker.is_fastmcp_opentelemetry_installed:
-    from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
     from opentelemetry.metrics import get_meter_provider
     from opentelemetry.trace import get_tracer_provider
     from starlette.routing import BaseRoute, Match, Mount, Route
     from starlette.types import Scope
+
+    from lite_bootstrap.helpers.opentelemetry_asgi import build_opentelemetry_middleware
 
 if import_checker.is_fastmcp_installed and import_checker.is_sentry_installed:
     from sentry_sdk.integrations.starlette import StarletteIntegration
@@ -233,7 +234,8 @@ class FastMcpOpenTelemetryInstrument(OpenTelemetryInstrument[FastMcpConfig]):
         if getattr(http_application, _OPENTELEMETRY_INSTRUMENTED_MARKER, False):
             return http_application
         http_application.add_middleware(
-            OpenTelemetryMiddleware,
+            build_opentelemetry_middleware,
+            infrastructure_paths=self._build_infrastructure_excluded_paths(),
             default_span_details=functools.partial(
                 build_fastmcp_route_details_from_scope, routes=http_application.routes
             ),

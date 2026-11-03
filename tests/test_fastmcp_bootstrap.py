@@ -12,7 +12,6 @@ from fastmcp.exceptions import ToolError
 from fastmcp.server.context import Context
 from fastmcp.server.http import StarletteWithLifespan
 from fastmcp.server.middleware import MiddlewareContext
-from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace import TracerProvider as SDKTracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -31,6 +30,7 @@ from lite_bootstrap.bootstrappers.fastmcp_bootstrapper import (
     _postprocess_http_apps,
 )
 from lite_bootstrap.exceptions import ConfigurationError
+from lite_bootstrap.helpers.opentelemetry_asgi import build_opentelemetry_middleware
 from lite_bootstrap.instruments.healthchecks_instrument import HealthProbe
 from tests.conftest import (
     HEALTH_PROBE_CASES,
@@ -435,7 +435,7 @@ def test_second_fastmcp_bootstrapper_bootstrap_raises() -> None:
 
 
 def _count_opentelemetry_middlewares(http_application: Starlette) -> int:
-    return sum(middleware.cls is OpenTelemetryMiddleware for middleware in http_application.user_middleware)
+    return sum(middleware.cls is build_opentelemetry_middleware for middleware in http_application.user_middleware)
 
 
 def _server_spans(exporter: InMemorySpanExporter) -> list[ReadableSpan]:

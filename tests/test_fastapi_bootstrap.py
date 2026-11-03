@@ -597,7 +597,9 @@ def test_fastapi_prometheus_still_serves_metrics_while_opentelemetry_records_htt
         bootstrapper.teardown()
 
 
-def _server_span_names_for(config: FastAPIConfig, paths: typing.Iterable[str]) -> list[str]:
+def _server_span_names_for(
+    config: FastAPIConfig, paths: typing.Iterable[str], *, host: str = "testserver", root_path: str = ""
+) -> list[str]:
     application = config.app
 
     @application.get("/api/custom-metrics/report")
@@ -619,9 +621,9 @@ def _server_span_names_for(config: FastAPIConfig, paths: typing.Iterable[str]) -
     exporter = InMemorySpanExporter()
     tracer_provider.add_span_processor(SimpleSpanProcessor(exporter))
     try:
-        with TestClient(bootstrapped_application) as client:
+        with TestClient(bootstrapped_application, root_path=root_path) as client:
             for path in paths:
-                client.get(path, follow_redirects=False)
+                client.get(path, headers={"host": host}, follow_redirects=False)
     finally:
         bootstrapper.teardown()
     return [span.name for span in exporter.get_finished_spans() if span.kind == SpanKind.SERVER]
@@ -647,6 +649,18 @@ def test_fastapi_otel_leaves_the_health_check_untraced_by_default() -> None:
     )
 
     assert _server_span_names_for(config, ["/custom-health/", "/custom-healthy"]) == ["GET /custom-healthy"]
+
+
+def test_fastapi_otel_host_header_cannot_exclude_a_work_request(fastapi_config: FastAPIConfig) -> None:
+    assert _server_span_names_for(fastapi_config, ["/custom-healthy"], host="x/custom-health") == [
+        "GET /custom-healthy"
+    ]
+
+
+def test_fastapi_otel_excludes_health_under_root_path(fastapi_config: FastAPIConfig) -> None:
+    assert _server_span_names_for(fastapi_config, ["/api/custom-health/", "/api/custom-healthy"], root_path="/api") == [
+        "GET /custom-healthy"
+    ]
 
 
 @pytest.mark.parametrize("environment_variable", ["OTEL_PYTHON_FASTAPI_EXCLUDED_URLS", "OTEL_PYTHON_EXCLUDED_URLS"])
