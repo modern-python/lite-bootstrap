@@ -2,13 +2,14 @@ import contextlib
 import typing
 import uuid
 import warnings
-from collections.abc import Generator
+from collections.abc import AsyncGenerator, Generator
 from unittest.mock import MagicMock
 
 import prometheus_client
 import pytest
 from fastmcp import Client, FastMCP
 from fastmcp.exceptions import ToolError
+from fastmcp.server.context import Context
 from fastmcp.server.http import StarletteWithLifespan
 from fastmcp.server.middleware import MiddlewareContext
 from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
@@ -85,6 +86,35 @@ async def _drive_asgi_lifespan(application: typing.Any) -> list[dict[str, typing
 
     await application({"type": "lifespan", "asgi": {"version": "3.0"}}, receive, send)
     return outbox
+
+
+async def test_fastmcp_exports_user_shutdown_span_and_preserves_lifespan_result() -> None:
+    @contextlib.asynccontextmanager
+    async def lifespan(_app: FastMCP) -> AsyncGenerator[dict[str, str]]:
+        yield {"service": "ready"}
+        with get_tracer_provider().get_tracer(__name__).start_as_current_span("user-shutdown"):
+            pass
+
+    app = FastMCP(lifespan=lifespan)
+
+    @app.tool
+    def read_state(ctx: Context) -> str:
+        return ctx.lifespan_context["service"]
+
+    bootstrapper = FastMcpBootstrapper(
+        bootstrap_config=FastMcpConfig(application=app, opentelemetry_log_traces=True),
+    )
+    application = bootstrapper.bootstrap()
+    provider = get_tracer_provider()
+    assert isinstance(provider, SDKTracerProvider)
+    exporter = InMemorySpanExporter()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+
+    async with Client(application) as client:
+        assert (await client.call_tool("read_state")).data == "ready"
+
+    assert "user-shutdown" in [span.name for span in exporter.get_finished_spans()]
+    assert not bootstrapper.is_bootstrapped
 
 
 async def test_fastmcp_teardown_runs_via_asgi_lifespan() -> None:
