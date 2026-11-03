@@ -348,7 +348,7 @@ Additional parameters:
 - `logging_enabled` - whether to configure structlog (default: `True`).
 - `logging_log_level`
 - `logging_extra_processors`
-- `logging_unset_handlers`
+- `logging_unset_handlers` - logger names whose handlers are cleared at bootstrap. These removals are permanent.
 - `logging_record_filters` - standard-library `logging.Filter` instances to attach to named loggers (see below).
 - `logging_time_stamper` - a `structlog.processors.TimeStamper` instance controlling timestamp format (default: `TimeStamper(fmt="iso")`). Pass a custom instance to change the format or enable UTC:
 
@@ -360,6 +360,9 @@ config = FastAPIConfig(
     logging_time_stamper=structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S", utc=True),
 )
 ```
+
+Teardown removes and closes the root handler installed by lite-bootstrap and restores the root
+logger level from before bootstrap. Other root handlers stay attached.
 
 ### Filtering standard-library log records
 

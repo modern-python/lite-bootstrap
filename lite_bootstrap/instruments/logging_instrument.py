@@ -83,6 +83,8 @@ LoggingConfigT = typing.TypeVar("LoggingConfigT", bound=LoggingConfig)
 class LoggingInstrument(BaseInstrument[LoggingConfigT]):
     not_configured_reason = "logging_enabled is False"
     missing_dependency_message = "structlog is not installed"
+    _root_handler: logging.Handler | None = dataclasses.field(default=None, init=False, repr=False, compare=False)
+    _previous_root_level: int | None = dataclasses.field(default=None, init=False, repr=False, compare=False)
     _attached_filters: list[tuple[logging.Logger, logging.Filter]] = dataclasses.field(
         default_factory=list, init=False, repr=False, compare=False
     )
@@ -180,7 +182,9 @@ class LoggingInstrument(BaseInstrument[LoggingConfigT]):
                 logger=root_logger,
             )
         )
+        self._previous_root_level = root_logger.level
         root_logger.addHandler(stream_handler)
+        self._root_handler = stream_handler
         root_logger.setLevel(self.bootstrap_config.logging_log_level)
 
     def _attach_record_filters(self) -> None:
@@ -204,24 +208,23 @@ class LoggingInstrument(BaseInstrument[LoggingConfigT]):
         self._attach_record_filters()
 
     def teardown(self) -> None:
-        """Reset structlog and root logger.
+        """Reset structlog, remove the installed handler and filters, and restore the root level.
 
-        Root logger level is unconditionally set to WARNING; pre-existing user configuration is overwritten.
-        Filters from ``logging_record_filters`` are removed one pair at a time, so a filter the
-        application or another library put on the same logger survives.
-
-        Best-effort cleanup: errors from individual ``handler.close()`` calls are collected and
-        re-raised together via :class:`~lite_bootstrap.exceptions.TeardownError` after the rest of
-        teardown completes, so no single misbehaving handler keeps the others open.
+        Handler removals configured through ``logging_unset_handlers`` are permanent.
+        Errors from closing the installed handler are reported after the rest of teardown.
         """
         structlog.reset_defaults()
         root_logger = logging.getLogger()
         with collect_teardown_errors() as teardown_errors:
             try:
-                for h in root_logger.handlers[:]:
-                    root_logger.removeHandler(h)
-                    with teardown_errors.capture(type(h).__name__):
-                        h.close()
-                root_logger.setLevel(logging.WARNING)
+                if self._root_handler is not None:
+                    handler = self._root_handler
+                    self._root_handler = None
+                    root_logger.removeHandler(handler)
+                    with teardown_errors.capture(type(handler).__name__):
+                        handler.close()
+                if self._previous_root_level is not None:
+                    root_logger.setLevel(self._previous_root_level)
+                    self._previous_root_level = None
             finally:
                 self._detach_record_filters()

@@ -112,17 +112,41 @@ def test_logging_instrument_lifecycle_replay(logging_mock: LoggingMock) -> None:
         instrument.teardown()
 
 
+def test_logging_instrument_teardown_restores_root_logger() -> None:
+    root_logger = logging.getLogger()
+    original_handlers = root_logger.handlers[:]
+    original_level = root_logger.level
+    existing_handler = logging.StreamHandler(StringIO())
+    root_logger.addHandler(existing_handler)
+    root_logger.setLevel(logging.DEBUG)
+    instrument = LoggingInstrument(bootstrap_config=LoggingConfig())
+    try:
+        instrument.bootstrap()
+        (owned_handler,) = set(root_logger.handlers) - {*original_handlers, existing_handler}
+        with patch.object(existing_handler, "close", wraps=existing_handler.close) as close:
+            instrument.teardown()
+            close.assert_not_called()
+
+        assert existing_handler in root_logger.handlers
+        assert root_logger.level == logging.DEBUG
+        assert owned_handler not in root_logger.handlers
+    finally:
+        for handler in original_handlers:
+            root_logger.addHandler(handler)
+        root_logger.removeHandler(existing_handler)
+        existing_handler.close()
+        root_logger.setLevel(original_level)
+
+
 def test_logging_instrument_teardown_aggregates_handler_close_errors() -> None:
     instrument = LoggingInstrument(
         bootstrap_config=LoggingConfig(),
     )
-    instrument.bootstrap()
     root_logger = logging.getLogger()
-
-    # Find the StreamHandler added by _configure_foreign_loggers and patch its close.
-    bootstrap_added = [h for h in root_logger.handlers if isinstance(h, logging.StreamHandler)]
-    assert bootstrap_added, "bootstrap should have added at least one StreamHandler to root"
-    target_handler = bootstrap_added[0]
+    previous_level = root_logger.level
+    existing_handlers = set(root_logger.handlers)
+    instrument.bootstrap()
+    (target_handler,) = set(root_logger.handlers) - existing_handlers
 
     with (
         patch.object(target_handler, "close", side_effect=RuntimeError("boom")),
@@ -132,9 +156,7 @@ def test_logging_instrument_teardown_aggregates_handler_close_errors() -> None:
     assert isinstance(excinfo.value.__cause__, RuntimeError)
     assert any("boom" in str(err) for _, err in excinfo.value.errors)
 
-    # After teardown despite the raise, post-loop cleanup must have completed:
-    assert root_logger.level == logging.WARNING
-    # And the broken handler must have been removed from root despite raising.
+    assert root_logger.level == previous_level
     assert target_handler not in root_logger.handlers
 
 
