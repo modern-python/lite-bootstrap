@@ -16,6 +16,7 @@ if typing.TYPE_CHECKING:
 
 if import_checker.is_sentry_installed:
     import sentry_sdk
+    from sentry_sdk.integrations._wsgi_common import request_body_within_bounds
     from sentry_sdk.integrations.logging import LoggingIntegration
     from sentry_sdk.scrubber import EventScrubber
     from sentry_sdk.serializer import serialize
@@ -115,6 +116,17 @@ class SentryLeanCaptureConfig(SentryConfig):
 
 SENTRY_FAILED_REQUEST_STATUS_CODES: typing.Final = range(500, 600)
 _SENTRY_TRACE_HEADERS: typing.Final = frozenset({b"sentry-trace", b"baggage"})
+
+
+def should_collect_request_body(content_length: str | None) -> bool:
+    client = sentry_sdk.get_client()
+    if "incoming_request" not in client.options["data_collection"]["http_bodies"]:
+        return False
+    try:
+        size = int(content_length or "0")
+    except ValueError:
+        size = 0
+    return request_body_within_bounds(client, size)
 
 
 def read_sentry_trace_headers(headers: typing.Iterable[tuple[bytes, bytes]]) -> dict[str, str]:

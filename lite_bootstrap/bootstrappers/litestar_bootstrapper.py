@@ -25,6 +25,7 @@ from lite_bootstrap.instruments.sentry_instrument import (
     capture_request_exception,
     disable_sentry_integrations,
     read_sentry_trace_headers,
+    should_collect_request_body,
     warn_about_sentry_integrations_installed_earlier,
 )
 from lite_bootstrap.instruments.swagger_instrument import SwaggerConfig, SwaggerInstrument
@@ -71,6 +72,7 @@ if import_checker.is_litestar_installed and import_checker.is_sentry_installed:
     from sentry_sdk.data_collection import _apply_key_value_collection_filtering
     from sentry_sdk.integrations import logging as sentry_logging
     from sentry_sdk.integrations._asgi_common import _get_request_data, _RootPathInPath
+    from sentry_sdk.integrations._wsgi_common import request_body_within_bounds
     from sentry_sdk.integrations.litestar import LitestarIntegration, retrieve_user_from_scope
     from sentry_sdk.utils import transaction_from_function
 
@@ -142,6 +144,8 @@ class _PendingSentryException:
 def _read_parsed_request_body(scope: "Scope") -> typing.Any:  # noqa: ANN401
     """Return the body a handler already read, without reading the stream."""
     state: typing.Final = ScopeState.from_scope(scope)
+    if state.body is not Empty and not request_body_within_bounds(sentry_sdk.get_client(), len(state.body)):
+        return None
     if state.json is not Empty:
         return state.json
     if state.form is not Empty:
@@ -154,11 +158,13 @@ def _read_parsed_request_body(scope: "Scope") -> typing.Any:  # noqa: ANN401
 def _build_sentry_request_data(scope: "Scope") -> dict[str, typing.Any]:
     request_data: typing.Final = _get_request_data(scope, root_path_in_path=_RootPathInPath.EXCLUDED)
     data_collection: typing.Final = sentry_sdk.get_client().options["data_collection"]
-    if cookies := _apply_key_value_collection_filtering(
-        items=ASGIConnection(scope).cookies, behaviour=data_collection["cookies"]
-    ):
+    connection = ASGIConnection(scope)
+    if cookies := _apply_key_value_collection_filtering(items=connection.cookies, behaviour=data_collection["cookies"]):
         request_data["cookies"] = cookies
-    if "incoming_request" in data_collection["http_bodies"] and (body := _read_parsed_request_body(scope)) is not None:
+    if (
+        should_collect_request_body(connection.headers.get("content-length"))
+        and (body := _read_parsed_request_body(scope)) is not None
+    ):
         request_data["data"] = body
     return request_data
 

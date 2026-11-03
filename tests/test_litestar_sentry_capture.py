@@ -346,6 +346,22 @@ def test_lean_capture_attaches_only_a_body_the_handler_already_read(
     assert event["request"].get("data") == expected_data
 
 
+@pytest.mark.parametrize(("policy", "size"), [("never", 4), ("small", 1001)])
+def test_lean_capture_honors_body_limit(sentry_mock: SentryTestTransport, policy: str, size: int) -> None:
+    params = {
+        "data_collection": {**DEFAULT_DATA_COLLECTION, "http_bodies": ["incoming_request"]},
+        "max_request_body_size": policy,
+    }
+    application = LitestarBootstrapper(
+        bootstrap_config=_build_config(sentry_mock, sentry_additional_params=params)
+    ).bootstrap()
+    with TestClient(app=application, raise_server_exceptions=False) as test_client:
+        test_client.post("/read-raw-body-then-boom", content=b"x" * size)
+
+    [event] = _error_events(sentry_mock)
+    assert "data" not in event["request"]
+
+
 async def test_lean_capture_continues_an_incoming_sentry_trace(sentry_mock: SentryTestTransport) -> None:
     # Called without TestClient: sentry-sdk's httpx integration would overwrite the outgoing sentry-trace.
     trace_id = "771a43a4192642f0b136d5159a501700"
