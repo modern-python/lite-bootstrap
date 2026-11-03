@@ -35,7 +35,6 @@ if typing.TYPE_CHECKING:
 if import_checker.is_fastapi_installed:
     import fastapi
     from fastapi.middleware.cors import CORSMiddleware
-    from fastapi.routing import _merge_lifespan_context
 
 if import_checker.is_fastapi_installed and import_checker.is_sentry_installed:
     from sentry_sdk.integrations.fastapi import FastApiIntegration
@@ -299,11 +298,14 @@ class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI", FastAPIConfig]):
         self._attach_teardown_once(application, lambda: self._wrap_lifespan(application))
 
     def _wrap_lifespan(self, application: "fastapi.FastAPI") -> None:
-        old_lifespan_manager = application.router.lifespan_context
-        application.router.lifespan_context = _merge_lifespan_context(
-            old_lifespan_manager,
-            self.lifespan_manager,
-        )
+        user_lifespan = application.router.lifespan_context
+
+        @contextlib.asynccontextmanager
+        async def merged_lifespan(app: "fastapi.FastAPI") -> AsyncGenerator[Mapping[str, typing.Any]]:
+            async with self.lifespan_manager(app) as bootstrap_state, user_lifespan(app) as user_state:
+                yield {**bootstrap_state, **(user_state or {})}
+
+        application.router.lifespan_context = merged_lifespan
 
     def is_ready(self) -> bool:
         return import_checker.is_fastapi_installed

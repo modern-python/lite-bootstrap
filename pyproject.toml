@@ -82,8 +82,6 @@ free-all = [
     "lite-bootstrap[sentry,otl,logging,pyroscope]",
 ]
 fastapi = [
-    # >=0.112.2 for fastapi.routing._merge_lifespan_context, which FastAPIBootstrapper._wrap_lifespan
-    # uses to chain teardown onto the user's lifespan. Private, so it can move without a deprecation.
     "fastapi>=0.112.2",
     # fastapi 0.112.2 requires typing-extensions>=4.8.
     "typing-extensions>=4.8",

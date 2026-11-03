@@ -5,7 +5,7 @@ import logging
 import typing
 import uuid
 import warnings
-from collections.abc import Generator
+from collections.abc import AsyncGenerator, Generator
 from unittest.mock import patch
 
 import fastapi
@@ -62,6 +62,33 @@ def fastapi_config() -> FastAPIConfig:
         sentry_additional_params={"transport": SentryTestTransport()},
         swagger_offline_docs=True,
     )
+
+
+def test_fastapi_exports_user_shutdown_span_and_preserves_lifespan_state() -> None:
+    @contextlib.asynccontextmanager
+    async def lifespan(_app: fastapi.FastAPI) -> AsyncGenerator[dict[str, str]]:
+        yield {"service": "ready"}
+        with get_tracer_provider().get_tracer(__name__).start_as_current_span("user-shutdown"):
+            pass
+
+    app = fastapi.FastAPI(lifespan=lifespan)
+
+    @app.get("/state")
+    async def read_state(request: fastapi.Request) -> str:
+        return request.state.service
+
+    bootstrapper = FastAPIBootstrapper(bootstrap_config=FastAPIConfig(application=app, opentelemetry_log_traces=True))
+    application = bootstrapper.bootstrap()
+    provider = get_tracer_provider()
+    assert isinstance(provider, SDKTracerProvider)
+    exporter = InMemorySpanExporter()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+
+    with TestClient(application) as client:
+        assert client.get("/state").json() == "ready"
+
+    assert "user-shutdown" in [span.name for span in exporter.get_finished_spans()]
+    assert not bootstrapper.is_bootstrapped
 
 
 def _instrument_app_kwargs(config: FastAPIConfig) -> dict[str, typing.Any]:
