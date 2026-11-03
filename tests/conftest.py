@@ -263,6 +263,15 @@ def prometheus_recorded_path(path: str) -> bool:
     return f'"{path}"' in prometheus_client.generate_latest().decode()
 
 
+def prometheus_request_count(metric_name: str, path_label: str, path: str) -> float:
+    return sum(
+        sample.value
+        for metric in prometheus_client.REGISTRY.collect()
+        for sample in metric.samples
+        if sample.name == metric_name and sample.labels.get(path_label) == path
+    )
+
+
 def unregister_prometheus_request_metrics() -> None:
     """Unregister the instrumentator's request metrics: a second registration is skipped, not reused."""
     registered_collectors: typing.Final = dict(prometheus_client.REGISTRY._collector_to_names)  # noqa: SLF001

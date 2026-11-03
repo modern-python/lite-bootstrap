@@ -49,6 +49,7 @@ from tests.conftest import (
     in_memory_opentelemetry_metric_reader,
     opentelemetry_recorded_http_server_metrics,
     prometheus_recorded_path,
+    prometheus_request_count,
 )
 
 
@@ -658,6 +659,32 @@ def _bootstrap_with_span_exporter(config: LitestarConfig) -> tuple[litestar.Lite
 
 def _server_spans(exporter: InMemorySpanExporter) -> list[ReadableSpan]:
     return [span for span in exporter.get_finished_spans() if span.kind == SpanKind.SERVER]
+
+
+def test_litestar_prometheus_excludes_infrastructure_and_user_paths() -> None:
+    suffix = uuid.uuid4().hex
+    normal_path = f"/health-{suffix}/report"
+    excluded_path = f"/excluded-{suffix}"
+    config = LitestarConfig(
+        health_checks_path=f"/health-{suffix}",
+        prometheus_metrics_path=f"/metrics-{suffix}",
+        prometheus_additional_params={"exclude": f"^{excluded_path}$"},
+    )
+
+    async def items() -> list[int]:
+        return [1]
+
+    config.application_config.route_handlers.extend(
+        [litestar.get(normal_path)(items), litestar.get(excluded_path)(items)]
+    )
+    application = LitestarBootstrapper(bootstrap_config=config).bootstrap()
+    with TestClient(application) as client:
+        for path in (config.health_checks_path, config.prometheus_metrics_path, excluded_path, normal_path):
+            assert client.get(path).is_success
+
+    for path in (config.health_checks_path, config.prometheus_metrics_path, excluded_path):
+        assert prometheus_request_count("litestar_requests_total", "path", path) == 0
+    assert prometheus_request_count("litestar_requests_total", "path", normal_path) == 1
 
 
 def _http_metric_sets_one_request_moves(config: LitestarConfig) -> tuple[bool, bool]:

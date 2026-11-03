@@ -250,7 +250,12 @@ class FastAPIPrometheusInstrument(PrometheusInstrument[FastAPIConfig]):
     def bootstrap(self) -> None:
         config = self.bootstrap_config
         application = config.app
-        instrumentator = Instrumentator(**config.prometheus_instrumentator_additional_params)
+        instrumentator_params = dict(config.prometheus_instrumentator_additional_params)
+        instrumentator_params["excluded_handlers"] = [
+            *instrumentator_params.get("excluded_handlers", []),
+            *self.infrastructure_excluded_patterns(),
+        ]
+        instrumentator = Instrumentator(**instrumentator_params)
         if config.is_prometheus_http_metrics_on(
             opentelemetry_records_http_metrics=FastAPIOpenTelemetryInstrument.is_recording_metrics(config)
         ):

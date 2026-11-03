@@ -1,6 +1,7 @@
 """Prometheus config and readiness check; framework-specific bootstrap lives in the bootstrapper subclasses."""
 
 import dataclasses
+import re
 import typing
 
 from lite_bootstrap.exceptions import ConfigurationError
@@ -42,3 +43,8 @@ class PrometheusInstrument(BaseInstrument[PrometheusConfigT]):
     @classmethod
     def is_configured(cls, bootstrap_config: "PrometheusConfig") -> bool:
         return bool(bootstrap_config.prometheus_metrics_path)
+
+    def infrastructure_excluded_patterns(self) -> list[str]:
+        config = self.bootstrap_config
+        paths = (getattr(config, "health_checks_path", ""), config.prometheus_metrics_path)
+        return [rf"^{re.escape(path.rstrip('/'))}/?$" for path in paths if path]
