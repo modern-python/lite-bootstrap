@@ -1,5 +1,6 @@
 import copy
 import dataclasses
+import json
 import logging
 import typing
 import uuid
@@ -553,6 +554,40 @@ def test_structlog_envelope_redacts_kwargs_and_excludes_skipped_breadcrumbs(
         empty = second.get_event()
         assert empty is not None
         assert empty["logentry"] == {"message": "", "formatted": "", "params": []}
+    finally:
+        logs.teardown()
+        sentry.teardown()
+
+
+def test_structlog_stored_exception_reaches_sentry_and_stdout(
+    minimal_sentry_config: SentryConfig,
+    sentry_mock: SentryTestTransport,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    sentry = SentryInstrument(bootstrap_config=minimal_sentry_config)
+    logs = LoggingInstrument(bootstrap_config=LoggingConfig())
+    sentry.bootstrap()
+    logs.bootstrap()
+    try:
+        try:
+            int("original stored error")
+        except ValueError as exc:
+            stored = exc
+
+        logger.error("stored exception", exc_info=stored, component="worker")
+
+        line = json.loads(capsys.readouterr().out.splitlines()[-1])
+        assert "Traceback (most recent call last)" in line["exception"]
+        assert "ValueError: invalid literal for int() with base 10: 'original stored error'" in line["exception"]
+        event = sentry_mock.mock_envelopes[0].get_event()
+        assert event is not None
+        (exception,) = event["exception"]["values"]
+        assert exception["type"] == "ValueError"
+        assert exception["value"] == "invalid literal for int() with base 10: 'original stored error'"
+        assert exception["stacktrace"]["frames"][-1]["function"] == (
+            "test_structlog_stored_exception_reaches_sentry_and_stdout"
+        )
+        assert event["contexts"]["structlog"] == {"component": "worker"}
     finally:
         logs.teardown()
         sentry.teardown()
