@@ -19,6 +19,8 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 from opentelemetry.trace import SpanKind, get_tracer_provider
 from starlette import status
 from starlette.applications import Starlette
+from starlette.requests import Request
+from starlette.responses import Response
 from starlette.testclient import TestClient
 
 from lite_bootstrap import BootstrapperNotReadyError, FastMcpBootstrapper, FastMcpConfig
@@ -574,15 +576,21 @@ def _unregister_request_metrics() -> None:
 
 
 def _http_metric_sets_one_request_moves(**overrides: typing.Any) -> tuple[bool, bool]:  # noqa: ANN401
-    """Return whether one health-check request reached OpenTelemetry's HTTP metrics and Prometheus's, in that order."""
-    config: typing.Final = _make_test_config(**{"opentelemetry_generate_health_check_spans": True, **overrides})
+    """Return whether one application request reached OpenTelemetry and Prometheus HTTP metrics, in that order."""
+    config = _make_test_config(**overrides)
+    path = f"/items-{uuid.uuid4().hex}"
+
+    @config.application.custom_route(path, methods=["GET"])
+    async def items(_request: Request) -> Response:
+        return Response("ok")
+
     with in_memory_opentelemetry_metric_reader() as reader:
         bootstrapper = FastMcpBootstrapper(bootstrap_config=config)
         application = bootstrapper.bootstrap()
     try:
         with TestClient(application.http_app()) as client:
-            assert client.get(config.health_checks_path).status_code == status.HTTP_200_OK
-        return opentelemetry_recorded_http_server_metrics(reader), prometheus_recorded_path(config.health_checks_path)
+            assert client.get(path).status_code == status.HTTP_200_OK
+        return opentelemetry_recorded_http_server_metrics(reader), prometheus_recorded_path(path)
     finally:
         bootstrapper.teardown()
 
@@ -630,56 +638,56 @@ def _http_requests_total(handler: str, method: str = "GET", status_group: str = 
     return _sample_value("http_requests_total", {"handler": handler, "method": method, "status": status_group})
 
 
-def test_fastmcp_prometheus_counts_http_requests_by_route_template() -> None:
-    health_checks_path = f"/health-{uuid.uuid4().hex}/"
-    config = _make_test_config(health_checks_path=health_checks_path)
+def test_fastmcp_prometheus_excludes_infrastructure_and_user_paths() -> None:
+    health_path = f"/health-{uuid.uuid4().hex}/"
+    normal_path = f"{health_path}report"
+    excluded_path = "/excluded"
+    config = _make_test_config(
+        health_checks_path=health_path,
+        prometheus_instrumentator_additional_params={"excluded_handlers": [f"^{excluded_path}$"]},
+    )
+
+    @config.application.custom_route(normal_path, methods=["GET"])
+    @config.application.custom_route(excluded_path, methods=["GET"])
+    async def items(_request: Request) -> Response:
+        return Response("ok")
+
     bootstrapper = FastMcpBootstrapper(bootstrap_config=config)
     application = bootstrapper.bootstrap()
     try:
         with TestClient(application.http_app()) as client:
-            client.get(health_checks_path)
-            client.get(health_checks_path)
+            for path in (health_path, config.prometheus_metrics_path, excluded_path, normal_path):
+                assert client.get(path).is_success
             client.get("/missing")
-            client.get(config.prometheus_metrics_path)
     finally:
         bootstrapper.teardown()
 
-    expected_health_requests = 2
-    assert _http_requests_total(health_checks_path) == expected_health_requests
-    assert _http_requests_total("none", status_group="4xx") == 1
+    assert _http_requests_total(health_path) == 0
     assert _http_requests_total(config.prometheus_metrics_path) == 0
+    assert _http_requests_total(excluded_path) == 0
+    assert _http_requests_total(normal_path) == 1
+    assert _http_requests_total("none", status_group="4xx") == 1
 
 
 def test_fastmcp_prometheus_counts_requests_of_every_http_app() -> None:
-    health_checks_path = f"/health-{uuid.uuid4().hex}/"
-    bootstrapper = FastMcpBootstrapper(bootstrap_config=_make_test_config(health_checks_path=health_checks_path))
+    path = f"/items-{uuid.uuid4().hex}"
+    config = _make_test_config()
+
+    @config.application.custom_route(path, methods=["GET"])
+    async def items(_request: Request) -> Response:
+        return Response("ok")
+
+    bootstrapper = FastMcpBootstrapper(bootstrap_config=config)
     application = bootstrapper.bootstrap()
     try:
         for http_application in (application.http_app(), application.http_app(path="/other")):
             with TestClient(http_application) as client:
-                client.get(health_checks_path)
+                client.get(path)
     finally:
         bootstrapper.teardown()
 
     expected_requests = 2
-    assert _http_requests_total(health_checks_path) == expected_requests
-
-
-def test_fastmcp_prometheus_instrumentator_params_are_passed() -> None:
-    health_checks_path = f"/health-{uuid.uuid4().hex}/"
-    config = _make_test_config(
-        health_checks_path=health_checks_path,
-        prometheus_instrumentator_additional_params={"excluded_handlers": [health_checks_path]},
-    )
-    bootstrapper = FastMcpBootstrapper(bootstrap_config=config)
-    application = bootstrapper.bootstrap()
-    try:
-        with TestClient(application.http_app()) as client:
-            client.get(health_checks_path)
-    finally:
-        bootstrapper.teardown()
-
-    assert _http_requests_total(health_checks_path) == 0
+    assert _http_requests_total(path) == expected_requests
 
 
 def test_fastmcp_prometheus_teardown_restores_http_app() -> None:

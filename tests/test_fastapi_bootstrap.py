@@ -37,6 +37,7 @@ from tests.conftest import (
     in_memory_opentelemetry_metric_reader,
     opentelemetry_recorded_http_server_metrics,
     prometheus_recorded_path,
+    prometheus_request_count,
     unregister_prometheus_request_metrics,
     warning_source_files,
 )
@@ -575,6 +576,32 @@ def test_fastapi_otel_hands_the_instrumentor_the_meter_provider(fastapi_config: 
 
     assert mock_instrument_app.call_args.kwargs["meter_provider"] is get_meter_provider()
     assert isinstance(get_meter_provider(), SDKMeterProvider)
+
+
+def test_fastapi_prometheus_excludes_infrastructure_and_user_paths() -> None:
+    unregister_prometheus_request_metrics()
+    suffix = uuid.uuid4().hex
+    normal_path = f"/health-{suffix}/report"
+    excluded_path = f"/excluded-{suffix}"
+    config = FastAPIConfig(
+        health_checks_path=f"/health-{suffix}",
+        prometheus_metrics_path=f"/metrics-{suffix}",
+        prometheus_instrumentator_additional_params={"excluded_handlers": [f"^{excluded_path}$"]},
+    )
+
+    async def items() -> list[int]:
+        return [1]
+
+    for path in (normal_path, excluded_path):
+        config.app.add_api_route(path, items, methods=["GET"])
+    application = FastAPIBootstrapper(bootstrap_config=config).bootstrap()
+    with TestClient(application) as client:
+        for path in (config.health_checks_path, config.prometheus_metrics_path, excluded_path, normal_path):
+            assert client.get(path).is_success
+
+    for path in (config.health_checks_path, config.prometheus_metrics_path, excluded_path):
+        assert prometheus_request_count("http_requests_total", "handler", path) == 0
+    assert prometheus_request_count("http_requests_total", "handler", normal_path) == 1
 
 
 def _http_metric_sets_one_request_moves(config: FastAPIConfig) -> tuple[bool, bool]:

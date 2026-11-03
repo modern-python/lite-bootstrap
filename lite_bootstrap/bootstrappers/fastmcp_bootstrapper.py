@@ -2,7 +2,6 @@ import contextlib
 import dataclasses
 import functools
 import inspect
-import re
 import time
 import typing
 from collections.abc import AsyncGenerator, Mapping
@@ -280,10 +279,11 @@ class FastMcpPrometheusInstrument(PrometheusInstrument[FastMcpConfig]):
 
     def _instrument_http_app(self, http_application: "StarletteWithLifespan") -> "StarletteWithLifespan":
         config: typing.Final = self.bootstrap_config
-        instrumentator_params: typing.Final[dict[str, typing.Any]] = {
-            "excluded_handlers": [f"^{re.escape(config.prometheus_metrics_path)}$"],
-            **config.prometheus_instrumentator_additional_params,
-        }
+        instrumentator_params = dict(config.prometheus_instrumentator_additional_params)
+        instrumentator_params["excluded_handlers"] = [
+            *instrumentator_params.get("excluded_handlers", []),
+            *self.infrastructure_excluded_patterns(),
+        ]
         # A second http_app() would register the default metrics again, which the instrumentator
         # treats as a duplicate and silently skips, so every application shares the first set.
         if self._default_metrics is None:

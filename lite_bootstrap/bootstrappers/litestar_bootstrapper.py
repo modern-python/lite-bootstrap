@@ -415,6 +415,10 @@ class LitestarPrometheusInstrument(PrometheusInstrument[LitestarConfig]):
             "group_path": config.prometheus_group_path,
             **config.prometheus_additional_params,
         }
+        user_exclusions = prometheus_params.get("exclude")
+        if isinstance(user_exclusions, str):
+            user_exclusions = [user_exclusions]
+        prometheus_params["exclude"] = [*(user_exclusions or []), *self.infrastructure_excluded_patterns()]
         litestar_prometheus_config = PrometheusConfig(app_name=config.service_name_or_default, **prometheus_params)
 
         config.application_config.route_handlers.append(LitestarPrometheusController)

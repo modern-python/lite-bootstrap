@@ -12,3 +12,11 @@ methods your application supports, such as `["GET", "POST"]`.
 `cors_allowed_headers` defaults to `[]`. Both frameworks allow their built-in
 CORS headers, including `Content-Type`. Add headers such as `Authorization`
 explicitly if your application needs them.
+
+## Prometheus HTTP metrics on FastAPI, FastMCP, and Litestar
+
+Health checks and metrics scrapes are excluded from Prometheus HTTP request
+metrics. Existing user-defined exclusions still apply. Dashboards and alerts
+that previously included these requests may show lower request totals and
+different latency percentiles. Review thresholds that were based on the old
+traffic mix.
