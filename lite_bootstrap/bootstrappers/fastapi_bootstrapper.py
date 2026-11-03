@@ -284,7 +284,7 @@ class FastAPISwaggerInstrument(SwaggerInstrument[FastAPIConfig]):
     def bootstrap(self) -> None:
         config = self.bootstrap_config
         application = config.app
-        if config.swagger_path != application.docs_url:
+        if application.docs_url is not None and config.swagger_path != application.docs_url:
             warn_at_caller(f"swagger_path differs from docs_url, {application.docs_url} will be used for docs path")
         if config.swagger_offline_docs:
             enable_offline_docs(application, static_path=config.swagger_static_path)

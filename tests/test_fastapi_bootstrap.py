@@ -181,6 +181,33 @@ def test_fastapi_bootstrapper_docs_url_differ(fastapi_config: FastAPIConfig) -> 
     bootstrapper.teardown()
 
 
+def test_offline_docs_respect_both_disabled_routes() -> None:
+    app = fastapi.FastAPI(docs_url=None, redoc_url=None)
+    config = FastAPIConfig(application=app, swagger_offline_docs=True)
+    bootstrapper = FastAPIBootstrapper(bootstrap_config=config)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        application = bootstrapper.bootstrap()
+
+    with TestClient(application) as client:
+        assert client.get("/docs").status_code == status.HTTP_404_NOT_FOUND
+        assert client.get("/redoc").status_code == status.HTTP_404_NOT_FOUND
+
+    assert not caught
+
+
+def test_offline_swagger_ui_works_with_redoc_disabled() -> None:
+    app = fastapi.FastAPI(redoc_url=None)
+    config = FastAPIConfig(application=app, swagger_offline_docs=True)
+
+    with TestClient(FastAPIBootstrapper(bootstrap_config=config).bootstrap()) as client:
+        response = client.get("/docs")
+        assert response.status_code == status.HTTP_200_OK
+        assert f"{config.swagger_static_path}/swagger-ui-bundle.js" in response.text
+        assert client.get("/redoc").status_code == status.HTTP_404_NOT_FOUND
+
+
 def test_fastapi_bootstrapper_apps_and_kwargs_warning(fastapi_config: FastAPIConfig) -> None:
     with pytest.warns(UserWarning, match="application_kwargs must be used without application") as caught:
         dataclasses.replace(fastapi_config, application=fastapi.FastAPI(), application_kwargs={"title": "some title"})

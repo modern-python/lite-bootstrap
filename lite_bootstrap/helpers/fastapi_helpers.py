@@ -8,7 +8,7 @@ from lite_bootstrap.helpers.path import is_valid_path
 
 if import_checker.is_fastapi_installed:
     from fastapi import FastAPI, Request
-    from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html, get_swagger_ui_oauth2_redirect_html
+    from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
     from fastapi.responses import HTMLResponse
     from fastapi.staticfiles import StaticFiles
     from starlette.routing import Route
@@ -42,11 +42,12 @@ def enable_offline_docs(
         msg = "No app.openapi_url specified"
         raise ConfigurationError(msg)
 
-    docs_url: str = app.docs_url or "/docs"
-    redoc_url: str = app.redoc_url or "/redoc"
-    swagger_ui_oauth2_redirect_url: str = app.swagger_ui_oauth2_redirect_url or "/docs/oauth2-redirect"
+    docs_url = app.docs_url
+    redoc_url = app.redoc_url
+    if not docs_url and not redoc_url:
+        return
 
-    replaced_urls = (docs_url, redoc_url, swagger_ui_oauth2_redirect_url)
+    replaced_urls = (docs_url, redoc_url)
     app.router.routes = [
         route
         for route in app.router.routes
@@ -58,26 +59,26 @@ def enable_offline_docs(
     static_dir_path = pathlib.Path(__file__).parent.parent / "static/fastapi_docs"
     app.mount(static_path, StaticFiles(directory=static_dir_path), name="static")
 
-    @app.get(docs_url, include_in_schema=False)
-    async def custom_swagger_ui_html(request: Request) -> HTMLResponse:
-        root_path = _safe_root_path(request.scope.get("root_path", ""))
-        return get_swagger_ui_html(
-            openapi_url=f"{root_path}{app_openapi_url}",
-            title=f"{app.title} - Swagger UI",
-            oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
-            swagger_js_url=f"{root_path}{static_path}/swagger-ui-bundle.js",
-            swagger_css_url=f"{root_path}{static_path}/swagger-ui.css",
-        )
+    if docs_url:
 
-    @app.get(swagger_ui_oauth2_redirect_url, include_in_schema=False)
-    async def swagger_ui_redirect() -> HTMLResponse:
-        return get_swagger_ui_oauth2_redirect_html()
+        @app.get(docs_url, include_in_schema=False)
+        async def custom_swagger_ui_html(request: Request) -> HTMLResponse:
+            root_path = _safe_root_path(request.scope.get("root_path", ""))
+            return get_swagger_ui_html(
+                openapi_url=f"{root_path}{app_openapi_url}",
+                title=f"{app.title} - Swagger UI",
+                oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
+                swagger_js_url=f"{root_path}{static_path}/swagger-ui-bundle.js",
+                swagger_css_url=f"{root_path}{static_path}/swagger-ui.css",
+            )
 
-    @app.get(redoc_url, include_in_schema=False)
-    async def redoc_html(request: Request) -> HTMLResponse:
-        root_path = _safe_root_path(request.scope.get("root_path", ""))
-        return get_redoc_html(
-            openapi_url=f"{root_path}{app_openapi_url}",
-            title=f"{app.title} - ReDoc",
-            redoc_js_url=f"{root_path}{static_path}/redoc.standalone.js",
-        )
+    if redoc_url:
+
+        @app.get(redoc_url, include_in_schema=False)
+        async def redoc_html(request: Request) -> HTMLResponse:
+            root_path = _safe_root_path(request.scope.get("root_path", ""))
+            return get_redoc_html(
+                openapi_url=f"{root_path}{app_openapi_url}",
+                title=f"{app.title} - ReDoc",
+                redoc_js_url=f"{root_path}{static_path}/redoc.standalone.js",
+            )
