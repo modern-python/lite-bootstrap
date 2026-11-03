@@ -97,3 +97,6 @@ extra:
     - icon: fontawesome/brands/github
       link: https://github.com/modern-python/lite-bootstrap
       name: GitHub
+
+plugins:
+  - search
