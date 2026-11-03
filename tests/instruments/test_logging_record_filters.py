@@ -2,6 +2,7 @@ import json
 import logging
 import re
 import typing
+from unittest.mock import patch
 
 import faststream.asgi
 import pytest
@@ -284,34 +285,18 @@ def test_teardown_removes_filters_even_when_a_handler_close_fails() -> None:
     configured_filter = RecordingFilter()
     target_logger = logging.getLogger("teardown_despite_error.target")
 
-    class ExplodingHandler(logging.Handler):
-        exploded = False
-
-        def emit(self, record: logging.LogRecord) -> None:
-            """Never called: this handler exists only to fail on close."""
-
-        def close(self) -> None:
-            """Fail the first close only: a later logging.shutdown still reaches this handler until it is collected."""
-            super().close()
-            if not self.exploded:
-                self.exploded = True
-                msg = "boom"
-                raise RuntimeError(msg)
-
     instrument = LoggingInstrument(
         bootstrap_config=LoggingConfig(
             logging_record_filters={"teardown_despite_error.target": (configured_filter,)},
         ),
     )
+    root_logger = logging.getLogger()
+    existing_handlers = set(root_logger.handlers)
     instrument.bootstrap()
-    exploding_handler = ExplodingHandler()
-    logging.getLogger().addHandler(exploding_handler)
+    (owned_handler,) = set(root_logger.handlers) - existing_handlers
 
-    try:
-        with pytest.raises(TeardownError):
-            instrument.teardown()
-    finally:
-        logging.getLogger().removeHandler(exploding_handler)
+    with patch.object(owned_handler, "close", side_effect=RuntimeError("boom")), pytest.raises(TeardownError):
+        instrument.teardown()
 
     assert target_logger.filters == []
 
