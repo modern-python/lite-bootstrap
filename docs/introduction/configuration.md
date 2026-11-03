@@ -464,8 +464,8 @@ To bootstrap CORS headers, you must provide `cors_allowed_origins` or `cors_allo
 
 Additional params:
 
-- `cors_allowed_methods`
-- `cors_allowed_headers`
+- `cors_allowed_methods` defaults to `["*"]`, allowing all standard HTTP methods.
+- `cors_allowed_headers` defaults to `[]`, allowing only the framework’s built-in CORS headers.
 - `cors_exposed_headers`
 - `cors_allowed_credentials`
 - `cors_max_age`

@@ -11,7 +11,7 @@ _PERMISSIVE_ORIGIN_REGEX: typing.Final[frozenset[str]] = frozenset({".*", r".+"}
 @dataclasses.dataclass(kw_only=True, frozen=True)
 class CorsConfig(BaseConfig):
     cors_allowed_origins: list[str] = dataclasses.field(default_factory=list)
-    cors_allowed_methods: list[str] = dataclasses.field(default_factory=list)
+    cors_allowed_methods: list[str] = dataclasses.field(default_factory=lambda: ["*"])
     cors_allowed_headers: list[str] = dataclasses.field(default_factory=list)
     cors_exposed_headers: list[str] = dataclasses.field(default_factory=list)
     cors_allowed_credentials: bool = False
