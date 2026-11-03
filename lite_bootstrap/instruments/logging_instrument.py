@@ -19,10 +19,6 @@ class _RenderedLine(str):
     __slots__ = ()
 
 
-def _mark_rendered(_: "WrappedLogger", __: str, rendered_line: str) -> _RenderedLine:
-    return _RenderedLine(rendered_line)
-
-
 if import_checker.is_structlog_installed:
     import structlog
 
@@ -141,12 +137,24 @@ class LoggingInstrument(BaseInstrument[LoggingConfigT]):
 
     @property
     def structlog_processors(self) -> list[typing.Any]:
-        return [
-            structlog.stdlib.filter_by_level,
+        processors = [
             *self.structlog_pre_chain_processors,
             *self.bootstrap_config.logging_extra_processors,
-            structlog.processors.JSONRenderer(serializer=_serialize_log_to_string),
-            _mark_rendered,
+        ]
+        render_json = structlog.processors.JSONRenderer(serializer=_serialize_log_to_string)
+
+        def render_for_stdlib(
+            logger: "WrappedLogger", method: str, event_dict: "EventDict"
+        ) -> tuple[tuple[_RenderedLine], dict[str, typing.Any]]:
+            exc_info = event_dict.get("exc_info")
+            for processor in processors:
+                event_dict = processor(logger, method, event_dict)
+            line = _RenderedLine(render_json(logger, method, event_dict))
+            return (line,), {"exc_info": exc_info}
+
+        return [
+            structlog.stdlib.filter_by_level,
+            render_for_stdlib,
         ]
 
     def _configure_structlog_loggers(self) -> None:
