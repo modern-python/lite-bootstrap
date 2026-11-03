@@ -4,6 +4,7 @@ import warnings
 import pytest
 
 from lite_bootstrap import FastAPIConfig, FastStreamConfig, FreeConfig, LitestarConfig
+from lite_bootstrap.exceptions import ConfigurationError
 from lite_bootstrap.instruments.base import BaseConfig
 from tests.conftest import CustomInstrumentor
 
@@ -119,3 +120,13 @@ def test_service_name_and_version_fall_back_for_readers_that_need_a_string(
 ) -> None:
     assert config.service_name_or_default == expected_name
     assert config.service_version_or_default == expected_version
+
+
+def test_invalid_prometheus_metrics_path_raises_at_construction() -> None:
+    with pytest.raises(ConfigurationError, match="prometheus_metrics_path"):
+        FastAPIConfig(prometheus_metrics_path="metrics")
+
+
+def test_invalid_health_checks_path_raises_at_construction() -> None:
+    with pytest.raises(ConfigurationError, match="health_checks_path"):
+        FastAPIConfig(health_checks_path="health")
