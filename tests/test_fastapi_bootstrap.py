@@ -2,6 +2,7 @@ import contextlib
 import dataclasses
 import json
 import logging
+import re
 import typing
 import uuid
 import warnings
@@ -20,7 +21,7 @@ from opentelemetry.trace import SpanKind, get_tracer_provider
 from starlette import status
 from starlette.testclient import TestClient
 
-from lite_bootstrap import FastAPIBootstrapper, FastAPIConfig, import_checker
+from lite_bootstrap import FastAPIBootstrapper, FastAPIConfig, FastMcpConfig, import_checker
 from lite_bootstrap.bootstrappers import fastapi_bootstrapper
 from lite_bootstrap.exceptions import ConfigurationError, InstrumentDependencyMissingWarning
 from lite_bootstrap.instruments.healthchecks_instrument import HealthProbe
@@ -43,6 +44,15 @@ from tests.conftest import (
 
 logger = structlog.getLogger(__name__)
 std_logger = logging.getLogger()
+
+
+@pytest.mark.parametrize("config_class", [FastAPIConfig, FastMcpConfig])
+def test_config_rejects_comma_in_opentelemetry_excluded_url(
+    config_class: type[FastAPIConfig] | type[FastMcpConfig],
+) -> None:
+    pattern = r"/v\d{1,2}/ping$"
+    with pytest.raises(ConfigurationError, match=re.escape(repr(pattern))):
+        config_class(opentelemetry_excluded_urls=[pattern])
 
 
 @pytest.fixture

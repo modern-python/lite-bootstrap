@@ -5,7 +5,7 @@ import typing
 import urllib.parse
 
 from lite_bootstrap import import_checker
-from lite_bootstrap.exceptions import InstrumentDependencyMissingWarning, collect_teardown_errors
+from lite_bootstrap.exceptions import ConfigurationError, InstrumentDependencyMissingWarning, collect_teardown_errors
 from lite_bootstrap.helpers.warn import warn_at_caller
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 
@@ -136,6 +136,16 @@ class OpenTelemetryAsgiConfig(OpenTelemetryConfig):
     opentelemetry_exclude_spans: list[typing.Literal["receive", "send"]] = dataclasses.field(
         default_factory=lambda: ["receive", "send"]
     )
+
+    _opentelemetry_exclusions_use_comma_separator: typing.ClassVar[bool] = False
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self._opentelemetry_exclusions_use_comma_separator:
+            for pattern in self.opentelemetry_excluded_urls:
+                if "," in pattern:
+                    msg = f"opentelemetry_excluded_urls entry {pattern!r} contains a comma, which separates patterns"
+                    raise ConfigurationError(msg)
 
 
 if import_checker.is_opentelemetry_sdk_installed and import_checker.is_pyroscope_installed:

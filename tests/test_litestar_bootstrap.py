@@ -611,7 +611,7 @@ def test_litestar_otel_keeps_caller_supplied_excluded_urls_as_regexes(litestar_c
     config = dataclasses.replace(
         litestar_config,
         application_config=AppConfig(route_handlers=[get_item]),
-        opentelemetry_excluded_urls=[r"/items/\d+$"],
+        opentelemetry_excluded_urls=[r"/items/\d{1,2}$"],
     )
     application = LitestarBootstrapper(bootstrap_config=config).bootstrap()
 

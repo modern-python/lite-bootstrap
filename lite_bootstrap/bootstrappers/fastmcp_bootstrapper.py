@@ -197,6 +197,7 @@ class FastMcpConfig(
     fastmcp_prometheus_tool_metrics_enabled: bool = True
     prometheus_instrumentator_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     prometheus_instrument_additional_params: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
+    _opentelemetry_exclusions_use_comma_separator: typing.ClassVar[bool] = True
     _sentry_lean_replaced_integrations: typing.ClassVar[Mapping[str, str]] = {"starlette": "StarletteIntegration"}
 
 
