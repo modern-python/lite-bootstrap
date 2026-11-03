@@ -218,7 +218,7 @@ def test_fastapi_bootstrapper_apps_and_kwargs_warning(fastapi_config: FastAPICon
 @pytest.mark.parametrize(
     "package_name",
     [
-        "opentelemetry",
+        "opentelemetry.trace",
         "sentry_sdk",
         "structlog",
         "prometheus_fastapi_instrumentator",
@@ -227,7 +227,7 @@ def test_fastapi_bootstrapper_apps_and_kwargs_warning(fastapi_config: FastAPICon
 def test_fastapi_bootstrapper_with_missing_instrument_dependency(
     fastapi_config: FastAPIConfig, package_name: str
 ) -> None:
-    with emulate_package_missing(package_name), pytest.warns(UserWarning, match=package_name):
+    with emulate_package_missing(package_name), pytest.warns(UserWarning, match=package_name.removesuffix(".trace")):
         FastAPIBootstrapper(bootstrap_config=fastapi_config)
 
 

@@ -135,7 +135,7 @@ def test_teardown_error_aggregates_all_failures(free_bootstrapper_config: FreeCo
 @pytest.mark.parametrize(
     "package_name",
     [
-        "opentelemetry",
+        "opentelemetry.trace",
         "sentry_sdk",
         "structlog",
     ],
@@ -143,7 +143,7 @@ def test_teardown_error_aggregates_all_failures(free_bootstrapper_config: FreeCo
 def test_free_bootstrapper_with_missing_instrument_dependency(
     free_bootstrapper_config: FreeConfig, package_name: str
 ) -> None:
-    with emulate_package_missing(package_name), pytest.warns(UserWarning, match=package_name):
+    with emulate_package_missing(package_name), pytest.warns(UserWarning, match=package_name.removesuffix(".trace")):
         FreeBootstrapper(bootstrap_config=free_bootstrapper_config)
 
 
