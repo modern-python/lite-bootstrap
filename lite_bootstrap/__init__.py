@@ -64,3 +64,7 @@ def __getattr__(name: str) -> typing.Any:  # noqa: ANN401
     exported = getattr(import_module(f".{module_name}", __name__), name)
     globals()[name] = exported
     return exported
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(__all__))

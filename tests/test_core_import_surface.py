@@ -157,3 +157,28 @@ def test_unknown_public_export_raises_attribute_error() -> None:
     name = "not_an_export"
     with pytest.raises(AttributeError, match=name):
         getattr(lite_bootstrap, name)
+
+
+def test_public_exports_are_discoverable_without_loading_frameworks() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            """
+import sys
+import lite_bootstrap
+
+before = set(sys.modules)
+names = dir(lite_bootstrap)
+assert set(lite_bootstrap.__all__).issubset(names)
+assert "__name__" in names
+assert set(sys.modules) == before
+assert not {"fastapi", "litestar", "faststream", "fastmcp"}.intersection(sys.modules)
+""",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert set(lite_bootstrap.__all__).issubset(dir(lite_bootstrap))
