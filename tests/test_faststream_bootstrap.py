@@ -1,3 +1,4 @@
+import contextlib
 import dataclasses
 import json
 import logging
@@ -5,6 +6,7 @@ import sys
 import typing
 import uuid
 import warnings
+from collections.abc import AsyncGenerator
 from types import TracebackType
 from unittest.mock import AsyncMock, patch
 
@@ -38,7 +40,7 @@ from lite_bootstrap.bootstrappers.faststream_bootstrapper import (
     FastStreamOpenTelemetryInstrument,
     FastStreamPrometheusInstrument,
 )
-from lite_bootstrap.exceptions import ConfigurationError
+from lite_bootstrap.exceptions import ConfigurationError, TeardownError
 from lite_bootstrap.instruments.healthchecks_instrument import HealthProbe
 from tests.conftest import (
     HEALTH_PROBE_CASES,
@@ -53,6 +55,21 @@ from tests.conftest import (
 
 
 logger = structlog.getLogger(__name__)
+
+
+class _ShutdownCountingSpanExporter(InMemorySpanExporter):
+    shutdown_calls = 0
+
+    def __init__(self, shutdown_error: Exception | None = None) -> None:
+        super().__init__()
+        self.shutdown_error = shutdown_error
+
+    def shutdown(self) -> None:
+        self.shutdown_calls += 1
+        super().shutdown()
+        if self.shutdown_error is not None:
+            error, self.shutdown_error = self.shutdown_error, None
+            raise error
 
 
 @pytest.fixture
@@ -126,6 +143,253 @@ async def test_faststream_bootstrap(broker: RedisBroker) -> None:
             assert response.status_code == status.HTTP_200_OK
 
     assert not bootstrapper.is_bootstrapped
+
+
+def test_faststream_exports_broker_and_user_shutdown_spans(broker: RedisBroker) -> None:
+    @contextlib.asynccontextmanager
+    async def lifespan() -> AsyncGenerator[None]:
+        yield
+        with get_tracer(__name__).start_as_current_span("user-shutdown"):
+            pass
+
+    async def stop_broker() -> None:
+        with get_tracer(__name__).start_as_current_span("broker-drain"):
+            pass
+
+    application = faststream.asgi.AsgiFastStream(broker, lifespan=lifespan)
+    bootstrapper = FastStreamBootstrapper(
+        FastStreamConfig(application=application, logging_enabled=False, opentelemetry_log_traces=True)
+    )
+    bootstrapper.bootstrap()
+    provider = get_tracer_provider()
+    assert isinstance(provider, SDKTracerProvider)
+    exporter = _ShutdownCountingSpanExporter()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+
+    with (
+        patch.object(broker, "start", new=AsyncMock()),
+        patch.object(broker, "stop", new=AsyncMock(side_effect=stop_broker)),
+        TestClient(application),
+        get_tracer(__name__).start_as_current_span("during-service"),
+    ):
+        pass
+
+    assert [span.name for span in exporter.get_finished_spans()] == [
+        "during-service",
+        "broker-drain",
+        "user-shutdown",
+    ]
+    assert not bootstrapper.is_bootstrapped
+    assert exporter.shutdown_calls == 1
+    bootstrapper.teardown()
+    assert exporter.shutdown_calls == 1
+
+
+@pytest.mark.parametrize(
+    "failure_stage", ["lifespan-startup", "startup-hook", "shutdown-hook", "broker-stop", "lifespan-shutdown"]
+)
+@pytest.mark.parametrize("teardown_fails", [False, True])
+def test_faststream_lifecycle_failure_preserves_error_and_tears_down(
+    broker: RedisBroker, failure_stage: str, teardown_fails: bool
+) -> None:
+    error = ValueError(failure_stage)
+    shutdown_seen: list[bool] = []
+
+    def fail_at(stage: str) -> None:
+        if failure_stage == stage:
+            raise error
+
+    @contextlib.asynccontextmanager
+    async def lifespan() -> AsyncGenerator[None]:
+        fail_at("lifespan-startup")
+        try:
+            yield
+        finally:
+            shutdown_seen.append(bootstrapper.is_bootstrapped)
+            fail_at("lifespan-shutdown")
+
+    async def startup() -> None:
+        fail_at("startup-hook")
+
+    async def shutdown() -> None:
+        fail_at("shutdown-hook")
+
+    async def stop_broker() -> None:
+        fail_at("broker-stop")
+
+    application = faststream.asgi.AsgiFastStream(
+        broker, lifespan=lifespan, on_startup=[startup], on_shutdown=[shutdown]
+    )
+    bootstrapper = FastStreamBootstrapper(
+        FastStreamConfig(application=application, logging_enabled=False, opentelemetry_log_traces=True)
+    )
+    bootstrapper.bootstrap()
+    provider = get_tracer_provider()
+    assert isinstance(provider, SDKTracerProvider)
+    exporter = _ShutdownCountingSpanExporter(ValueError("exporter shutdown failed") if teardown_fails else None)
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+
+    with (
+        patch.object(broker, "start", new=AsyncMock()),
+        patch.object(broker, "stop", new=AsyncMock(side_effect=stop_broker)),
+        pytest.raises(ValueError, match=failure_stage) as caught,
+        TestClient(application),
+    ):
+        pass
+
+    assert caught.value is error
+    assert shutdown_seen == ([] if failure_stage == "lifespan-startup" else [True])
+    assert not bootstrapper.is_bootstrapped
+    assert exporter.shutdown_calls == 1
+    if teardown_fails:
+        assert any("exporter shutdown failed" in note for note in caught.value.__notes__)
+
+
+def test_faststream_reports_teardown_failure_after_successful_lifespan(broker: RedisBroker) -> None:
+    application = faststream.asgi.AsgiFastStream(broker)
+    bootstrapper = FastStreamBootstrapper(
+        FastStreamConfig(application=application, logging_enabled=False, opentelemetry_log_traces=True)
+    )
+    bootstrapper.bootstrap()
+    provider = get_tracer_provider()
+    assert isinstance(provider, SDKTracerProvider)
+    exporter = _ShutdownCountingSpanExporter(ValueError("exporter shutdown failed"))
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+
+    with (
+        patch.object(broker, "start", new=AsyncMock()),
+        patch.object(broker, "stop", new=AsyncMock()),
+        pytest.raises(TeardownError, match="exporter shutdown failed"),
+        TestClient(application),
+    ):
+        pass
+
+    assert not bootstrapper.is_bootstrapped
+    assert exporter.shutdown_calls == 1
+
+
+async def test_faststream_lifespan_preserves_run_extra_options(broker: RedisBroker) -> None:
+    seen: list[tuple[str, int]] = []
+
+    @contextlib.asynccontextmanager
+    async def lifespan(service: str, workers: int) -> AsyncGenerator[None]:
+        seen.append((service, workers))
+        yield
+        seen.append((service, workers))
+
+    application = faststream.asgi.AsgiFastStream(broker, lifespan=lifespan)
+    bootstrapper = FastStreamBootstrapper(FastStreamConfig(application=application, logging_enabled=False))
+    bootstrapper.bootstrap()
+
+    with patch.object(broker, "start", new=AsyncMock()), patch.object(broker, "stop", new=AsyncMock()):
+        async with application.start_lifespan_context(run_extra_options={"service": "worker", "workers": 3}):
+            assert seen == [("worker", 3)]
+
+    assert seen == [("worker", 3), ("worker", 3)]
+    assert not bootstrapper.is_bootstrapped
+
+
+async def test_faststream_lifespan_preserves_positional_and_keyword_arguments(broker: RedisBroker) -> None:
+    @contextlib.asynccontextmanager
+    async def lifespan(service: str, *, workers: int) -> AsyncGenerator[None]:
+        assert service == "worker"
+        expected_workers = 3
+        assert workers == expected_workers
+        yield
+
+    application = faststream.asgi.AsgiFastStream(broker, lifespan=lifespan)
+    bootstrapper = FastStreamBootstrapper(FastStreamConfig(application=application, logging_enabled=False))
+    bootstrapper.bootstrap()
+
+    async with application.lifespan_context("worker", workers=3) as result:
+        assert result is None
+        assert bootstrapper.is_bootstrapped
+
+    assert not bootstrapper.is_bootstrapped
+
+
+@pytest.mark.parametrize(
+    "lifecycle",
+    [
+        pytest.param(
+            "context-manager",
+            marks=pytest.mark.skipif(
+                not hasattr(faststream.asgi.AsgiFastStream, "__aexit__"),
+                reason="This FastStream version has no application context manager",
+            ),
+        ),
+        "start-stop",
+    ],
+)
+async def test_faststream_manual_lifecycle_tears_down_after_broker_drain(broker: RedisBroker, lifecycle: str) -> None:
+    async def stop_broker() -> None:
+        with get_tracer(__name__).start_as_current_span("broker-drain"):
+            pass
+
+    application = faststream.asgi.AsgiFastStream(broker)
+    bootstrapper = FastStreamBootstrapper(
+        FastStreamConfig(application=application, logging_enabled=False, opentelemetry_log_traces=True)
+    )
+    bootstrapper.bootstrap()
+    provider = get_tracer_provider()
+    assert isinstance(provider, SDKTracerProvider)
+    exporter = _ShutdownCountingSpanExporter()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+
+    with (
+        patch.object(broker, "start", new=AsyncMock()),
+        patch.object(broker, "stop", new=AsyncMock(side_effect=stop_broker)),
+    ):
+        if lifecycle == "context-manager":
+            async with application:
+                assert bootstrapper.is_bootstrapped
+        else:
+            await application.start()
+            await application.stop()
+
+    assert [span.name for span in exporter.get_finished_spans()] == ["broker-drain"]
+    assert not bootstrapper.is_bootstrapped
+    assert exporter.shutdown_calls == 1
+
+
+@pytest.mark.parametrize("failure_stage", ["shutdown-hook", "broker-stop"])
+@pytest.mark.parametrize("teardown_fails", [False, True])
+async def test_faststream_direct_stop_failure_preserves_error_and_tears_down(
+    broker: RedisBroker, failure_stage: str, teardown_fails: bool
+) -> None:
+    error = ValueError(failure_stage)
+
+    async def shutdown() -> None:
+        if failure_stage == "shutdown-hook":
+            raise error
+
+    async def stop_broker() -> None:
+        if failure_stage == "broker-stop":
+            raise error
+
+    application = faststream.asgi.AsgiFastStream(broker, on_shutdown=[shutdown])
+    bootstrapper = FastStreamBootstrapper(
+        FastStreamConfig(application=application, logging_enabled=False, opentelemetry_log_traces=True)
+    )
+    bootstrapper.bootstrap()
+    provider = get_tracer_provider()
+    assert isinstance(provider, SDKTracerProvider)
+    exporter = _ShutdownCountingSpanExporter(ValueError("exporter shutdown failed") if teardown_fails else None)
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+
+    with (
+        patch.object(broker, "start", new=AsyncMock()),
+        patch.object(broker, "stop", new=AsyncMock(side_effect=stop_broker)),
+    ):
+        await application.start()
+        with pytest.raises(ValueError, match=failure_stage) as caught:
+            await application.stop()
+
+    assert caught.value is error
+    assert not bootstrapper.is_bootstrapped
+    assert exporter.shutdown_calls == 1
+    if teardown_fails:
+        assert any("exporter shutdown failed" in note for note in caught.value.__notes__)
 
 
 @pytest.mark.parametrize("path", ["/health", "/health/", "/metrics", "/metrics/"])
