@@ -4,6 +4,7 @@ import dataclasses
 import re
 import typing
 
+from lite_bootstrap import import_checker
 from lite_bootstrap.exceptions import ConfigurationError
 from lite_bootstrap.helpers.path import is_valid_path
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
@@ -38,11 +39,15 @@ PrometheusConfigT = typing.TypeVar("PrometheusConfigT", bound=PrometheusConfig)
 
 @dataclasses.dataclass(kw_only=True, slots=True)
 class PrometheusInstrument(BaseInstrument[PrometheusConfigT]):
-    not_configured_reason = "prometheus_metrics_path is empty"
+    not_configured_reason = "prometheus_metrics_path is empty or uses its default without prometheus_client"
 
     @classmethod
     def is_configured(cls, bootstrap_config: "PrometheusConfig") -> bool:
-        return bool(bootstrap_config.prometheus_metrics_path)
+        path = bootstrap_config.prometheus_metrics_path
+        default_path = next(
+            field.default for field in dataclasses.fields(bootstrap_config) if field.name == "prometheus_metrics_path"
+        )
+        return bool(path) and (path != default_path or import_checker.is_prometheus_client_installed)
 
     def infrastructure_excluded_patterns(self) -> list[str]:
         config = self.bootstrap_config

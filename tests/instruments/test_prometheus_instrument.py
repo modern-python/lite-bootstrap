@@ -9,7 +9,10 @@ def test_prometheus_instrument_configured_with_default_path() -> None:
 def test_prometheus_instrument_not_configured_with_empty_path() -> None:
     config = PrometheusConfig(prometheus_metrics_path="")
     assert not PrometheusInstrument.is_configured(config)
-    assert PrometheusInstrument.not_configured_reason == "prometheus_metrics_path is empty"
+    assert (
+        PrometheusInstrument.not_configured_reason
+        == "prometheus_metrics_path is empty or uses its default without prometheus_client"
+    )
 
 
 def test_prometheus_instrument_configured_with_custom_valid_path() -> None:

@@ -341,7 +341,7 @@ def test_fastmcp_logging_config_warns_nothing(overrides: dict[str, bool]) -> Non
     [
         ("sentry_sdk", {"sentry_dsn": "https://testdsn@localhost/1"}),
         ("structlog", {}),
-        ("prometheus_client", {}),
+        ("prometheus_client", {"prometheus_metrics_path": "/custom"}),
     ],
 )
 def test_fastmcp_bootstrapper_with_missing_instrument_dependency(
@@ -372,8 +372,10 @@ def test_fastmcp_bootstrap_without_prometheus_client() -> None:
         "prometheus_client",
         ["lite_bootstrap.bootstrappers.fastmcp_bootstrapper"],
     ):
-        with pytest.warns(UserWarning, match="prometheus_client"):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
             bootstrapper = FastMcpBootstrapper(bootstrap_config=FastMcpConfig())
+        assert not caught
         bootstrapper.bootstrap()
         bootstrapper.teardown()
 

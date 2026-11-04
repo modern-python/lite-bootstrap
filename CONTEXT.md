@@ -29,7 +29,8 @@ per-framework guides, and Sentry's word for its own `Integration` objects.
 **Configured**:
 An instrument is configured when the user's config asks for it: `is_configured(config)`, a
 classmethod evaluated before anything is instantiated. Unconfigured is the normal case, not a fault:
-an empty `sentry_dsn` means the user did not want Sentry.
+an empty `sentry_dsn` means the user did not want Sentry. Prometheus at its default metrics path
+is also unconfigured when `prometheus_client` is missing, treating an absent extra as an opt-out.
 _Avoid_: enabled. `logging_enabled` and `health_checks_enabled` are two config fields among the
 several inputs `is_configured` reads; most instruments have no enabled flag at all.
 
@@ -45,7 +46,8 @@ An instrument the bootstrapper decided not to instantiate. Two paths, deliberate
 signals: not configured is silent and lands in `skipped_instruments`, so it shows in
 `build_summary()`; configured but with its optional package missing is a deployment surprise, so it
 raises `InstrumentDependencyMissingWarning` plus a `logger.warning` and lands in neither list. The
-quiet skip is the one you have to go looking for; the loud one finds you.
+quiet skip includes Prometheus at its default path without `prometheus_client`; a custom path
+with the same missing dependency takes the warning path.
 
 **Health probe**:
 One check of something the service depends on, run each time the health check route is requested. A

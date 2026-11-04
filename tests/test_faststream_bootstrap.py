@@ -512,7 +512,7 @@ def test_faststream_prometheus_is_skipped_without_metrics_path(broker: RedisBrok
     )
     bootstrapper = FastStreamBootstrapper(bootstrap_config=bootstrap_config)
     skipped = dict(bootstrapper.skipped_instruments)
-    assert skipped[FastStreamPrometheusInstrument] == "prometheus_metrics_path is empty"
+    assert skipped[FastStreamPrometheusInstrument] == FastStreamPrometheusInstrument.not_configured_reason
 
 
 async def test_faststream_prometheus_serves_the_default_registry(broker: RedisBroker) -> None:

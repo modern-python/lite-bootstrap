@@ -253,6 +253,34 @@ def test_fastapi_bootstrapper_with_missing_instrument_dependency(
         FastAPIBootstrapper(bootstrap_config=fastapi_config)
 
 
+@pytest.mark.parametrize("metrics_path", [None, "/custom"])
+def test_fastapi_missing_prometheus_is_quiet_only_for_the_default_path(
+    metrics_path: str | None, caplog: pytest.LogCaptureFixture
+) -> None:
+    config = FastAPIConfig() if metrics_path is None else FastAPIConfig(prometheus_metrics_path=metrics_path)
+    with emulate_package_missing("prometheus_client"), warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        bootstrapper = FastAPIBootstrapper(bootstrap_config=config)
+    try:
+        assert not any(
+            isinstance(instrument, fastapi_bootstrapper.FastAPIPrometheusInstrument)
+            for instrument in bootstrapper.instruments
+        )
+        if metrics_path is None:
+            assert not caught
+            assert not caplog.records
+            assert any(
+                instrument is fastapi_bootstrapper.FastAPIPrometheusInstrument
+                for instrument, _reason in bootstrapper.skipped_instruments
+            )
+        else:
+            assert [warning.category for warning in caught] == [InstrumentDependencyMissingWarning]
+            assert "prometheus" in str(caught[0].message)
+            assert "prometheus" in caplog.text
+    finally:
+        bootstrapper.teardown()
+
+
 def test_fastapi_bootstrapper_runs_without_sentry_sdk(fastapi_config: FastAPIConfig) -> None:
     with emulate_package_missing_with_module_reload(
         "sentry_sdk",
