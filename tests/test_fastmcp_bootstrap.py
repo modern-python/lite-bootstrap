@@ -9,9 +9,13 @@ import prometheus_client
 import pytest
 from fastmcp import Client, FastMCP
 from fastmcp.exceptions import ToolError
+from fastmcp.server import create_proxy
 from fastmcp.server.context import Context
 from fastmcp.server.http import StarletteWithLifespan
 from fastmcp.server.middleware import MiddlewareContext
+from fastmcp.server.providers.addressing import hash_tool, hashed_backend_name
+from fastmcp.server.transforms.tool_transform import ToolTransform
+from fastmcp.tools.tool_transform import ToolTransformConfig
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace import TracerProvider as SDKTracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -702,7 +706,63 @@ def test_fastmcp_prometheus_teardown_restores_http_app() -> None:
     assert "http_app" not in vars(application)
 
 
-async def test_fastmcp_prometheus_counts_tool_calls() -> None:
+def _retained_tool_metric_samples() -> int:
+    return sum(
+        len(metric.samples)
+        for metric in prometheus_client.REGISTRY.collect()
+        if metric.name.startswith("fastmcp_tool_call")
+    )
+
+
+@pytest.mark.parametrize("name_prefix", ["missing", "000000000000_missing"])
+async def test_fastmcp_prometheus_unknown_tools_do_not_retain_metric_samples(name_prefix: str) -> None:
+    bootstrapper = FastMcpBootstrapper(bootstrap_config=_make_test_config(logging_enabled=False))
+    application = bootstrapper.bootstrap()
+    samples_before = _retained_tool_metric_samples()
+    missing_prefix = f"{name_prefix}_{uuid.uuid4().hex}"
+    try:
+        async with Client(application) as client:
+            for index in range(100):
+                with pytest.raises(ToolError, match="Unknown tool"):
+                    await client.call_tool(f"{missing_prefix}_{index}")
+    finally:
+        bootstrapper.teardown()
+
+    assert _retained_tool_metric_samples() == samples_before
+
+
+async def test_fastmcp_prometheus_hashed_proxy_aliases_share_metric_samples() -> None:
+    remote = FastMCP()
+    tool_name = f"echo_{uuid.uuid4().hex}"
+    tool_hash = hash_tool("metrics", tool_name)
+
+    def echo() -> str:
+        return "ok"
+
+    remote.tool(echo, name=tool_name, meta={"fastmcp": {"tool_hash": tool_hash}, "ui": {"visibility": ["app"]}})
+    bootstrapper = FastMcpBootstrapper(
+        bootstrap_config=_make_test_config(application=create_proxy(remote), logging_enabled=False)
+    )
+    application = bootstrapper.bootstrap()
+    metric_label = hashed_backend_name("metrics", tool_name)
+    try:
+        async with Client(application) as client:
+            await client.call_tool(metric_label)
+            samples_after_first_call = _retained_tool_metric_samples()
+            for index in range(100):
+                result = await client.call_tool(f"{tool_hash}_alias_{index}")
+                assert result.data == "ok"
+            assert _retained_tool_metric_samples() == samples_after_first_call
+    finally:
+        bootstrapper.teardown()
+
+    expected_calls = 101
+    assert _sample_value("fastmcp_tool_calls_total", {"tool": metric_label, "status": "success"}) == expected_calls
+    assert _sample_value("fastmcp_tool_call_duration_seconds_count", {"tool": metric_label}) == expected_calls
+
+
+@pytest.mark.parametrize("tool_source", ["registered", "mounted", "transformed", "hashed"])
+async def test_fastmcp_prometheus_counts_tool_calls(tool_source: str) -> None:
     bootstrapper = FastMcpBootstrapper(bootstrap_config=_make_test_config())
     application = bootstrapper.bootstrap()
     echo_name = f"echo_{uuid.uuid4().hex}"
@@ -715,8 +775,32 @@ async def test_fastmcp_prometheus_counts_tool_calls() -> None:
         message = "boom"
         raise ValueError(message)
 
-    application.tool(echo, name=echo_name)
-    application.tool(failing, name=failing_name)
+    tool_server = FastMCP() if tool_source == "mounted" else application
+    for tool_function, tool_name in ((echo, echo_name), (failing, failing_name)):
+        meta = (
+            {"fastmcp": {"tool_hash": hash_tool("metrics", tool_name)}, "ui": {"visibility": ["app"]}}
+            if tool_source == "hashed"
+            else None
+        )
+        tool_server.tool(tool_function, name=tool_name, meta=meta)
+    if tool_source == "mounted":
+        application.mount(tool_server, namespace="mounted")
+        echo_name = f"mounted_{echo_name}"
+        failing_name = f"mounted_{failing_name}"
+    elif tool_source == "transformed":
+        application.add_transform(
+            ToolTransform(
+                {
+                    echo_name: ToolTransformConfig(name=f"renamed_{echo_name}"),
+                    failing_name: ToolTransformConfig(name=f"renamed_{failing_name}"),
+                }
+            )
+        )
+        echo_name = f"renamed_{echo_name}"
+        failing_name = f"renamed_{failing_name}"
+    elif tool_source == "hashed":
+        echo_name = hashed_backend_name("metrics", echo_name)
+        failing_name = hashed_backend_name("metrics", failing_name)
     try:
         async with Client(application) as client:
             await client.call_tool(echo_name, {"text": "hi"})
@@ -729,7 +813,10 @@ async def test_fastmcp_prometheus_counts_tool_calls() -> None:
     expected_successes = 2
     assert _sample_value("fastmcp_tool_calls_total", {"tool": echo_name, "status": "success"}) == expected_successes
     assert _sample_value("fastmcp_tool_calls_total", {"tool": failing_name, "status": "error"}) == 1
+    assert _sample_value("fastmcp_tool_calls_total", {"tool": echo_name, "status": "error"}) == 0
+    assert _sample_value("fastmcp_tool_calls_total", {"tool": failing_name, "status": "success"}) == 0
     assert _sample_value("fastmcp_tool_call_duration_seconds_count", {"tool": echo_name}) == expected_successes
+    assert _sample_value("fastmcp_tool_call_duration_seconds_count", {"tool": failing_name}) == 1
 
 
 def test_fastmcp_prometheus_tool_metrics_can_be_disabled() -> None:

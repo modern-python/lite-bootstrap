@@ -25,6 +25,7 @@ if import_checker.is_fastmcp_installed:
     from fastmcp import FastMCP
     from fastmcp.server.http import StarletteWithLifespan
     from fastmcp.server.middleware import Middleware, MiddlewareContext
+    from fastmcp.server.providers.addressing import parse_hashed_backend_name
     from starlette import status
     from starlette.requests import Request
     from starlette.responses import JSONResponse, Response
@@ -139,7 +140,19 @@ if import_checker.is_fastmcp_installed:
             context: "MiddlewareContext[typing.Any]",
             call_next: "typing.Callable[[MiddlewareContext[typing.Any]], typing.Awaitable[typing.Any]]",
         ) -> typing.Any:  # noqa: ANN401
-            tool_name: typing.Final = context.message.name
+            tool_name = context.message.name
+            fastmcp_context: typing.Final = context.fastmcp_context
+            tool = None
+            if fastmcp_context is not None:
+                tool = await fastmcp_context.fastmcp.get_tool(tool_name)
+                if tool is None:
+                    hashed_name = parse_hashed_backend_name(tool_name)
+                    if hashed_name is not None:
+                        tool = await fastmcp_context.fastmcp.get_tool_by_hash(*hashed_name)
+                        if tool is not None:
+                            tool_name = f"{hashed_name[0]}_{tool.name}"
+            if tool is None:
+                return await call_next(context)
             start_time: typing.Final = time.perf_counter()
             try:
                 result = await call_next(context)

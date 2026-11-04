@@ -196,6 +196,10 @@ Every ASGI application `application.http_app()` builds counts its requests in `h
 route itself is not counted. Those HTTP metrics are left out while OpenTelemetry records its own
 ([Prometheus HTTP metrics](#prometheus-http-metrics)). Tool calls are counted in `fastmcp_tool_calls_total{tool, status}`, with
 `status` either `success` or `error`, and timed in `fastmcp_tool_call_duration_seconds{tool}`.
+Calls whose names do not resolve to an available tool are omitted from both tool metrics,
+preventing arbitrary names from creating unbounded series. Registered, mounted and transformed
+tools retain their client-visible names as labels, including when execution fails.
+Hashed app-tool calls use `<hash>_<resolved tool name>` so aliases share one series.
 
 Additional parameters for FastMCP integration:
 
