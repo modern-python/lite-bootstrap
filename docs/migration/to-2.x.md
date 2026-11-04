@@ -325,6 +325,15 @@ headers, including `Content-Type`. Add `Authorization` explicitly when needed
 
 ## Prometheus
 
+### Unknown FastMCP tools
+
+Calls to unresolved tool names no longer create `fastmcp_tool_calls_total` or
+`fastmcp_tool_call_duration_seconds` series. These calls still return errors, but
+are omitted from tool metrics to bound retained series. Registered, mounted and
+transformed tools keep their labels and success/failure counts
+([#433](https://github.com/modern-python/lite-bootstrap/issues/433)).
+Hashed app-tool labels use `<hash>_<resolved tool name>`; aliases share that label.
+
 ### HTTP metrics alongside OpenTelemetry
 
 On FastAPI, Litestar, and FastMCP, configuring OpenTelemetry HTTP metrics suppresses
