@@ -370,8 +370,6 @@ class FastMcpLoggingInstrument(LoggingInstrument[FastMcpConfig]):
 
 
 class FastMcpBootstrapper(BaseBootstrapper["FastMCP[typing.Any]", FastMcpConfig]):
-    __slots__ = "bootstrap_config", "instruments"
-
     instruments_types: typing.ClassVar = [
         FastMcpOpenTelemetryInstrument,
         PyroscopeInstrument,

@@ -24,18 +24,18 @@ from sentry_sdk.integrations.starlette import StarletteIntegration
 from structlog.typing import EventDict, WrappedLogger
 
 from lite_bootstrap import import_checker
-from lite_bootstrap.exceptions import InstrumentSkippedWarning
+from lite_bootstrap.exceptions import InstrumentDependencyMissingWarning
 from lite_bootstrap.instruments import healthchecks_instrument, opentelemetry_instrument
 
 
 def pytest_configure() -> None:
-    """Escalate InstrumentSkippedWarning (and subclasses) to errors.
+    """Escalate InstrumentDependencyMissingWarning (and subclasses) to errors.
 
     Done here rather than via filterwarnings in pyproject.toml to avoid pytest
     resolving the warning class before pytest-cov starts coverage, which would
     cause coverage to miss the lite_bootstrap module-level statements.
     """
-    warnings.filterwarnings("error", category=InstrumentSkippedWarning)
+    warnings.filterwarnings("error", category=InstrumentDependencyMissingWarning)
 
 
 class CustomInstrumentor(BaseInstrumentor):

@@ -54,7 +54,6 @@ if import_checker.is_opentelemetry_installed:
     tracer: typing.Final = trace.get_tracer(__name__)
 
 
-@typing.runtime_checkable
 class FastStreamTelemetryMiddlewareProtocol(typing.Protocol):
     def __init__(
         self,
@@ -71,7 +70,6 @@ class FastStreamTelemetryMiddlewareProtocol(typing.Protocol):
     def __call__(self, msg: typing.Any, /, *, context: typing.Any) -> typing.Any: ...  # noqa: ANN401
 
 
-@typing.runtime_checkable
 class FastStreamPrometheusMiddlewareProtocol(typing.Protocol):
     def __init__(
         self,
@@ -266,8 +264,6 @@ class FastStreamSentryInstrument(SentryInstrument["FastStreamConfig"]):
 
 
 class FastStreamBootstrapper(BaseBootstrapper["AsgiFastStream", FastStreamConfig]):
-    __slots__ = "bootstrap_config", "instruments"
-
     instruments_types: typing.ClassVar = [
         FastStreamOpenTelemetryInstrument,
         PyroscopeInstrument,
