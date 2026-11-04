@@ -232,6 +232,28 @@ Additional parameters:
 - `opentelemetry_excluded_urls` - extra regexes for URLs excluded from tracing; the metrics path and (unless health-check spans are enabled) the health-check path are excluded automatically. Litestar searches them in the request path, FastAPI and FastMCP in the full URL. FastAPI and FastMCP raise `ConfigurationError` at config construction if an entry contains a comma because OpenTelemetry uses commas to separate patterns. Litestar accepts commas in config entries. The environment variable OpenTelemetry defines for the framework (`OTEL_PYTHON_LITESTAR_EXCLUDED_URLS`, `OTEL_PYTHON_FASTAPI_EXCLUDED_URLS` or `OTEL_PYTHON_STARLETTE_EXCLUDED_URLS` for FastMCP), falling back to `OTEL_PYTHON_EXCLUDED_URLS`, adds to them.
 - `opentelemetry_metrics_endpoint` - will be passed to `OTLPMetricExporter` as endpoint, and turns on the metrics signal. Its own field rather than a flag on `opentelemetry_endpoint`, so upgrading never starts exporting metrics you did not ask for. Under `opentelemetry_exporter_protocol="http"` this is a full URL (e.g. `http://collector:4318/v1/metrics`); `opentelemetry_exporter_protocol` and `opentelemetry_insecure` are shared with traces.
 
+### Tracing without span processors
+
+lite-bootstrap installs an SDK `TracerProvider` only when it adds a span processor:
+Pyroscope span correlation, `opentelemetry_log_traces=True`, or a trace endpoint
+with its exporter installed. Metrics-only configuration does not create an SDK
+tracer provider. A trace endpoint with a missing exporter still warns, but uses
+no-op tracing if no other span processor is configured.
+
+Without span processors, framework and custom instrumentors receive a local
+`NoOpTracerProvider` unless an external tracer provider is already installed.
+An existing external provider is preserved and is never shut down by lite-bootstrap.
+Install an external provider before bootstrap if it should record framework spans.
+The no-op path leaves the global provider registration slot available, but installing
+an external provider afterward does not replace the no-op provider already passed
+to framework and custom instrumentors.
+
+Code that previously added a span processor to `get_tracer_provider()` after a
+metrics-only bootstrap must instead create and install its own SDK provider before
+bootstrap. For metrics-only requests without external tracing, spans do not record
+and JSON logs omit `tracing`; there are no `span_id` or `trace_id` values to inject.
+Metrics collection is unchanged.
+
 ### Metrics
 
 Left unset, no `MeterProvider` is installed and the metrics signal stays off. Set it, and the

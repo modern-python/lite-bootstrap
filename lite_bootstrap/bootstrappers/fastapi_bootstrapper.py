@@ -49,7 +49,6 @@ if import_checker.is_structlog_installed:
 
 if import_checker.is_opentelemetry_installed:
     from opentelemetry.metrics import get_meter_provider
-    from opentelemetry.trace import get_tracer_provider
 
 if import_checker.is_fastapi_opentelemetry_installed:
     from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
@@ -213,7 +212,7 @@ class FastAPIOpenTelemetryInstrument(OpenTelemetryInstrument[FastAPIConfig]):
         super().bootstrap()
         FastAPIInstrumentor.instrument_app(
             app=self.bootstrap_config.app,
-            tracer_provider=get_tracer_provider(),
+            tracer_provider=self.tracer_provider,
             meter_provider=get_meter_provider(),
             excluded_urls=",".join(self._build_excluded_url_patterns("FASTAPI")),
             exclude_spans=self.bootstrap_config.opentelemetry_exclude_spans,

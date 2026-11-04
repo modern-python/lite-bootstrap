@@ -78,7 +78,6 @@ if import_checker.is_litestar_installed and import_checker.is_sentry_installed:
 
 if import_checker.is_opentelemetry_installed:
     from opentelemetry.metrics import get_meter_provider
-    from opentelemetry.trace import get_tracer_provider
 
 if import_checker.is_structlog_installed:
     import structlog
@@ -382,7 +381,7 @@ class LitestarOpenTelemetryInstrument(OpenTelemetryInstrument[LitestarConfig]):
         application_config.plugins.append(
             OpenTelemetryPlugin(
                 LitestarOpenTelemetryConfig(
-                    tracer_provider=get_tracer_provider(),
+                    tracer_provider=self.tracer_provider,
                     meter_provider=get_meter_provider(),
                     scope_span_details_extractor=build_litestar_route_details_from_scope,
                     # An empty list compiles to a pattern that matches, and so skips, every path
