@@ -559,12 +559,16 @@ def test_structlog_envelope_redacts_kwargs_and_excludes_skipped_breadcrumbs(
         sentry.teardown()
 
 
+@pytest.mark.parametrize("attach_stacktrace", [False, True])
 def test_structlog_stored_exception_reaches_sentry_and_stdout(
     minimal_sentry_config: SentryConfig,
     sentry_mock: SentryTestTransport,
     capsys: pytest.CaptureFixture[str],
+    *,
+    attach_stacktrace: bool,
 ) -> None:
-    sentry = SentryInstrument(bootstrap_config=minimal_sentry_config)
+    config = dataclasses.replace(minimal_sentry_config, sentry_attach_stacktrace=attach_stacktrace)
+    sentry = SentryInstrument(bootstrap_config=config)
     logs = LoggingInstrument(bootstrap_config=LoggingConfig())
     sentry.bootstrap()
     logs.bootstrap()
@@ -574,12 +578,18 @@ def test_structlog_stored_exception_reaches_sentry_and_stdout(
         except ValueError as exc:
             stored = exc
 
-        logger.error("stored exception", exc_info=stored, component="worker")
+        marker = uuid.uuid4().hex
+        padding = "x" * config.sentry_max_value_length
+        logger.error("stored exception", exc_info=stored, component="worker", password=marker, padding=padding)
 
         line = json.loads(capsys.readouterr().out.splitlines()[-1])
+        assert line["password"] == marker
+        assert line["padding"] == padding
         assert "Traceback (most recent call last)" in line["exception"]
         assert "ValueError: invalid literal for int() with base 10: 'original stored error'" in line["exception"]
-        event = sentry_mock.mock_envelopes[0].get_event()
+        envelope = sentry_mock.mock_envelopes[0]
+        assert marker.encode() not in envelope.serialize()
+        event = envelope.get_event()
         assert event is not None
         (exception,) = event["exception"]["values"]
         assert exception["type"] == "ValueError"
@@ -587,7 +597,83 @@ def test_structlog_stored_exception_reaches_sentry_and_stdout(
         assert exception["stacktrace"]["frames"][-1]["function"] == (
             "test_structlog_stored_exception_reaches_sentry_and_stdout"
         )
-        assert event["contexts"]["structlog"] == {"component": "worker"}
+        assert event["contexts"]["structlog"]["component"] == "worker"
+        assert event["contexts"]["structlog"]["password"] == "[Filtered]"  # noqa: S105
     finally:
         logs.teardown()
+        sentry.teardown()
+
+
+@pytest.mark.parametrize("attach_stacktrace", [False, True])
+@pytest.mark.parametrize("oversized", [False, True])
+def test_structlog_envelope_privacy_across_string_limit(
+    minimal_sentry_config: SentryConfig,
+    sentry_mock: SentryTestTransport,
+    capsys: pytest.CaptureFixture[str],
+    *,
+    attach_stacktrace: bool,
+    oversized: bool,
+) -> None:
+    limit = 1024
+    marker = uuid.uuid4().hex
+    padding = "x" * (limit + 1 if oversized else limit - 256)
+    callback_events: list[sentry_types.Event] = []
+
+    def before_send(event: "sentry_types.Event", _: "sentry_types.Hint") -> "sentry_types.Event":
+        callback_events.append(copy.deepcopy(event))
+        return event
+
+    config = dataclasses.replace(
+        minimal_sentry_config,
+        sentry_max_value_length=limit,
+        sentry_attach_stacktrace=attach_stacktrace,
+        sentry_before_send=before_send,
+    )
+    sentry = SentryInstrument(bootstrap_config=config)
+    logs = LoggingInstrument(bootstrap_config=LoggingConfig())
+    sentry.bootstrap()
+    logs.bootstrap()
+    try:
+        logger.error("failure", password=marker, padding=padding)
+        logger.error("suppressed", password=marker, padding=padding, skip_sentry=True)
+
+        lines = capsys.readouterr().out.splitlines()
+        expected_lines = 2
+        assert len(lines) == expected_lines
+        for line in lines:
+            assert (len(line) > limit) == oversized
+            rendered = json.loads(line)
+            assert rendered["password"] == marker
+            assert rendered["padding"] == padding
+        assert json.loads(lines[1])["skip_sentry"] is True
+        (envelope,) = sentry_mock.mock_envelopes
+        assert marker.encode() not in envelope.serialize()
+        (event,) = callback_events
+        assert event["logentry"] == {"message": "failure", "formatted": "failure", "params": []}
+        assert event["contexts"]["structlog"]["password"] == "[Filtered]"  # noqa: S105
+        assert ("threads" in event) == attach_stacktrace
+    finally:
+        logs.teardown()
+        sentry.teardown()
+
+
+@pytest.mark.parametrize("template", ["plain %s", "{invalid %s", '{"unrelated":"%s"}'])
+def test_unstructured_log_keeps_sdk_truncation(
+    minimal_sentry_config: SentryConfig, sentry_mock: SentryTestTransport, template: str
+) -> None:
+    limit = 256
+    config = dataclasses.replace(minimal_sentry_config, sentry_max_value_length=limit)
+    sentry = SentryInstrument(bootstrap_config=config)
+    sentry.bootstrap()
+    try:
+        std_logger.error(template, "x" * (limit * 2))
+        (envelope,) = sentry_mock.mock_envelopes
+        event = envelope.get_event()
+        assert event is not None
+        formatted = event["logentry"]["formatted"]
+        assert isinstance(formatted, str)
+        assert len(formatted) <= limit
+        assert event["logentry"]["message"] == template
+        assert "structlog" not in event["contexts"]
+    finally:
         sentry.teardown()
