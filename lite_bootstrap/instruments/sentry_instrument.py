@@ -171,7 +171,7 @@ def _scrub_structlog_extra(extra: dict[str, typing.Any]) -> dict[str, typing.Any
 
 
 def enrich_sentry_event_from_structlog_log(
-    event: "sentry_types.Event", _: "sentry_types.Hint"
+    event: "sentry_types.Event", hint: "sentry_types.Hint"
 ) -> typing.Optional["sentry_types.Event"]:
     logentry = event.get("logentry") or {}
     if not (
@@ -181,7 +181,11 @@ def enrich_sentry_event_from_structlog_log(
     ):
         return event
 
-    payload = StructuredLogPayload.parse(formatted_message)
+    # Sentry truncates logentry before before_send; the original record still has complete JSON.
+    record = hint.get("log_record")
+    payload = StructuredLogPayload.parse(record.getMessage()) if isinstance(record, logging.LogRecord) else None
+    if payload is None:
+        payload = StructuredLogPayload.parse(formatted_message)
     if payload is None:
         return event
     if payload.skip_sentry:
