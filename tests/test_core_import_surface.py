@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import sys
 
+import pytest
 import typing_extensions
 
 import lite_bootstrap
@@ -95,3 +96,89 @@ for instrument in (
     )
 
     assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "import lite_bootstrap",
+        "from lite_bootstrap import ConfigurationError",
+        "from lite_bootstrap import PyroscopeConfig",
+        "from lite_bootstrap import FastAPIBootstrapper",
+    ],
+)
+def test_public_imports_do_not_load_unrelated_frameworks(statement: str) -> None:
+    result = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            "-c",
+            statement
+            + """
+import sys
+assert not {"litestar", "faststream", "fastmcp"}.intersection(sys.modules)
+""",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_every_public_export_resolves_in_a_fresh_process() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            """
+import lite_bootstrap
+
+for name in lite_bootstrap.__all__:
+    exported = getattr(lite_bootstrap, name)
+    assert exported.__name__ == name, name
+    assert exported is getattr(lite_bootstrap, name), name
+
+try:
+    getattr(lite_bootstrap, "not_an_export")
+except AttributeError as error:
+    assert "not_an_export" in str(error)
+else:
+    raise AssertionError("unknown export resolved")
+""",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_unknown_public_export_raises_attribute_error() -> None:
+    name = "not_an_export"
+    with pytest.raises(AttributeError, match=name):
+        getattr(lite_bootstrap, name)
+
+
+def test_public_exports_are_discoverable_without_loading_frameworks() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            """
+import sys
+import lite_bootstrap
+
+before = set(sys.modules)
+names = dir(lite_bootstrap)
+assert set(lite_bootstrap.__all__).issubset(names)
+assert "__name__" in names
+assert set(sys.modules) == before
+assert not {"fastapi", "litestar", "faststream", "fastmcp"}.intersection(sys.modules)
+""",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert set(lite_bootstrap.__all__).issubset(dir(lite_bootstrap))
