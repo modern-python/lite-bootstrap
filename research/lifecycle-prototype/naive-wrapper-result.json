@@ -1,0 +1,25 @@
+{
+  "framework": "faststream",
+  "variant": "lifespan",
+  "scenario": "happy",
+  "status": "fail",
+  "events": [
+    "own provider",
+    "exporter shutdown"
+  ],
+  "exported_spans": [],
+  "shutdown_calls": 1,
+  "error": "TypeError",
+  "error_message": "make_application.<locals>.faststream_lifespan() got an unexpected keyword argument 'context__'",
+  "notes": [],
+  "checks": {
+    "expected_error": false,
+    "primary_preserved": true,
+    "cleanup_note": true,
+    "shutdown_ownership": true,
+    "shutdown_spans": false,
+    "arguments": false,
+    "lifespan_result": true,
+    "external_survives": true
+  }
+}

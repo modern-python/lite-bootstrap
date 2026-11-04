@@ -1,0 +1,1127 @@
+{
+  "versions": {
+    "fastapi": "0.162.0",
+    "faststream": "0.7.8",
+    "opentelemetry-sdk": "1.45.2",
+    "opentelemetry-instrumentation-fastapi": "0.66b2",
+    "starlette": "1.10.0"
+  },
+  "results": [
+    {
+      "framework": "fastapi",
+      "variant": "lifespan",
+      "scenario": "happy",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "user startup",
+        "work",
+        "user shutdown",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup",
+        "work",
+        "GET /work",
+        "user shutdown"
+      ],
+      "shutdown_calls": 1,
+      "error": null,
+      "error_message": null,
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "fastapi",
+      "variant": "lifespan",
+      "scenario": "setup-error",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "exporter shutdown"
+      ],
+      "exported_spans": [],
+      "shutdown_calls": 1,
+      "error": "ValueError",
+      "error_message": "primary failed",
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "fastapi",
+      "variant": "lifespan",
+      "scenario": "startup-error",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "user startup",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup"
+      ],
+      "shutdown_calls": 1,
+      "error": "ValueError",
+      "error_message": "primary failed",
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "fastapi",
+      "variant": "lifespan",
+      "scenario": "shutdown-error",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "user startup",
+        "work",
+        "user shutdown",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup",
+        "work",
+        "GET /work",
+        "user shutdown"
+      ],
+      "shutdown_calls": 1,
+      "error": "ValueError",
+      "error_message": "primary failed",
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "fastapi",
+      "variant": "lifespan",
+      "scenario": "cleanup-error",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "user startup",
+        "work",
+        "user shutdown",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup",
+        "work",
+        "GET /work",
+        "user shutdown"
+      ],
+      "shutdown_calls": 1,
+      "error": "RuntimeError",
+      "error_message": "cleanup failed",
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "fastapi",
+      "variant": "lifespan",
+      "scenario": "combined-error",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "user startup",
+        "work",
+        "user shutdown",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup",
+        "work",
+        "GET /work",
+        "user shutdown"
+      ],
+      "shutdown_calls": 1,
+      "error": "ValueError",
+      "error_message": "primary failed",
+      "notes": [
+        "Observability cleanup: cleanup failed"
+      ],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "fastapi",
+      "variant": "lifespan",
+      "scenario": "external",
+      "status": "pass",
+      "events": [
+        "borrow provider",
+        "user startup",
+        "work",
+        "user shutdown",
+        "external after cleanup",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup",
+        "work",
+        "GET /work",
+        "user shutdown",
+        "external after cleanup"
+      ],
+      "shutdown_calls": 0,
+      "error": null,
+      "error_message": null,
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "fastapi",
+      "variant": "explicit",
+      "scenario": "happy",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "user startup",
+        "work",
+        "user shutdown",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup",
+        "work",
+        "GET /work",
+        "user shutdown"
+      ],
+      "shutdown_calls": 1,
+      "error": null,
+      "error_message": null,
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "fastapi",
+      "variant": "explicit",
+      "scenario": "setup-error",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "exporter shutdown"
+      ],
+      "exported_spans": [],
+      "shutdown_calls": 1,
+      "error": "ValueError",
+      "error_message": "primary failed",
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "fastapi",
+      "variant": "explicit",
+      "scenario": "startup-error",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "user startup",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup"
+      ],
+      "shutdown_calls": 1,
+      "error": "ValueError",
+      "error_message": "primary failed",
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "fastapi",
+      "variant": "explicit",
+      "scenario": "shutdown-error",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "user startup",
+        "work",
+        "user shutdown",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup",
+        "work",
+        "GET /work",
+        "user shutdown"
+      ],
+      "shutdown_calls": 1,
+      "error": "ValueError",
+      "error_message": "primary failed",
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "fastapi",
+      "variant": "explicit",
+      "scenario": "cleanup-error",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "user startup",
+        "work",
+        "user shutdown",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup",
+        "work",
+        "GET /work",
+        "user shutdown"
+      ],
+      "shutdown_calls": 1,
+      "error": "RuntimeError",
+      "error_message": "cleanup failed",
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "fastapi",
+      "variant": "explicit",
+      "scenario": "combined-error",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "user startup",
+        "work",
+        "user shutdown",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup",
+        "work",
+        "GET /work",
+        "user shutdown"
+      ],
+      "shutdown_calls": 1,
+      "error": "ValueError",
+      "error_message": "primary failed",
+      "notes": [
+        "Observability cleanup: cleanup failed"
+      ],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "fastapi",
+      "variant": "explicit",
+      "scenario": "external",
+      "status": "pass",
+      "events": [
+        "borrow provider",
+        "user startup",
+        "work",
+        "user shutdown",
+        "external after cleanup",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup",
+        "work",
+        "GET /work",
+        "user shutdown",
+        "external after cleanup"
+      ],
+      "shutdown_calls": 0,
+      "error": null,
+      "error_message": null,
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "faststream",
+      "variant": "lifespan",
+      "scenario": "happy",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown"
+      ],
+      "shutdown_calls": 1,
+      "error": null,
+      "error_message": null,
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "faststream",
+      "variant": "lifespan",
+      "scenario": "setup-error",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "exporter shutdown"
+      ],
+      "exported_spans": [],
+      "shutdown_calls": 1,
+      "error": "ValueError",
+      "error_message": "primary failed",
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "faststream",
+      "variant": "lifespan",
+      "scenario": "startup-error",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "user startup",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup"
+      ],
+      "shutdown_calls": 1,
+      "error": "ValueError",
+      "error_message": "primary failed",
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "faststream",
+      "variant": "lifespan",
+      "scenario": "shutdown-error",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown"
+      ],
+      "shutdown_calls": 1,
+      "error": "ValueError",
+      "error_message": "primary failed",
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "faststream",
+      "variant": "lifespan",
+      "scenario": "cleanup-error",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown"
+      ],
+      "shutdown_calls": 1,
+      "error": "RuntimeError",
+      "error_message": "cleanup failed",
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "faststream",
+      "variant": "lifespan",
+      "scenario": "combined-error",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown"
+      ],
+      "shutdown_calls": 1,
+      "error": "ValueError",
+      "error_message": "primary failed",
+      "notes": [
+        "Observability cleanup: cleanup failed"
+      ],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "faststream",
+      "variant": "lifespan",
+      "scenario": "external",
+      "status": "pass",
+      "events": [
+        "borrow provider",
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown",
+        "external after cleanup",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown",
+        "external after cleanup"
+      ],
+      "shutdown_calls": 0,
+      "error": null,
+      "error_message": null,
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "faststream",
+      "variant": "lifespan",
+      "scenario": "hook-error",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "user startup",
+        "work",
+        "shutdown hook",
+        "user shutdown",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup",
+        "work",
+        "shutdown hook",
+        "user shutdown"
+      ],
+      "shutdown_calls": 1,
+      "error": "ValueError",
+      "error_message": "primary failed",
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "faststream",
+      "variant": "lifespan",
+      "scenario": "broker-error",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown"
+      ],
+      "shutdown_calls": 1,
+      "error": "ValueError",
+      "error_message": "primary failed",
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "faststream",
+      "variant": "lifespan",
+      "scenario": "manual",
+      "status": "unsupported",
+      "events": [
+        "work",
+        "shutdown hook",
+        "broker drain"
+      ],
+      "exported_spans": [],
+      "shutdown_calls": 0,
+      "error": null,
+      "error_message": null,
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "faststream",
+      "variant": "explicit",
+      "scenario": "happy",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown"
+      ],
+      "shutdown_calls": 1,
+      "error": null,
+      "error_message": null,
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "faststream",
+      "variant": "explicit",
+      "scenario": "setup-error",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "exporter shutdown"
+      ],
+      "exported_spans": [],
+      "shutdown_calls": 1,
+      "error": "ValueError",
+      "error_message": "primary failed",
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "faststream",
+      "variant": "explicit",
+      "scenario": "startup-error",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "user startup",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup"
+      ],
+      "shutdown_calls": 1,
+      "error": "ValueError",
+      "error_message": "primary failed",
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "faststream",
+      "variant": "explicit",
+      "scenario": "shutdown-error",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown"
+      ],
+      "shutdown_calls": 1,
+      "error": "ValueError",
+      "error_message": "primary failed",
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "faststream",
+      "variant": "explicit",
+      "scenario": "cleanup-error",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown"
+      ],
+      "shutdown_calls": 1,
+      "error": "RuntimeError",
+      "error_message": "cleanup failed",
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "faststream",
+      "variant": "explicit",
+      "scenario": "combined-error",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown"
+      ],
+      "shutdown_calls": 1,
+      "error": "ValueError",
+      "error_message": "primary failed",
+      "notes": [
+        "Observability cleanup: cleanup failed"
+      ],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "faststream",
+      "variant": "explicit",
+      "scenario": "external",
+      "status": "pass",
+      "events": [
+        "borrow provider",
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown",
+        "external after cleanup",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown",
+        "external after cleanup"
+      ],
+      "shutdown_calls": 0,
+      "error": null,
+      "error_message": null,
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "faststream",
+      "variant": "explicit",
+      "scenario": "hook-error",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "user startup",
+        "work",
+        "shutdown hook",
+        "user shutdown",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup",
+        "work",
+        "shutdown hook",
+        "user shutdown"
+      ],
+      "shutdown_calls": 1,
+      "error": "ValueError",
+      "error_message": "primary failed",
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "faststream",
+      "variant": "explicit",
+      "scenario": "broker-error",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown"
+      ],
+      "shutdown_calls": 1,
+      "error": "ValueError",
+      "error_message": "primary failed",
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "faststream",
+      "variant": "explicit",
+      "scenario": "manual",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "work",
+        "shutdown hook",
+        "broker drain"
+      ],
+      "shutdown_calls": 1,
+      "error": null,
+      "error_message": null,
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    }
+  ]
+}

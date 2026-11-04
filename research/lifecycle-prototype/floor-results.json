@@ -1,0 +1,79 @@
+{
+  "faststream": "0.6.0",
+  "results": [
+    {
+      "framework": "faststream",
+      "variant": "lifespan",
+      "scenario": "happy",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown"
+      ],
+      "shutdown_calls": 1,
+      "error": null,
+      "error_message": null,
+      "notes": [],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    },
+    {
+      "framework": "faststream",
+      "variant": "explicit",
+      "scenario": "combined-error",
+      "status": "pass",
+      "events": [
+        "own provider",
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown",
+        "exporter shutdown"
+      ],
+      "exported_spans": [
+        "user startup",
+        "work",
+        "shutdown hook",
+        "broker drain",
+        "user shutdown"
+      ],
+      "shutdown_calls": 1,
+      "error": "ValueError",
+      "error_message": "primary failed",
+      "notes": [
+        "Observability cleanup: cleanup failed"
+      ],
+      "checks": {
+        "expected_error": true,
+        "primary_preserved": true,
+        "cleanup_note": true,
+        "shutdown_ownership": true,
+        "shutdown_spans": true,
+        "arguments": true,
+        "lifespan_result": true,
+        "external_survives": true
+      }
+    }
+  ]
+}
