@@ -1,10 +1,8 @@
 # Migration guide: upgrading to lite-bootstrap 2.x
 
-This guide covers changes since 1.16.0. Upgrade your dependency constraints first,
-then review the sections for the instruments and frameworks your service uses.
-The [2.0.0 release notes](https://github.com/modern-python/lite-bootstrap/releases/tag/2.0.0)
-provide the release checklist. Configuration snippets below are independent examples;
-use your own DSN, application, exporter, and service identity where applicable.
+This guide covers changes since 1.16.0. Update dependency constraints, then follow
+the sections for your frameworks and instruments. Snippets are independent examples;
+use your service's DSN, application, exporter, and identity.
 
 ## Dependency constraints
 
@@ -18,11 +16,10 @@ Update lockfiles and any direct pins to match these supported versions:
 | `litestar` | `>=2.22` | All Litestar extras |
 | `fastmcp` | `>=4.0,<5` | All FastMCP extras |
 
-Sentry 3 is not supported. FastMCP 3 pins must move to 4; see its
-[upgrade guide](https://github.com/PrefectHQ/fastmcp/blob/main/docs/getting-started/upgrading/from-fastmcp-3.mdx)
-for changes in FastMCP itself. With access logging configured, notifications and
-pre-handler failures now produce records too; review log-volume assumptions.
-These constraints come from
+Sentry 3 is unsupported. For FastMCP 3, follow the
+[FastMCP 4 upgrade guide](https://github.com/PrefectHQ/fastmcp/blob/main/docs/getting-started/upgrading/from-fastmcp-3.mdx).
+FastMCP access logs now include notifications and pre-handler failures, increasing
+log volume. Sources:
 [#359](https://github.com/modern-python/lite-bootstrap/pull/359),
 [#368](https://github.com/modern-python/lite-bootstrap/pull/368),
 [#371](https://github.com/modern-python/lite-bootstrap/pull/371),
@@ -31,9 +28,8 @@ These constraints come from
 
 ## Removed names and config fields
 
-Aliases deprecated in 1.x have been removed
-([#367](https://github.com/modern-python/lite-bootstrap/pull/367)). Update imports,
-attribute access, config constructor arguments, and keys in external settings sources:
+Replace aliases deprecated in 1.x in imports, attributes, constructor arguments,
+and settings keys ([#367](https://github.com/modern-python/lite-bootstrap/pull/367)):
 
 | Removed name | Replacement |
 | --- | --- |
@@ -51,11 +47,11 @@ attribute access, config constructor arguments, and keys in external settings so
 | Custom instrument `not_ready_message` | `not_configured_reason` |
 | Custom instrument `check_dependencies` | `dependencies_installed` |
 
-Removed imports fail with `ImportError`; removed attributes fail with `AttributeError`.
-Removed constructor keywords fail with `TypeError`. `from_dict()` and `from_object()`
-still ignore unknown keys, so old settings keys can silently fall back to defaults.
-Rename those keys before upgrading. Custom instruments using the old dependency
-method can be instantiated despite a missing package; update both class members.
+Removed imports raise `ImportError`, attributes raise `AttributeError`, and
+constructor keywords raise `TypeError`. `from_dict()` and `from_object()` ignore
+unknown keys, so rename settings keys to avoid silently using defaults. Update both
+custom instrument members: the old dependency method no longer prevents construction
+when a package is missing.
 
 For example, replace `FreeBootstrapperConfig(...)` with:
 
@@ -67,10 +63,9 @@ config = FreeConfig(logging_enabled=False)
 
 ### Missing-dependency warning category
 
-`InstrumentSkippedWarning` has also been removed
-([#427](https://github.com/modern-python/lite-bootstrap/pull/427)). Replace imports
-and warning filters with `InstrumentDependencyMissingWarning`, which derives directly
-from `UserWarning`:
+Replace `InstrumentSkippedWarning` imports and filters with
+`InstrumentDependencyMissingWarning`, now a direct subclass of `UserWarning`
+([#427](https://github.com/modern-python/lite-bootstrap/pull/427)):
 
 ```python
 import warnings
@@ -80,19 +75,17 @@ from lite_bootstrap import InstrumentDependencyMissingWarning
 warnings.filterwarnings("error", category=InstrumentDependencyMissingWarning)
 ```
 
-Unconfigured instruments are skipped silently. A configured instrument with a missing
-optional dependency warns. With `prometheus_client` missing, the default metrics path
-now skips silently too, including an explicitly supplied `/metrics` on FastAPI,
-Litestar, or FastMCP. A custom path still warns; install the framework's metrics extra
-if you expect a scrape route
+Unconfigured instruments skip silently; configured instruments with missing
+dependencies warn. Without `prometheus_client`, the default metrics path also skips
+silently, even an explicit `/metrics` on FastAPI, Litestar, or FastMCP. Custom paths
+still warn. Install your framework's metrics extra if you expect a scrape route
 ([#428](https://github.com/modern-python/lite-bootstrap/pull/428)).
 
 ### Custom bootstrappers
 
-`BaseBootstrapper` now takes the application and config types. Change
-`BaseBootstrapper[MyApp]` to `BaseBootstrapper[MyApp, MyConfig]`; the old form raises
-`TypeError` when the class is defined
-([#376](https://github.com/modern-python/lite-bootstrap/pull/376)). For example:
+Change `BaseBootstrapper[MyApp]` to `BaseBootstrapper[MyApp, MyConfig]`.
+The old form raises `TypeError` at class definition
+([#376](https://github.com/modern-python/lite-bootstrap/pull/376)):
 
 ```python
 from lite_bootstrap import FreeConfig
@@ -105,10 +98,9 @@ class MyBootstrapper(BaseBootstrapper[object, FreeConfig]):
 
 ## Service identity and debug mode
 
-`service_debug` defaults to `False`. FastAPI apps created by lite-bootstrap and
-Litestar apps no longer show debug tracebacks unless explicitly requested. Set
-`service_debug=True` for development; Litestar also preserves an explicit
-`AppConfig(debug=True)`
+`service_debug=False` disables debug tracebacks on FastAPI apps created by
+lite-bootstrap and on Litestar apps. Set `service_debug=True` for development.
+Litestar also preserves `AppConfig(debug=True)`
 ([#369](https://github.com/modern-python/lite-bootstrap/pull/369)).
 
 `service_name` and `service_version` now default to `None`
@@ -135,55 +127,47 @@ from lite_bootstrap import FreeConfig
 config = FreeConfig(service_name="micro-service", service_version="1.0.0")
 ```
 
-Review Sentry release grouping when setting a version explicitly.
-
 ## Logging
 
 ### Immediate output and root propagation
 
-`logging_buffer_capacity` and `logging_flush_level` were removed. Delete those
-constructor arguments and settings keys. Structlog lines are written immediately,
-in order with stdlib lines, rather than waiting for a buffer flush
+Delete `logging_buffer_capacity` and `logging_flush_level` from constructors and
+settings. Structlog lines now appear immediately, in order with stdlib lines
 ([#378](https://github.com/modern-python/lite-bootstrap/pull/378)).
 
-`MemoryLoggerFactory` and `LoggingInstrument.memory_logger_factory` were removed.
-Structlog uses the standard-library logger factory and propagates to root. Loggers
-used by structlog inherit root's level instead of receiving their own. Stdlib records
-on those names and their children are now JSON lines. Litestar and FastStream loggers
-also propagate to root while bootstrapped
+Remove uses of `MemoryLoggerFactory` and `LoggingInstrument.memory_logger_factory`.
+Structlog uses the stdlib factory, propagates to root, and inherits root's level.
+Stdlib records on structlog logger names and their children now render as JSON.
+Litestar and FastStream loggers also propagate to root while bootstrapped
 ([#405](https://github.com/modern-python/lite-bootstrap/pull/405)).
 
-Remove code inspecting the old factory or per-logger handlers. Review your parent
-and root handlers for duplicate output, and set explicit named-logger levels if you
-need them to differ from `logging_log_level`.
+Check parent and root handlers for duplicate output. Set named-logger levels
+explicitly when they should differ from `logging_log_level`.
 
 ### Teardown preserves application logging
 
-Logging teardown now removes only its own root handler and restores the root level
-from before bootstrap. Other root handlers survive. If your application relied on
-teardown to close its handlers or set root to `WARNING`, do that explicitly.
-Removals requested through `logging_unset_handlers` remain permanent
+Teardown removes its own root handler, preserves other handlers, and restores the
+previous root level. Close application handlers or set root to `WARNING` yourself
+if needed. `logging_unset_handlers` removals remain permanent
 ([#415](https://github.com/modern-python/lite-bootstrap/pull/415)).
 
 ### Trace context in JSON logs
 
-JSON log lines include `tracing` only inside a recording OpenTelemetry span; the
-object contains `span_id` and `trace_id`. Outside one, the key is absent instead of
-an empty object. Update log parsers to treat `tracing` as optional
+Treat JSON log `tracing` as optional. It contains `span_id` and `trace_id` inside a
+recording OpenTelemetry span and is absent elsewhere, replacing the empty object
 ([#425](https://github.com/modern-python/lite-bootstrap/pull/425)).
 
 ## Sentry
 
 ### Data collection and request bodies
 
-lite-bootstrap passes an explicit `data_collection` policy. Sentry's general event
-scrubber is bypassed by the SDK for that policy; headers, cookies, query parameters,
-and frame locals instead use collection denylists. `send_default_pii=True` alone no
-longer opts into collection. User information and HTTP bodies are off by default
+An explicit `data_collection` policy bypasses Sentry's general event scrubber;
+collection denylists filter headers, cookies, query parameters, and frame locals.
+Review custom scrubbing. User information and HTTP bodies default to off;
+`send_default_pii=True` alone no longer enables them
 ([#359](https://github.com/modern-python/lite-bootstrap/pull/359)).
 
-Review any custom scrubbing and opt-ins. To collect user information or incoming
-request bodies, replace the relevant policy entries while retaining the others:
+To collect user information or incoming bodies, override those policy entries:
 
 ```python
 from lite_bootstrap import FastAPIConfig
@@ -201,27 +185,22 @@ config = FastAPIConfig(
 )
 ```
 
-Enable only the data your service intends to collect. Lean capture attaches a body
-only after the handler reads it; FastAPI and FastMCP require the complete body.
-Raw bodies are text rather than a raw-data annotation. Request body size policy is
-also enforced by lean capture
+Lean capture attaches bodies only after the handler reads them; FastAPI and
+FastMCP require the complete body. Raw bodies become text. Body size limits apply
 ([#410](https://github.com/modern-python/lite-bootstrap/pull/410)). See
 [Sentry data collection](../introduction/configuration.md#sentry-data-collection)
 for the full default policy.
 
-Structured log events and breadcrumbs are now normalized and redacted before user
-callbacks. Recognized structlog events omit frame locals, which can retain the
-original unredacted line. Update callbacks that relied on those locals or raw JSON
-messages ([#408](https://github.com/modern-python/lite-bootstrap/pull/408)).
-FastStream message scopes are isolated: set tags and breadcrumbs for each message
-instead of relying on context left by a previous one
+Structured log events and breadcrumbs reach callbacks normalized and redacted.
+Structlog events omit frame locals to avoid leaking the original line. Update
+callbacks that relied on those locals or raw JSON messages ([#408](https://github.com/modern-python/lite-bootstrap/pull/408)).
+FastStream isolates message scopes. Set tags and breadcrumbs per message
 ([#409](https://github.com/modern-python/lite-bootstrap/pull/409)).
 
 ### Sessions and breadcrumbs
 
-Release-health session tracking defaults to off, and logging breadcrumbs start at
-`WARNING` instead of `INFO`. HTTP crash-free session/user rates stop and INFO log
-breadcrumbs disappear. To restore both defaults from 1.x:
+Session tracking defaults to off; HTTP crash-free session/user rates stop.
+Log breadcrumbs start at `WARNING`, omitting INFO records. Restore the 1.x defaults:
 
 ```python
 import logging
@@ -234,34 +213,30 @@ config = FreeConfig(
 )
 ```
 
-Only HTTP frameworks opened request sessions; FastStream and Free do not gain
-request sessions from this option
+Request sessions apply only to HTTP frameworks, not FastStream or Free
 ([#360](https://github.com/modern-python/lite-bootstrap/pull/360)).
 
 ### Lean request error capture
 
-FastAPI, Litestar, and FastMCP now use lean error capture when tracing is not
-requested and no replaced framework integration is supplied. Request transactions
-are no longer created, so code reading the current transaction must change.
-Litestar exceptions handled as 4xx are no longer reported. FastAPI/FastMCP report
-escaping exceptions and handled exceptions whose own integer `status_code` is 5xx;
-a handler returning 503 alone does not make its exception reportable.
+FastAPI, Litestar, and FastMCP use lean capture when tracing is unrequested and no
+replaced framework integration is supplied. It creates no request transaction;
+update code that reads one. Litestar no longer reports exceptions handled as 4xx.
+FastAPI/FastMCP report escaping exceptions and handled exceptions with their own
+integer 5xx `status_code`; a handler returning 503 alone does not qualify.
 
-Set `sentry_lean_error_capture=False` to retain Sentry's framework integrations.
-Setting a tracing option, including an explicit sample rate of zero, selects the
-integration path under the default `None` policy. Avoid initializing those framework
-integrations earlier in the same process: lean capture cannot undo their global
+Set `sentry_lean_error_capture=False` to keep Sentry's framework integrations.
+With the default `None`, any tracing option, even a zero sample rate, selects them.
+Avoid initializing them earlier: lean capture cannot undo global
 patches and warns about possible duplicate events
 ([#361](https://github.com/modern-python/lite-bootstrap/pull/361),
 [#362](https://github.com/modern-python/lite-bootstrap/pull/362)).
 
 ### Auto-enabling integrations
 
-Auto-enabling integrations default to off while tracing is off (for HTTP frameworks,
+Auto-enabling integrations default to off without tracing (on HTTP frameworks,
 while lean capture is on). SQL, Redis, httpx, aiohttp, and FastMCP's `MCPIntegration`
-may therefore stop contributing breadcrumbs and event context. Set
-`sentry_auto_enabling_integrations=True` to restore them, or list only the desired
-integrations in `sentry_integrations`
+may stop adding breadcrumbs and event context. Restore them with `sentry_auto_enabling_integrations=True`
+or select integrations through `sentry_integrations`
 ([#363](https://github.com/modern-python/lite-bootstrap/pull/363)).
 
 ## OpenTelemetry
@@ -272,18 +247,16 @@ FastAPI, Litestar, and FastMCP omit per-message `receive` and `send` spans. Set
 `opentelemetry_exclude_spans=[]` to restore them
 ([#364](https://github.com/modern-python/lite-bootstrap/pull/364)).
 
-`opentelemetry_generate_health_check_spans` defaults to `False`. Health requests
-are omitted from traces and OpenTelemetry HTTP metrics. Set it to `True` to observe
-probe latency and restore those metrics
+`opentelemetry_generate_health_check_spans=False` omits health requests from traces
+and OpenTelemetry HTTP metrics. Set it to `True` to restore both
 ([#366](https://github.com/modern-python/lite-bootstrap/pull/366)).
 
 ### OTLP transport security
 
-`opentelemetry_insecure` defaults to `None`, allowing OTLP insecure environment
-variables to take effect. Without an override, schemeless gRPC endpoints such as
-`collector:4317` now use TLS. For a plaintext collector, use an `http://` endpoint
-or explicitly set `opentelemetry_insecure=True`. Unix sockets also need an explicit
-`True`; `https://` retains TLS. Check both trace and metric endpoints
+`opentelemetry_insecure=None` lets OTLP insecure environment variables apply.
+Without an override, schemeless gRPC endpoints such as `collector:4317` use TLS.
+For plaintext, use `http://` or `opentelemetry_insecure=True`. Unix sockets need
+explicit `True`; `https://` keeps TLS. Check trace and metric endpoints
 ([#372](https://github.com/modern-python/lite-bootstrap/pull/372)).
 
 ```python
@@ -297,15 +270,14 @@ config = FreeConfig(
 
 ### Metrics-only tracing and external providers
 
-Metrics-only configuration no longer installs an SDK `TracerProvider` or records
-unexported framework spans. The same applies when a trace exporter is missing and
-no other span processor is configured; the missing-exporter warning remains. JSON
-logs from these requests omit `tracing` unless external tracing records a span.
+Without a span processor, metrics-only bootstrap installs no SDK `TracerProvider`
+and records no framework spans. This also applies when the trace exporter is
+missing; its warning remains. JSON logs omit `tracing` unless an external provider
+records a span.
 
-If you add span processors yourself, create and install an SDK provider before
-bootstrap. lite-bootstrap preserves that provider and leaves its shutdown to your
-application. Installing one later does not activate framework or custom instrumentors
-already given a no-op provider
+Install your SDK provider and processors before bootstrap; your application owns
+its shutdown. A provider installed later cannot activate instrumentors already
+bound to a no-op provider
 ([#430](https://github.com/modern-python/lite-bootstrap/pull/430)):
 
 ```python
@@ -336,11 +308,10 @@ span correlation continue to use an SDK tracer provider.
 
 ### URL exclusion validation
 
-FastAPI and FastMCP reject commas in `opentelemetry_excluded_urls` patterns with
-`ConfigurationError`, because their integrations join patterns with commas.
-Split alternatives into separate entries. For a literal comma use `\x2c`; for a
-bounded repetition such as `a{1,3}` rewrite it without a comma, such as `aa?a?`.
-Litestar accepts comma-containing patterns
+FastAPI and FastMCP raise `ConfigurationError` for commas in
+`opentelemetry_excluded_urls`, which their integrations join with commas. Split
+alternatives into entries, use `\x2c` for a literal comma, and rewrite bounded
+repetitions such as `a{1,3}` as `aa?a?`. Litestar accepts commas
 ([#417](https://github.com/modern-python/lite-bootstrap/pull/417)).
 
 ## CORS methods on FastAPI and Litestar
@@ -372,9 +343,8 @@ alert thresholds: totals can fall and latency percentiles can change. Enabling
 
 ### FastStream opt-in and registry
 
-`FastStreamConfig.prometheus_metrics_path` defaults to `""`. Supplying only
-`prometheus_middleware_cls` no longer installs the broker middleware or mounts a
-scrape route. Set the path explicitly:
+FastStream's metrics path defaults to `""`, disabling the scrape route and broker
+middleware even with `prometheus_middleware_cls` set. Supply a path:
 
 ```python
 from lite_bootstrap import FastStreamConfig
@@ -382,11 +352,10 @@ from lite_bootstrap import FastStreamConfig
 config = FastStreamConfig(prometheus_metrics_path="/metrics")
 ```
 
-Keep your existing application and middleware class settings. Scrapes now use the
-default registry, so they include process/platform collectors and other globally
-registered metrics alongside broker metrics. Review duplicate collector registrations
-and any assumptions about an isolated registry. Set
-`prometheus_collector_registry` to your own `CollectorRegistry` for isolation
+Keep your application and middleware settings. Scrapes use the default registry,
+including process/platform and other global collectors. Check for duplicate
+registrations. For isolation, pass your own `CollectorRegistry` through
+`prometheus_collector_registry`
 ([#375](https://github.com/modern-python/lite-bootstrap/pull/375)).
 
 ## Health and metrics routes
@@ -395,11 +364,10 @@ Unhealthy health checks return **503** instead of **500**. Update probes and
 load-balancer rules that matched exactly 500; match 503 or any 5xx
 ([#370](https://github.com/modern-python/lite-bootstrap/pull/370)).
 
-Invalid non-empty `health_checks_path` and `prometheus_metrics_path` now raise
-`ConfigurationError` during config construction, even when the instrument would
-otherwise be skipped. Paths need a leading slash and non-empty segments using
-letters, digits, `.`, `_`, or `-`; a trailing slash is allowed. `/` is supported
-only for health checks. Use `""` to disable either route
+Invalid non-empty health or metrics paths raise `ConfigurationError` at config
+construction, even for skipped instruments. Use a leading slash and non-empty
+segments of letters, digits, `.`, `_`, or `-`; a trailing slash is allowed.
+`/` works only for health checks. `""` disables either route
 ([#419](https://github.com/modern-python/lite-bootstrap/pull/419)):
 
 ```python
@@ -409,26 +377,22 @@ config = FastAPIConfig(health_checks_path="/health", prometheus_metrics_path="/m
 disabled = FastAPIConfig(health_checks_path="", prometheus_metrics_path="")
 ```
 
-FastStream now serves both slash spellings directly, such as `/health` and
-`/health/`, or `/metrics` and `/metrics/`. Existing probes work without changes;
-review custom routes that use the alternate spelling for another purpose
+FastStream serves `/health` and `/health/`, and `/metrics` and `/metrics/`, directly.
+Existing probes keep working. Check for custom routes using the alternate spelling
 ([#420](https://github.com/modern-python/lite-bootstrap/pull/420)).
 
 ## Framework lifecycle and offline docs
 
-FastAPI and FastMCP teardown now runs after user lifespan shutdown. Shutdown spans
-and logs can still be exported. Move any manual observability shutdown out of the
-user lifespan if it closes exporters before that work finishes
+FastAPI and FastMCP teardown runs after user lifespan shutdown, preserving shutdown
+spans and logs. Keep exporters open until that work finishes
 ([#412](https://github.com/modern-python/lite-bootstrap/pull/412),
 [#413](https://github.com/modern-python/lite-bootstrap/pull/413)).
 
-A failed bootstrap rolls back successfully started instruments and is terminal.
-Create a fresh application and bootstrapper to retry; do not reuse the failed
-instance ([#406](https://github.com/modern-python/lite-bootstrap/pull/406)).
+Failed bootstrap rolls back successfully started instruments and cannot be reused. Retry with
+a fresh application and bootstrapper ([#406](https://github.com/modern-python/lite-bootstrap/pull/406)).
 
-FastAPI offline docs now respect `docs_url=None` and `redoc_url=None` independently.
-If you relied on offline mode recreating a disabled route, give that route a URL
-explicitly ([#418](https://github.com/modern-python/lite-bootstrap/pull/418)):
+FastAPI offline docs respect `docs_url=None` and `redoc_url=None` independently.
+To serve a disabled route again, give it a URL ([#418](https://github.com/modern-python/lite-bootstrap/pull/418)):
 
 ```python
 from fastapi import FastAPI

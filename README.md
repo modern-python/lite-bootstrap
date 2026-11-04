@@ -76,7 +76,7 @@ The following intentionally differ:
 ## Links
 
 - [Documentation](https://lite-bootstrap.modern-python.org)
-- [Upgrading to 2.x](https://github.com/modern-python/lite-bootstrap/blob/main/docs/migration/to-2.x.md)
+- [Upgrading to 2.x](https://lite-bootstrap.modern-python.org/migration/to-2.x/)
 - [PyPI](https://pypi.org/project/lite-bootstrap)
 - [License](https://github.com/modern-python/lite-bootstrap/blob/main/LICENSE)
 

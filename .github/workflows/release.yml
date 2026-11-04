@@ -32,15 +32,15 @@ jobs:
       # Publisher on the lite-bootstrap PyPI project (env: pypi, workflow: release.yml).
       - run: just publish
 
-      # Versioned notes supplement GitHub's generated PR list when present.
+      # The Release body is GitHub's generated notes, rendered from the squashed
+      # PR titles since the previous tag — so a conventional-commit title is what
+      # a reader gets. A release wanting prose is edited after the fact with
+      # `gh release edit <tag> --notes-file`. A tag with a letter (2.0.0rc1) is a
+      # pre-release -> flagged so GitHub won't mark it "Latest".
       - name: Resolve release metadata
         id: meta
         run: |
           set -euo pipefail
-          notes_file=".github/release-notes/$GITHUB_REF_NAME.md"
-          if [[ -f "$notes_file" ]]; then
-            echo "notes_file=$notes_file" >> "$GITHUB_OUTPUT"
-          fi
           if [[ "$GITHUB_REF_NAME" =~ [a-z] ]]; then
             echo "prerelease=true" >> "$GITHUB_OUTPUT"
           else
@@ -50,7 +50,6 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          body_path: ${{ steps.meta.outputs.notes_file }}
           generate_release_notes: true
           prerelease: ${{ steps.meta.outputs.prerelease }}
           draft: false
