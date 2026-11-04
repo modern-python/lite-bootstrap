@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 import structlog
-from opentelemetry.trace import get_tracer
+from opentelemetry.trace import format_span_id, format_trace_id, get_tracer
 
 from lite_bootstrap.exceptions import TeardownError
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument
@@ -45,40 +45,29 @@ def test_logging_instrument_simple(logging_mock: LoggingMock) -> None:
         logging_instrument.teardown()
 
 
-def test_logging_instrument_tracer_injection(logging_mock: LoggingMock) -> None:
-    logging_instrument = LoggingInstrument(
-        bootstrap_config=LoggingConfig(
-            logging_unset_handlers=["uvicorn"],
-            logging_extra_processors=[logging_mock],
-        )
-    )
+def test_logging_instrument_tracer_injection(capsys: pytest.CaptureFixture[str]) -> None:
+    logging_instrument = LoggingInstrument(bootstrap_config=LoggingConfig())
     opentelemetry_instrument = OpenTelemetryInstrument(
-        bootstrap_config=OpenTelemetryConfig(
-            opentelemetry_log_traces=True,
-        )
+        bootstrap_config=OpenTelemetryConfig(opentelemetry_log_traces=True)
     )
     try:
         logging_instrument.bootstrap()
         opentelemetry_instrument.bootstrap()
 
         logger = structlog.getLogger(__name__)
-        tracer = get_tracer(__name__)
-        logger.info("testing tracer injection without spans")
-        with tracer.start_as_current_span("my_fake_span") as span:
-            logger.info("testing tracer injection without span attributes")
-            span.set_attribute("example_attribute", "value")
-            span.add_event("example_event", {"event_attr": 1})
-            logger.info("testing tracer injection with span attributes")
+        logger.info("outside span")
+        with get_tracer(__name__).start_as_current_span("test span") as span:
+            context = span.get_span_context()
+            logger.info("inside span")
 
-        assert logging_mock.entries[0]["event"] == "testing tracer injection without spans"
-
-        assert logging_mock.entries[1]["event"] == "testing tracer injection without span attributes"
-        assert logging_mock.entries[2]["event"] == "testing tracer injection with span attributes"
-
-        tracing1 = logging_mock.entries[1]["tracing"]
-        tracing2 = logging_mock.entries[2]["tracing"]
-        assert tracing1
-        assert tracing1 == tracing2
+        outside, inside = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+        assert outside["event"] == "outside span"
+        assert "tracing" not in outside
+        assert inside["event"] == "inside span"
+        assert inside["tracing"] == {
+            "span_id": format_span_id(context.span_id),
+            "trace_id": format_trace_id(context.trace_id),
+        }
     finally:
         logging_instrument.teardown()
         opentelemetry_instrument.teardown()
