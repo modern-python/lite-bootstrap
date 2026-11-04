@@ -27,7 +27,15 @@ if import_checker.is_opentelemetry_sdk_installed:
         SimpleSpanProcessor,
         SpanExporter,
     )
-    from opentelemetry.trace import Span, format_span_id, get_tracer_provider, set_tracer_provider
+    from opentelemetry.trace import (
+        NoOpTracerProvider,
+        ProxyTracerProvider,
+        Span,
+        format_span_id,
+        get_tracer_provider,
+        set_tracer_provider,
+    )
+    from opentelemetry.trace import TracerProvider as APITracerProvider
 
 if import_checker.is_otlp_grpc_exporter_installed:
     # opentelemetry-api can be present without the grpc otlp exporter package (e.g.
@@ -177,7 +185,11 @@ OpenTelemetryConfigT = typing.TypeVar("OpenTelemetryConfigT", bound=OpenTelemetr
 class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfigT]):
     """OpenTelemetry tracing instrument.
 
-    Lifecycle note: ``bootstrap()`` calls ``opentelemetry.trace.set_tracer_provider``,
+    Without span processors, framework and custom instrumentors use an existing external
+    provider or a local no-op provider. The global registration slot stays untouched.
+
+    Lifecycle note: when span processors are configured, ``bootstrap()`` calls
+    ``opentelemetry.trace.set_tracer_provider``,
     which the OTel SDK enforces as **set-once per process** (subsequent calls log
     "Overriding of current TracerProvider is not allowed" and have no effect).
     ``teardown()`` calls ``shutdown()`` on the provider, which flushes batched
@@ -194,6 +206,7 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfigT]):
     _tracer_provider: "TracerProvider | None" = dataclasses.field(
         default_factory=lambda: None, init=False, repr=False, compare=False
     )
+    tracer_provider: "APITracerProvider" = dataclasses.field(init=False, repr=False, compare=False)
     _meter_provider: "MeterProvider | None" = dataclasses.field(
         default_factory=lambda: None, init=False, repr=False, compare=False
     )
@@ -337,7 +350,7 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfigT]):
             )
         self._meter_provider = meter_provider
 
-    def _apply_instrumentors(self, tracer_provider: "TracerProvider") -> None:
+    def _apply_instrumentors(self, tracer_provider: "APITracerProvider") -> None:
         for one_instrumentor in self.bootstrap_config.opentelemetry_instrumentors:
             if isinstance(one_instrumentor, InstrumentorWithParams):
                 one_instrumentor.instrumentor.instrument(
@@ -347,25 +360,41 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfigT]):
             else:
                 one_instrumentor.instrument(tracer_provider=tracer_provider)
 
+    def _build_span_processors(self) -> "list[SpanProcessor]":
+        config = self.bootstrap_config
+        processors: list[SpanProcessor] = []
+        if import_checker.is_pyroscope_installed and getattr(config, "pyroscope_endpoint", None):
+            processors.append(PyroscopeSpanProcessor())
+        if config.opentelemetry_log_traces:
+            processors.append(SimpleSpanProcessor(ConsoleSpanExporter(formatter=_format_span)))
+        if config.opentelemetry_endpoint and (span_exporter := self._build_span_exporter()):
+            processors.append(BatchSpanProcessor(span_exporter))
+        return processors
+
     def bootstrap(self) -> None:
         config = self.bootstrap_config
         self._silence_otel_loggers()
         resource = self._build_resource()
-        tracer_provider = TracerProvider(resource=resource, sampler=config.opentelemetry_sampler)
-        set_tracer_provider(tracer_provider)
-        if get_tracer_provider() is not tracer_provider:
-            warn_at_caller(
-                "a TracerProvider is already installed; the configured exporter, sampler and resource will not be used"
+        processors = self._build_span_processors()
+        if processors:
+            tracer_provider = TracerProvider(resource=resource, sampler=config.opentelemetry_sampler)
+            self._tracer_provider = tracer_provider
+            for processor in processors:
+                tracer_provider.add_span_processor(processor)
+            set_tracer_provider(tracer_provider)
+            if get_tracer_provider() is not tracer_provider:
+                warn_at_caller(
+                    "a TracerProvider is already installed; "
+                    "the configured exporter, sampler and resource will not be used"
+                )
+            self.tracer_provider = get_tracer_provider()
+        else:
+            existing_provider = get_tracer_provider()
+            self.tracer_provider = (
+                NoOpTracerProvider() if isinstance(existing_provider, ProxyTracerProvider) else existing_provider
             )
-        self._tracer_provider = tracer_provider
-        if import_checker.is_pyroscope_installed and getattr(config, "pyroscope_endpoint", None):
-            tracer_provider.add_span_processor(PyroscopeSpanProcessor())
-        if config.opentelemetry_log_traces:
-            tracer_provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter(formatter=_format_span)))
-        if config.opentelemetry_endpoint and (span_exporter := self._build_span_exporter()):
-            tracer_provider.add_span_processor(BatchSpanProcessor(span_exporter))
         self._bootstrap_metrics(resource)
-        self._apply_instrumentors(tracer_provider)
+        self._apply_instrumentors(self.tracer_provider)
 
     def teardown(self) -> None:
         with collect_teardown_errors() as teardown_errors:

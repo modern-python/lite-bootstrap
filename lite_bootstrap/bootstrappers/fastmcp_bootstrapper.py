@@ -31,7 +31,6 @@ if import_checker.is_fastmcp_installed:
 
 if import_checker.is_fastmcp_opentelemetry_installed:
     from opentelemetry.metrics import get_meter_provider
-    from opentelemetry.trace import get_tracer_provider
     from starlette.routing import BaseRoute, Match, Mount, Route
     from starlette.types import Scope
 
@@ -241,7 +240,7 @@ class FastMcpOpenTelemetryInstrument(OpenTelemetryInstrument[FastMcpConfig]):
             ),
             excluded_urls=",".join(self._build_excluded_url_patterns("STARLETTE")),
             exclude_spans=self.bootstrap_config.opentelemetry_exclude_spans,
-            tracer_provider=get_tracer_provider(),
+            tracer_provider=self.tracer_provider,
             meter_provider=get_meter_provider(),
         )
         setattr(http_application, _OPENTELEMETRY_INSTRUMENTED_MARKER, True)

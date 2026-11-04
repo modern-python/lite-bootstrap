@@ -8,6 +8,7 @@ import warnings
 from unittest.mock import patch
 
 import pytest
+from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter as OTLPGrpcMetricExporter
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter as OTLPHttpMetricExporter
 from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
@@ -16,6 +17,8 @@ from opentelemetry.sdk.metrics import MeterProvider as SDKMeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.trace import TracerProvider as SDKTracerProvider
 from opentelemetry.sdk.trace import sampling
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import set_tracer_provider
 
 import lite_bootstrap.instruments.opentelemetry_instrument as otel_module
@@ -26,7 +29,12 @@ from lite_bootstrap.instruments.opentelemetry_instrument import (
     OpenTelemetryConfig,
     OpenTelemetryInstrument,
 )
-from tests.conftest import CustomInstrumentor, emulate_package_missing_with_module_reload, warning_source_files
+from tests.conftest import (
+    CustomInstrumentor,
+    emulate_package_missing_with_module_reload,
+    in_memory_opentelemetry_metric_reader,
+    warning_source_files,
+)
 
 
 def test_opentelemetry_instrument() -> None:
@@ -716,3 +724,91 @@ def test_bootstrap_warns_when_a_meter_provider_is_already_installed() -> None:
         "a MeterProvider is already installed; the configured metrics exporter and resource will not be used"
     ]
     assert warning_source_files(caught, UserWarning) == [__file__]
+
+
+class TracerCapturingInstrumentor(BaseInstrumentor):
+    provider: trace.TracerProvider
+
+    def instrumentation_dependencies(self) -> typing.Collection[str]:
+        return []
+
+    def _instrument(self, **kwargs: object) -> None:
+        self.provider = typing.cast("trace.TracerProvider", kwargs["tracer_provider"])
+
+    def _uninstrument(self, **kwargs: object) -> None:
+        pass
+
+
+def test_metrics_only_tracing_is_noop_without_installing_an_sdk_provider() -> None:
+    custom = TracerCapturingInstrumentor()
+    instrument = OpenTelemetryInstrument(
+        bootstrap_config=OpenTelemetryConfig(
+            opentelemetry_metrics_endpoint="localhost:4317",
+            opentelemetry_instrumentors=[custom],
+        )
+    )
+    with in_memory_opentelemetry_metric_reader():
+        try:
+            instrument.bootstrap()
+            assert not isinstance(trace.get_tracer_provider(), SDKTracerProvider)
+            with custom.provider.get_tracer(__name__).start_as_current_span("discarded") as span:
+                assert not span.is_recording()
+            assert isinstance(get_meter_provider(), SDKMeterProvider)
+        finally:
+            instrument.teardown()
+
+
+def test_metrics_only_tracing_preserves_an_external_provider_and_its_lifetime() -> None:
+    external = SDKTracerProvider()
+    exporter = InMemorySpanExporter()
+    external.add_span_processor(SimpleSpanProcessor(exporter))
+    trace.set_tracer_provider(external)
+    custom = TracerCapturingInstrumentor()
+    instrument = OpenTelemetryInstrument(
+        bootstrap_config=OpenTelemetryConfig(
+            opentelemetry_metrics_endpoint="localhost:4317",
+            opentelemetry_instrumentors=[custom],
+        )
+    )
+    try:
+        with in_memory_opentelemetry_metric_reader(), warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            instrument.bootstrap()
+            assert not caught
+            assert custom.provider is external
+            with custom.provider.get_tracer(__name__).start_as_current_span("external"):
+                pass
+            instrument.teardown()
+        with external.get_tracer(__name__).start_as_current_span("after-teardown"):
+            pass
+        assert trace.get_tracer_provider() is external
+        assert [span.name for span in exporter.get_finished_spans()] == ["external", "after-teardown"]
+    finally:
+        instrument.teardown()
+        external.shutdown()
+
+
+@pytest.mark.parametrize("protocol", ["grpc", "http"])
+def test_configured_exporter_still_records_and_exports_spans(protocol: typing.Literal["grpc", "http"]) -> None:
+    exporter = InMemorySpanExporter()
+    custom = TracerCapturingInstrumentor()
+    instrument = OpenTelemetryInstrument(
+        bootstrap_config=OpenTelemetryConfig(
+            opentelemetry_endpoint="localhost:4317",
+            opentelemetry_exporter_protocol=protocol,
+            opentelemetry_instrumentors=[custom],
+        )
+    )
+    exporter_name = "OTLPGrpcSpanExporter" if protocol == "grpc" else "OTLPHttpSpanExporter"
+    try:
+        with patch.object(otel_module, exporter_name, return_value=exporter):
+            instrument.bootstrap()
+        provider = trace.get_tracer_provider()
+        assert isinstance(provider, SDKTracerProvider)
+        assert custom.provider is provider
+        with custom.provider.get_tracer(__name__).start_as_current_span("exported") as span:
+            assert span.is_recording()
+        provider.force_flush()
+        assert [span.name for span in exporter.get_finished_spans()] == ["exported"]
+    finally:
+        instrument.teardown()
