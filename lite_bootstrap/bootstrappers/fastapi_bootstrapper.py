@@ -245,7 +245,10 @@ class FastAPIPrometheusInstrument(PrometheusInstrument[FastAPIConfig]):
 
     @staticmethod
     def dependencies_installed() -> bool:
-        return import_checker.is_prometheus_fastapi_instrumentator_installed
+        return (
+            import_checker.is_prometheus_client_installed
+            and import_checker.is_prometheus_fastapi_instrumentator_installed
+        )
 
     def bootstrap(self) -> None:
         config = self.bootstrap_config

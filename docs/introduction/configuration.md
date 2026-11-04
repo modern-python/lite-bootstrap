@@ -119,9 +119,15 @@ the option [here](https://docs.sentry.io/platforms/python/data-management/data-c
 
 Prometheus is the cheapest of the three non-logging instruments; see [Performance](performance.md).
 
-Prometheus is on by default when its extra is installed, serving metrics at `prometheus_metrics_path`
-(default: `/metrics`). Set `prometheus_metrics_path` to an empty string to disable it. FastStream is
-the exception: its default is empty; see [Prometheus FastStream](#prometheus-faststream).
+On FastAPI, Litestar and FastMCP, Prometheus is on by default when its extra is installed,
+serving metrics at `prometheus_metrics_path` (default: `/metrics`). Set the path to an empty
+string to disable it. Without `prometheus_client`, the default path is a silent opt-out;
+a custom path still emits a missing-dependency warning. Explicitly setting `/metrics`
+is indistinguishable from leaving the default and is also silent.
+
+FastStream is opt-in: its default path is empty because broker metrics require a
+broker-specific middleware class that lite-bootstrap cannot choose automatically.
+See [Prometheus FastStream](#prometheus-faststream).
 
 Additional parameters:
 
