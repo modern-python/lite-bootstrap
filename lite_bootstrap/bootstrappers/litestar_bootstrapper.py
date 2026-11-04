@@ -485,8 +485,6 @@ class LitestarSwaggerInstrument(SwaggerInstrument[LitestarConfig]):
 
 
 class LitestarBootstrapper(BaseBootstrapper["litestar.Litestar", LitestarConfig]):
-    __slots__ = "bootstrap_config", "instruments"
-
     instruments_types: typing.ClassVar = [
         LitestarCorsInstrument,
         LitestarOpenTelemetryInstrument,

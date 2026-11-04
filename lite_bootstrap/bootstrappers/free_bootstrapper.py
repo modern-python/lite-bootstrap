@@ -13,8 +13,6 @@ class FreeConfig(LoggingConfig, OpenTelemetryConfig, PyroscopeConfig, SentryConf
 
 
 class FreeBootstrapper(BaseBootstrapper[None, FreeConfig]):
-    __slots__ = "bootstrap_config", "instruments"
-
     instruments_types: typing.ClassVar = [
         LoggingInstrument,
         SentryInstrument,

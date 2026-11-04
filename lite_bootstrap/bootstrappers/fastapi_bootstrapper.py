@@ -296,8 +296,6 @@ class FastAPISwaggerInstrument(SwaggerInstrument[FastAPIConfig]):
 
 
 class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI", FastAPIConfig]):
-    __slots__ = "bootstrap_config", "instruments"
-
     instruments_types: typing.ClassVar = [
         FastAPICorsInstrument,
         FastAPIOpenTelemetryInstrument,

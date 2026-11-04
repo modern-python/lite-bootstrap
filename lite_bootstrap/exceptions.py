@@ -12,10 +12,11 @@ class BootstrapperNotReadyError(LiteBootstrapError):
 
 
 class ConfigurationError(LiteBootstrapError):
-    """Raised when a config is invalid or a required optional dependency is missing.
+    """Raised for invalid configuration or when bootstrap() cannot use the application.
 
-    Also raised when a bootstrapper is constructed on an application another bootstrapper
-    already owns.
+    bootstrap() rejects an application owned by another bootstrapper and refuses to reuse
+    a bootstrapper after teardown or a failed bootstrap. Missing optional dependencies warn
+    instead, as does construction on an application another bootstrapper already owns.
     """
 
 
@@ -28,11 +29,7 @@ class TeardownError(LiteBootstrapError):
         super().__init__(f"{len(errors)} instrument(s) failed during teardown: {details}")
 
 
-class InstrumentSkippedWarning(UserWarning):
-    """Base class for warnings emitted when an instrument is skipped during bootstrap."""
-
-
-class InstrumentDependencyMissingWarning(InstrumentSkippedWarning):
+class InstrumentDependencyMissingWarning(UserWarning):
     """Emitted when an instrument is skipped because its optional dependency is not installed."""
 
 

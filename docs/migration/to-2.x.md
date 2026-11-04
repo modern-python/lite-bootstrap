@@ -26,3 +26,20 @@ traffic mix.
 JSON log lines include `tracing` only when emitted inside a recording
 OpenTelemetry span. The object contains `span_id` and `trace_id`.
 Update log parsers to treat `tracing` as optional.
+
+## Missing-dependency warning category
+
+`InstrumentSkippedWarning` has been removed. Importing it from `lite_bootstrap`
+now raises `ImportError`. Replace imports and warning filters with
+`InstrumentDependencyMissingWarning`, which now derives directly from `UserWarning`:
+
+```python
+import warnings
+
+from lite_bootstrap import InstrumentDependencyMissingWarning
+
+warnings.filterwarnings("error", category=InstrumentDependencyMissingWarning)
+```
+
+Unconfigured instruments continue to be skipped silently. A configured instrument
+with a missing optional dependency emits `InstrumentDependencyMissingWarning`.

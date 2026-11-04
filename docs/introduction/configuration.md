@@ -31,7 +31,7 @@ Additional parameters can also be supplied through the settings object:
 - `sentry_traces_sample_rate` - in the range of 0.0 to 1.0, the percentage chance a given transaction will be sent 
 - `sentry_sample_rate` - in the range of 0.0 to 1.0, the sample rate for error events
 - `sentry_max_breadcrumbs` - the total amount of breadcrumbs
-- `sentry_max_value_length` - the max event payload length
+- `sentry_max_value_length` - the maximum length of each string value before sentry-sdk truncates it
 - `sentry_attach_stacktrace` - if True, stack traces are automatically attached to all messages logged
 - `sentry_auto_session_tracking` - whether every request opens and closes a Sentry release-health `Session` (default: `False`), measured at ~7.7 µs per request. Set it to `True` if you use Sentry release health: crash-free session and user rates need it.
 - `sentry_integrations` - list of integrations to enable
@@ -346,7 +346,7 @@ See [Performance](performance.md).
 Additional parameters:
 
 - `logging_enabled` - whether to configure structlog (default: `True`).
-- `logging_log_level`
+- `logging_log_level` - the root logger level set at bootstrap (default: `logging.INFO`).
 - `logging_extra_processors`
 - `logging_unset_handlers` - logger names whose handlers are cleared at bootstrap. These removals are permanent.
 - `logging_record_filters` - standard-library `logging.Filter` instances to attach to named loggers (see below).
@@ -537,8 +537,6 @@ from lite_bootstrap import InstrumentDependencyMissingWarning
 
 warnings.filterwarnings("ignore", category=InstrumentDependencyMissingWarning)
 ```
-
-`InstrumentSkippedWarning` is kept as the base class for forward-compatibility (additional skip categories may emerge); today, `InstrumentDependencyMissingWarning` is its only concrete subclass.
 
 To inspect skipped instruments programmatically:
 

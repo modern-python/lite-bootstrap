@@ -169,7 +169,6 @@ faststream-metrics = [
 ]
 faststream-all = [
     "lite-bootstrap[faststream-sentry,faststream-otl,faststream-logging,faststream-metrics,pyroscope]",
-    "lite-bootstrap[sentry,otl,logging,faststream,faststream-metrics,pyroscope]"
 ]
 fastmcp = [
     # >=4.0 so one middleware dispatch model is supported: from 4.0 the access log's on_message sees

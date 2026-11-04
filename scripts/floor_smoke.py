@@ -9,7 +9,7 @@ made during bootstrap or teardown, not by a missing module. So each target build
 config with every instrument its extras can supply, bootstraps, exercises the calls
 that set a floor, and tears down.
 
-`InstrumentSkippedWarning` is escalated to an error, because an instrument that
+`InstrumentDependencyMissingWarning` is escalated to an error, because an instrument that
 degrades to a silent skip would let a too-low floor pass as success.
 
 Not a pytest test: conftest.py hard-imports opentelemetry, sentry_sdk and structlog,
@@ -31,7 +31,7 @@ from lite_bootstrap import (
     FastStreamConfig,
     FreeBootstrapper,
     FreeConfig,
-    InstrumentSkippedWarning,
+    InstrumentDependencyMissingWarning,
     LitestarBootstrapper,
     LitestarConfig,
     import_checker,
@@ -338,7 +338,7 @@ def main() -> None:
     expected_argv_len = 2
     if len(sys.argv) != expected_argv_len or sys.argv[1] not in TARGETS:
         sys.exit(f"usage: floor_smoke.py {{{'|'.join(TARGETS)}}}")
-    warnings.filterwarnings("error", category=InstrumentSkippedWarning)
+    warnings.filterwarnings("error", category=InstrumentDependencyMissingWarning)
     target = sys.argv[1]
     TARGETS[target]()
     print(f"floor smoke OK: {target} on {sys.version}")  # noqa: T201
