@@ -38,9 +38,9 @@ it names.
   its end of life ships in a minor, as 1.11.0 did for 3.10. Installers skip a release whose
   `requires-python` excludes the running interpreter, so no deployed service breaks.
 - **A rename keeps the old name working, with a `DeprecationWarning`, for at least one minor, and
-  the next major deletes it.** The warning names that major. A module-level name goes through
-  `deprecated_module_getattr` plus a `typing.TYPE_CHECKING` alias so type checkers still see it; a
-  config field goes through `BaseConfig._renamed_fields`.
+  the next major deletes it.** The warning names that major. See
+  [#350](https://github.com/modern-python/lite-bootstrap/issues/350) and
+  [#351](https://github.com/modern-python/lite-bootstrap/issues/351) for previous renames.
 - **Every breaking change gets a line in a "Breaking changes" section of the release notes**, as
   [1.12.0](https://github.com/modern-python/lite-bootstrap/releases/tag/1.12.0) has.
 
