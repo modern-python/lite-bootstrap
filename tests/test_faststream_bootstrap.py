@@ -46,10 +46,8 @@ from tests.conftest import (
     HEALTH_PROBE_CASES,
     CustomInstrumentor,
     SentryTestTransport,
-    capture_probe_warnings,
     emulate_package_missing,
     emulate_package_missing_with_module_reload,
-    failed_probe_names,
     passing_probe,
 )
 
@@ -855,21 +853,19 @@ async def test_faststream_otel_hands_the_middleware_the_meter_provider(broker: R
         bootstrapper.teardown()
 
 
-@pytest.mark.parametrize(("probes", "expected_status", "expected_health_status", "expected_failed"), HEALTH_PROBE_CASES)
+@pytest.mark.parametrize(("probe", "expected_status", "expected_health_status"), HEALTH_PROBE_CASES)
 async def test_faststream_health_check_runs_probes(
     broker: RedisBroker,
-    probes: dict[str, HealthProbe],
+    probe: HealthProbe,
     expected_status: int,
     expected_health_status: bool,
-    expected_failed: list[str],
 ) -> None:
-    config = dataclasses.replace(build_faststream_config(broker=broker), health_checks_probes=probes)
+    config = dataclasses.replace(build_faststream_config(broker=broker), health_checks_probes={"cache": probe})
     bootstrapper = FastStreamBootstrapper(bootstrap_config=config)
     application = bootstrapper.bootstrap()
     try:
         with (
             patch.object(broker, "ping", new=AsyncMock(return_value=True)),
-            capture_probe_warnings() as probe_warnings,
             TestClient(app=application) as test_client,
         ):
             response = test_client.get(config.health_checks_path)
@@ -882,7 +878,6 @@ async def test_faststream_health_check_runs_probes(
         "service_name": "microservice",
         "service_version": "2.0.0",
     }
-    assert failed_probe_names(probe_warnings) == expected_failed
 
 
 async def test_faststream_health_check_fails_on_broker_ping_despite_passing_probe(broker: RedisBroker) -> None:

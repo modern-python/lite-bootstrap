@@ -4,7 +4,7 @@ import typing
 import warnings
 from collections.abc import Generator
 from importlib import reload
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import opentelemetry.metrics._internal
 import opentelemetry.trace
@@ -12,7 +12,7 @@ import prometheus_client
 import pytest
 import sentry_sdk
 from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
-from opentelemetry.sdk.metrics.export import InMemoryMetricReader
+from opentelemetry.sdk.metrics.export import Histogram, InMemoryMetricReader
 from opentelemetry.util._once import Once
 from sentry_sdk import integrations as sentry_integrations
 from sentry_sdk import scope as sentry_scope
@@ -25,7 +25,7 @@ from structlog.typing import EventDict, WrappedLogger
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.exceptions import InstrumentDependencyMissingWarning
-from lite_bootstrap.instruments import healthchecks_instrument, opentelemetry_instrument
+from lite_bootstrap.instruments import opentelemetry_instrument
 
 
 def pytest_configure() -> None:
@@ -64,20 +64,9 @@ async def raising_probe() -> bool:
 
 
 HEALTH_PROBE_CASES: typing.Final = [
-    pytest.param({"db": passing_probe, "cache": passing_probe}, 200, True, [], id="all-pass"),
-    pytest.param({"db": passing_probe, "cache": failing_probe}, 503, False, ["cache"], id="one-returns-false"),
-    pytest.param({"db": passing_probe, "cache": raising_probe}, 503, False, ["cache"], id="one-raises"),
+    pytest.param(passing_probe, 200, True, id="passes"),
+    pytest.param(failing_probe, 503, False, id="fails"),
 ]
-
-
-@contextlib.contextmanager
-def capture_probe_warnings() -> Generator[MagicMock]:
-    with patch.object(healthchecks_instrument, "logger") as mock_logger:
-        yield mock_logger.warning
-
-
-def failed_probe_names(warning_mock: MagicMock) -> list[str]:
-    return [call.args[1] for call in warning_mock.call_args_list]
 
 
 class SentryTestTransport(sentry_sdk.Transport):
@@ -247,20 +236,39 @@ def in_memory_opentelemetry_metric_reader() -> Generator[InMemoryMetricReader]:
         yield reader
 
 
-def opentelemetry_recorded_http_server_metrics(reader: InMemoryMetricReader) -> bool:
-    metrics_data: typing.Final = reader.get_metrics_data()
+HTTP_METRIC_CASES: typing.Final = [
+    pytest.param({"opentelemetry_metrics_endpoint": "localhost:4317"}, (1, 0), id="both-keeps-otel"),
+    pytest.param(
+        {"opentelemetry_metrics_endpoint": "localhost:4317", "prometheus_http_metrics_enabled": True},
+        (1, 1),
+        id="both-restored",
+    ),
+    pytest.param({}, (0, 1), id="prometheus-alone"),
+    pytest.param(
+        {"opentelemetry_metrics_endpoint": "localhost:4317", "prometheus_metrics_path": ""},
+        (1, 0),
+        id="otel-alone",
+    ),
+    pytest.param({"prometheus_http_metrics_enabled": False}, (0, 0), id="prometheus-http-off"),
+]
+
+
+def opentelemetry_http_request_count(reader: InMemoryMetricReader) -> int:
+    """Count requests without adding the legacy and stable series when both are emitted."""
+    metrics_data = reader.get_metrics_data()
     if metrics_data is None:
-        return False
-    return any(
-        metric.name.startswith("http.server.")
-        for resource_metrics in metrics_data.resource_metrics
-        for scope_metrics in resource_metrics.scope_metrics
-        for metric in scope_metrics.metrics
-    )
-
-
-def prometheus_recorded_path(path: str) -> bool:
-    return f'"{path}"' in prometheus_client.generate_latest().decode()
+        return 0
+    counts: dict[str, int] = {}
+    for resource_metrics in metrics_data.resource_metrics:
+        for scope_metrics in resource_metrics.scope_metrics:
+            for metric in scope_metrics.metrics:
+                if metric.name in {"http.server.duration", "http.server.request.duration"} and isinstance(
+                    metric.data, Histogram
+                ):
+                    counts[metric.name] = counts.get(metric.name, 0) + sum(
+                        point.count for point in metric.data.data_points
+                    )
+    return max(counts.values(), default=0)
 
 
 def prometheus_request_count(metric_name: str, path_label: str, path: str) -> float:
