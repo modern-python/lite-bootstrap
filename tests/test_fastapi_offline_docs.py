@@ -30,7 +30,12 @@ def test_fastapi_offline_docs() -> None:
 
 
 def test_fastapi_offline_docs_root_path() -> None:
-    app: FastAPI = FastAPI(title="Tests", root_path="/some-root-path", docs_url="/custom_docs")
+    app = FastAPI(
+        title="Tests",
+        root_path="/some-root-path",
+        docs_url="/custom_docs",
+        swagger_ui_oauth2_redirect_url=None,
+    )
     enable_offline_docs(app, static_path="/static")
 
     with TestClient(app, root_path="/some-root-path") as client:
@@ -38,6 +43,7 @@ def test_fastapi_offline_docs_root_path() -> None:
         assert response.status_code == HTTPStatus.OK
         assert "/some-root-path/static/swagger-ui.css" in response.text
         assert "/some-root-path/static/swagger-ui-bundle.js" in response.text
+        assert "oauth2RedirectUrl" not in response.text
 
         response = client.get("/some-root-path/static/swagger-ui.css")
         assert response.status_code == HTTPStatus.OK
@@ -46,6 +52,32 @@ def test_fastapi_offline_docs_root_path() -> None:
         assert response.status_code == HTTPStatus.OK
         assert "/some-root-path/static/redoc.standalone.js" in response.text
         assert "/some-root-path/openapi.json" in response.text
+
+
+@pytest.mark.parametrize(
+    "swagger_setting",
+    [
+        '"clientId": "public-demo"',
+        '"usePkceWithAuthorizationCodeGrant": true',
+        '"persistAuthorization": true',
+        "oauth2RedirectUrl: window.location.origin + '/api/docs/oauth2-redirect'",
+    ],
+)
+def test_offline_swagger_preserves_native_settings(swagger_setting: str) -> None:
+    app = FastAPI(
+        swagger_ui_init_oauth={"clientId": "public-demo", "usePkceWithAuthorizationCodeGrant": True},
+        swagger_ui_parameters={"persistAuthorization": True},
+    )
+    with TestClient(app, root_path="/api") as client:
+        native_response = client.get("/docs")
+
+    enable_offline_docs(app, static_path="/static")
+    with TestClient(app, root_path="/api") as client:
+        offline_response = client.get("/docs")
+
+    assert native_response.status_code == offline_response.status_code == HTTPStatus.OK
+    assert swagger_setting in native_response.text
+    assert swagger_setting in offline_response.text
 
 
 def test_fastapi_offline_docs_raises_without_openapi_url() -> None:

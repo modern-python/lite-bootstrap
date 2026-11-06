@@ -64,10 +64,15 @@ def enable_offline_docs(
         @app.get(docs_url, include_in_schema=False)
         async def custom_swagger_ui_html(request: Request) -> HTMLResponse:
             root_path = _safe_root_path(request.scope.get("root_path", ""))
+            oauth2_redirect_url = app.swagger_ui_oauth2_redirect_url
+            if oauth2_redirect_url:
+                oauth2_redirect_url = f"{root_path}{oauth2_redirect_url}"
             return get_swagger_ui_html(
                 openapi_url=f"{root_path}{app_openapi_url}",
                 title=f"{app.title} - Swagger UI",
-                oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
+                oauth2_redirect_url=oauth2_redirect_url,
+                init_oauth=app.swagger_ui_init_oauth,
+                swagger_ui_parameters=app.swagger_ui_parameters,
                 swagger_js_url=f"{root_path}{static_path}/swagger-ui-bundle.js",
                 swagger_css_url=f"{root_path}{static_path}/swagger-ui.css",
             )
