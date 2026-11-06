@@ -192,8 +192,9 @@ class LoggingInstrument(BaseInstrument[LoggingConfigT]):
         for logger_name, record_filters in self.bootstrap_config.logging_record_filters.items():
             target_logger = logging.getLogger(logger_name)
             for record_filter in record_filters:
-                target_logger.addFilter(record_filter)
-                self._attached_filters.append((target_logger, record_filter))
+                if record_filter not in target_logger.filters:
+                    target_logger.addFilter(record_filter)
+                    self._attached_filters.append((target_logger, record_filter))
 
     def _detach_record_filters(self) -> None:
         """Remove only the filters this instrument attached, leaving any others in place."""

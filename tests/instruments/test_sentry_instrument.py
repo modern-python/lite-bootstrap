@@ -72,14 +72,20 @@ def test_sentry_instrument_with_structlog_error(
         sentry_instrument.teardown()
 
 
-def test_sentry_teardown_disables_sdk(minimal_sentry_config: SentryConfig) -> None:
+def test_sentry_teardown_disables_sdk(
+    minimal_sentry_config: SentryConfig, sentry_mock: SentryTestTransport, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SENTRY_DSN", "https://synthetic@example.invalid/1")
+    monkeypatch.setattr("sentry_sdk.client.make_transport", lambda options: sentry_mock if options["dsn"] else None)
     instrument = SentryInstrument(bootstrap_config=minimal_sentry_config)
     instrument.bootstrap()
     assert sentry_sdk.get_client().dsn == minimal_sentry_config.sentry_dsn
 
     instrument.teardown()
 
-    assert sentry_sdk.get_client().dsn is None
+    assert not sentry_sdk.get_client().is_active()
+    assert sentry_sdk.capture_message("after teardown") is None
+    assert sentry_mock.mock_envelopes == []
 
 
 def test_sentry_instrument_empty_dsn() -> None:
@@ -138,7 +144,11 @@ class TestSentryEnrichEventFromStructlog:
         assert enrich_sentry_event_from_structlog_log(event_before, {}) == event_after
 
 
-def test_sentry_teardown_runs_init_when_flush_raises(minimal_sentry_config: SentryConfig) -> None:
+def test_sentry_teardown_disables_sdk_when_flush_raises(
+    minimal_sentry_config: SentryConfig, sentry_mock: SentryTestTransport, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SENTRY_DSN", "https://synthetic@example.invalid/1")
+    monkeypatch.setattr("sentry_sdk.client.make_transport", lambda options: sentry_mock if options["dsn"] else None)
     instrument = SentryInstrument(bootstrap_config=minimal_sentry_config)
     instrument.bootstrap()
 
@@ -148,8 +158,9 @@ def test_sentry_teardown_runs_init_when_flush_raises(minimal_sentry_config: Sent
     ):
         instrument.teardown()
 
-    # init() still ran (in the finally), so SDK is now disabled.
-    assert sentry_sdk.get_client().dsn is None
+    assert not sentry_sdk.get_client().is_active()
+    assert sentry_sdk.capture_message("after teardown") is None
+    assert sentry_mock.mock_envelopes == []
 
 
 def installed_logging_integration() -> LoggingIntegration:

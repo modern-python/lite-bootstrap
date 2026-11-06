@@ -1,7 +1,9 @@
 import abc
+import contextlib
 import logging
 import typing
 import warnings
+from collections.abc import Generator
 
 from lite_bootstrap.exceptions import (
     BootstrapperNotReadyError,
@@ -160,6 +162,22 @@ class BaseBootstrapper(abc.ABC, typing.Generic[ApplicationT, ConfigT]):
         self._application = application
         self.is_bootstrapped = True
         return self._application
+
+    @contextlib.contextmanager
+    def _teardown_after_lifecycle(self) -> Generator[None]:
+        lifecycle_error: BaseException | None = None
+        try:
+            yield
+        except BaseException as error:
+            lifecycle_error = error
+            raise
+        finally:
+            try:
+                self.teardown()
+            except Exception as teardown_error:
+                if lifecycle_error is None:
+                    raise
+                lifecycle_error.add_note(f"Error tearing down observability: {teardown_error}")
 
     def teardown(self) -> None:
         if not self.is_bootstrapped:

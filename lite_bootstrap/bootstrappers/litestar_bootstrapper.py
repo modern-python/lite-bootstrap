@@ -6,6 +6,7 @@ from collections.abc import Mapping
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
+from lite_bootstrap.exceptions import ConfigurationError
 from lite_bootstrap.helpers.path import is_valid_path
 from lite_bootstrap.helpers.warn import warn_at_caller
 from lite_bootstrap.instruments.cors_instrument import CorsConfig, CorsInstrument
@@ -457,6 +458,9 @@ class LitestarSwaggerInstrument(SwaggerInstrument[LitestarConfig]):
 
     def bootstrap(self) -> None:
         config = self.bootstrap_config
+        if "path" in config.swagger_additional_params:
+            msg = "Use swagger_path to configure the OpenAPI path"
+            raise ConfigurationError(msg)
         render_plugins: typing.Final = (
             (
                 SwaggerRenderPlugin(

@@ -898,3 +898,9 @@ def test_litestar_openapi_and_prometheus_fall_back_to_default_service_name() -> 
     with TestClient(app=application) as client:
         client.get("/health/")
         assert 'app_name="micro-service"' in client.get("/metrics").text
+
+
+def test_litestar_swagger_path_conflict_names_canonical_setting() -> None:
+    config = LitestarConfig(swagger_additional_params={"path": "/custom"})
+    with pytest.raises(ConfigurationError, match="swagger_path"):
+        LitestarBootstrapper(config).bootstrap()

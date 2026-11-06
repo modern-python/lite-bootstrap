@@ -57,8 +57,8 @@ The ASGI lifespan runs `bootstrapper.teardown()` after broker shutdown and user 
 cleanup. Tracing and logging remain active through both. Startup and shutdown failures still
 trigger teardown; cleanup failures are added as notes to the original error.
 
-Outside a lifespan, `stop()` tears down observability after broker shutdown. This also
-applies to `async with application`.
+When using `start()` and `stop()` directly or `async with application`, call
+`bootstrapper.teardown()` in an outer `finally` block after the application stops.
 
 ## Health and metrics routes
 

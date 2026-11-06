@@ -406,11 +406,9 @@ class FastMcpBootstrapper(BaseBootstrapper["FastMCP[typing.Any]", FastMcpConfig]
 
         @contextlib.asynccontextmanager
         async def lifespan(server: "FastMCP[typing.Any]") -> AsyncGenerator[typing.Any]:
-            try:
+            with self._teardown_after_lifecycle():
                 async with user_lifespan(server) as result:
                     yield result
-            finally:
-                self.teardown()
 
         application._lifespan = lifespan  # noqa: SLF001
 

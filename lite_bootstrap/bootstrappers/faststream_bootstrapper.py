@@ -4,7 +4,7 @@ import dataclasses
 import json
 import logging
 import typing
-from collections.abc import AsyncGenerator, Generator, Mapping, Sequence
+from collections.abc import AsyncGenerator, Mapping, Sequence
 from types import TracebackType
 
 from lite_bootstrap import import_checker
@@ -285,45 +285,14 @@ class FastStreamBootstrapper(BaseBootstrapper["AsgiFastStream", FastStreamConfig
 
     def _wrap_lifecycle(self, application: "AsgiFastStream") -> None:
         user_lifespan = application.lifespan_context
-        application_stop = application.stop
-        lifespan_active = False
 
         @contextlib.asynccontextmanager
         async def lifespan(*args: typing.Any, **kwargs: typing.Any) -> AsyncGenerator[typing.Any]:  # noqa: ANN401
-            nonlocal lifespan_active
-            lifespan_active = True
-            try:
-                with self._teardown_after_lifecycle():
-                    async with user_lifespan(*args, **kwargs) as result:
-                        yield result
-            finally:
-                lifespan_active = False
-
-        async def stop() -> None:
-            if lifespan_active:
-                await application_stop()
-            else:
-                with self._teardown_after_lifecycle():
-                    await application_stop()
+            with self._teardown_after_lifecycle():
+                async with user_lifespan(*args, **kwargs) as result:
+                    yield result
 
         application.lifespan_context = lifespan
-        application.stop = stop  # ty: ignore[invalid-assignment]
-
-    @contextlib.contextmanager
-    def _teardown_after_lifecycle(self) -> Generator[None]:
-        lifecycle_error: BaseException | None = None
-        try:
-            yield
-        except BaseException as error:
-            lifecycle_error = error
-            raise
-        finally:
-            try:
-                self.teardown()
-            except Exception as teardown_error:
-                if lifecycle_error is None:
-                    raise
-                lifecycle_error.add_note(f"Error tearing down FastStream observability: {teardown_error}")
 
     def _prepare_application(self) -> "AsgiFastStream":
         return self.bootstrap_config.application

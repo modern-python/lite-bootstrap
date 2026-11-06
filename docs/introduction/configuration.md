@@ -183,7 +183,7 @@ Additional parameters for FastAPI integration:
 
 - `prometheus_instrumentator_additional_params` - passed to `prometheus_fastapi_instrumentator.Instrumentator`
 - `prometheus_instrument_additional_params` - passed to `method Instrumentator(...).instrument`
-- `prometheus_expose_additional_params` - passed to `method Instrumentator(...).expose`.
+- `prometheus_expose_additional_params` - passed to `Instrumentator(...).expose`. Set the endpoint with `prometheus_metrics_path`.
 
 ### Prometheus FastMCP
 
@@ -343,7 +343,7 @@ Additional parameters:
 
 - `pyroscope_sample_rate` - CPU profiling sample rate in Hz (default: `100`).
 - `pyroscope_tags` - key/value string pairs attached to all profiles.
-- `pyroscope_additional_params` - additional params passed directly to `pyroscope.configure`.
+- `pyroscope_additional_params` - overrides the prepared arguments passed to `pyroscope.configure`.
 
 When OpenTelemetry is also enabled, a `PyroscopeSpanProcessor` is automatically added to the tracer provider. It tags root spans with a `pyroscope.profile.id` attribute and sets Pyroscope thread tags so that traces and profiles can be linked in the Grafana UI.
 
@@ -510,6 +510,8 @@ To bootstrap swagger, you have the following parameters:
 - `swagger_path`
 - `swagger_offline_docs` - option to turn on offline docs.
 - `swagger_additional_params` - Litestar only: extra keyword arguments for `litestar.openapi.OpenAPIConfig`. It cannot repeat `path`, `title`, `version`, `description` or `render_plugins`, which lite-bootstrap already passes.
+
+When lite-bootstrap creates the FastAPI application, set its docs URL with `swagger_path`.
 
 Swagger is on by default at `swagger_path` (default: `/docs`). For Litestar, set `swagger_path` to an empty string to disable it.
 

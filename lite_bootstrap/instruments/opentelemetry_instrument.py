@@ -5,7 +5,12 @@ import typing
 import urllib.parse
 
 from lite_bootstrap import import_checker
-from lite_bootstrap.exceptions import ConfigurationError, InstrumentDependencyMissingWarning, collect_teardown_errors
+from lite_bootstrap.exceptions import (
+    ConfigurationError,
+    InstrumentDependencyMissingWarning,
+    TeardownError,
+    collect_teardown_errors,
+)
 from lite_bootstrap.helpers.warn import warn_at_caller
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
 
@@ -210,6 +215,9 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfigT]):
     _meter_provider: "MeterProvider | None" = dataclasses.field(
         default_factory=lambda: None, init=False, repr=False, compare=False
     )
+    _owned_instrumentors: list[tuple["BaseInstrumentor", dict[str, typing.Any]]] = dataclasses.field(
+        default_factory=list, init=False, repr=False, compare=False
+    )
     _prior_logger_disabled: dict[str, bool] = dataclasses.field(
         default_factory=dict, init=False, repr=False, compare=False
     )
@@ -249,9 +257,6 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfigT]):
             if health_path:
                 excluded_paths.add(health_path)
         return excluded_paths
-
-    def _build_excluded_urls(self) -> set[str]:
-        return set(self.bootstrap_config.opentelemetry_excluded_urls) | self._build_infrastructure_excluded_paths()
 
     def _build_excluded_url_patterns(self, environment_key: str) -> list[str]:
         """Combine caller-supplied URL regexes with the OpenTelemetry environment defaults."""
@@ -343,22 +348,26 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfigT]):
         meter_provider = MeterProvider(
             resource=resource, metric_readers=[PeriodicExportingMetricReader(metric_exporter)]
         )
+        self._meter_provider = meter_provider
         set_meter_provider(meter_provider)
         if get_meter_provider() is not meter_provider:
             warn_at_caller(
                 "a MeterProvider is already installed; the configured metrics exporter and resource will not be used"
             )
-        self._meter_provider = meter_provider
 
     def _apply_instrumentors(self, tracer_provider: "APITracerProvider") -> None:
-        for one_instrumentor in self.bootstrap_config.opentelemetry_instrumentors:
-            if isinstance(one_instrumentor, InstrumentorWithParams):
-                one_instrumentor.instrumentor.instrument(
-                    tracer_provider=tracer_provider,
-                    **one_instrumentor.additional_params,
-                )
+        for configured in self.bootstrap_config.opentelemetry_instrumentors:
+            if isinstance(configured, InstrumentorWithParams):
+                instrumentor = configured.instrumentor
+                params = dict(configured.additional_params)
             else:
-                one_instrumentor.instrument(tracer_provider=tracer_provider)
+                instrumentor = configured
+                params = {}
+            if instrumentor.is_instrumented_by_opentelemetry:
+                continue
+            instrumentor.instrument(tracer_provider=tracer_provider, **params)
+            if instrumentor.is_instrumented_by_opentelemetry:
+                self._owned_instrumentors.append((instrumentor, params))
 
     def _build_span_processors(self) -> "list[SpanProcessor]":
         config = self.bootstrap_config
@@ -372,6 +381,17 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfigT]):
         return processors
 
     def bootstrap(self) -> None:
+        try:
+            self._bootstrap_telemetry()
+        except BaseException as error:
+            try:
+                self._teardown_owned_resources()
+            except TeardownError as cleanup_error:
+                for name, failure in cleanup_error.errors:
+                    error.add_note(f"Error rolling back {name}: {failure}")
+            raise
+
+    def _bootstrap_telemetry(self) -> None:
         config = self.bootstrap_config
         self._silence_otel_loggers()
         resource = self._build_resource()
@@ -397,13 +417,14 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfigT]):
         self._apply_instrumentors(self.tracer_provider)
 
     def teardown(self) -> None:
+        self._teardown_owned_resources()
+
+    def _teardown_owned_resources(self) -> None:
         with collect_teardown_errors() as teardown_errors:
-            for one_instrumentor in self.bootstrap_config.opentelemetry_instrumentors:
-                with teardown_errors.capture(type(one_instrumentor).__name__):
-                    if isinstance(one_instrumentor, InstrumentorWithParams):
-                        one_instrumentor.instrumentor.uninstrument(**one_instrumentor.additional_params)
-                    else:
-                        one_instrumentor.uninstrument()
+            while self._owned_instrumentors:
+                instrumentor, params = self._owned_instrumentors.pop()
+                with teardown_errors.capture(type(instrumentor).__name__):
+                    instrumentor.uninstrument(**params)
             for logger_name, prior in self._prior_logger_disabled.items():
                 logging.getLogger(logger_name).disabled = prior
             self._prior_logger_disabled.clear()

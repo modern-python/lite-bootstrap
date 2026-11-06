@@ -310,11 +310,11 @@ class SentryInstrument(BaseInstrument[SentryConfigT]):
     def teardown(self) -> None:
         """Flush pending events and reset the SDK to a no-op state.
 
-        Calling ``sentry_sdk.init()`` with no DSN disables further event capture. This
+        Clear the global client to disable capture even when SENTRY_DSN is set. This
         cleans up after a bootstrap so the same process can be torn down and re-tested
         without leaking the previous DSN/transport into subsequent code.
         """
         try:
             sentry_sdk.flush(timeout=2)
         finally:
-            sentry_sdk.init()
+            sentry_sdk.get_global_scope().set_client(None)

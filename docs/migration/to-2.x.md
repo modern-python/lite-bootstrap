@@ -398,8 +398,9 @@ spans and logs. Keep exporters open until that work finishes
 [#413](https://github.com/modern-python/lite-bootstrap/pull/413)).
 
 FastStream teardown now runs after broker shutdown and user lifespan shutdown,
-including when startup or shutdown fails. Outside a lifespan, `stop()` still
-triggers teardown after broker shutdown
+including when startup or shutdown fails. If you drive FastStream with
+`start()` and `stop()` or use `async with application`, explicitly call
+`bootstrapper.teardown()` in an outer `finally` block
 ([#434](https://github.com/modern-python/lite-bootstrap/issues/434)).
 
 Failed bootstrap rolls back successfully started instruments and cannot be reused. Retry with

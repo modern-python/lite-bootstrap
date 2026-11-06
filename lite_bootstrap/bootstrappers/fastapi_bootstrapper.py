@@ -92,6 +92,9 @@ class FastAPIConfig(
             raise ConfigurationError(msg)
 
         if isinstance(self.application, UnsetType):
+            if "docs_url" in self.application_kwargs:
+                msg = "Use swagger_path to configure docs_url when lite-bootstrap creates the FastAPI application"
+                raise ConfigurationError(msg)
             application = fastapi.FastAPI(docs_url=self.swagger_path, **self.application_kwargs)
             # FastAPIConfig stays frozen for user-facing immutability; __post_init__ needs
             # to set application after construction, so we bypass the freeze here.
@@ -252,6 +255,9 @@ class FastAPIPrometheusInstrument(PrometheusInstrument[FastAPIConfig]):
     def bootstrap(self) -> None:
         config = self.bootstrap_config
         application = config.app
+        if "endpoint" in config.prometheus_expose_additional_params:
+            msg = "Use prometheus_metrics_path to configure the Prometheus endpoint"
+            raise ConfigurationError(msg)
         instrumentator_params = dict(config.prometheus_instrumentator_additional_params)
         instrumentator_params["excluded_handlers"] = [
             *instrumentator_params.get("excluded_handlers", []),
@@ -312,10 +318,8 @@ class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI", FastAPIConfig]):
 
     @contextlib.asynccontextmanager
     async def lifespan_manager(self, _: "fastapi.FastAPI") -> AsyncGenerator[dict[str, typing.Any]]:
-        try:
+        with self._teardown_after_lifecycle():
             yield {}
-        finally:
-            self.teardown()
 
     def __init__(self, bootstrap_config: FastAPIConfig) -> None:
         super().__init__(bootstrap_config)

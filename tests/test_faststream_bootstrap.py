@@ -321,7 +321,7 @@ async def test_faststream_lifespan_preserves_positional_and_keyword_arguments(br
         "start-stop",
     ],
 )
-async def test_faststream_manual_lifecycle_tears_down_after_broker_drain(broker: RedisBroker, lifecycle: str) -> None:
+async def test_faststream_manual_lifecycle_requires_explicit_teardown(broker: RedisBroker, lifecycle: str) -> None:
     async def stop_broker() -> None:
         with get_tracer(__name__).start_as_current_span("broker-drain"):
             pass
@@ -348,48 +348,10 @@ async def test_faststream_manual_lifecycle_tears_down_after_broker_drain(broker:
             await application.stop()
 
     assert [span.name for span in exporter.get_finished_spans()] == ["broker-drain"]
-    assert not bootstrapper.is_bootstrapped
+    assert bootstrapper.is_bootstrapped
+    assert exporter.shutdown_calls == 0
+    bootstrapper.teardown()
     assert exporter.shutdown_calls == 1
-
-
-@pytest.mark.parametrize("failure_stage", ["shutdown-hook", "broker-stop"])
-@pytest.mark.parametrize("teardown_fails", [False, True])
-async def test_faststream_direct_stop_failure_preserves_error_and_tears_down(
-    broker: RedisBroker, failure_stage: str, teardown_fails: bool
-) -> None:
-    error = ValueError(failure_stage)
-
-    async def shutdown() -> None:
-        if failure_stage == "shutdown-hook":
-            raise error
-
-    async def stop_broker() -> None:
-        if failure_stage == "broker-stop":
-            raise error
-
-    application = faststream.asgi.AsgiFastStream(broker, on_shutdown=[shutdown])
-    bootstrapper = FastStreamBootstrapper(
-        FastStreamConfig(application=application, logging_enabled=False, opentelemetry_log_traces=True)
-    )
-    bootstrapper.bootstrap()
-    provider = get_tracer_provider()
-    assert isinstance(provider, SDKTracerProvider)
-    exporter = _ShutdownCountingSpanExporter(ValueError("exporter shutdown failed") if teardown_fails else None)
-    provider.add_span_processor(SimpleSpanProcessor(exporter))
-
-    with (
-        patch.object(broker, "start", new=AsyncMock()),
-        patch.object(broker, "stop", new=AsyncMock(side_effect=stop_broker)),
-    ):
-        await application.start()
-        with pytest.raises(ValueError, match=failure_stage) as caught:
-            await application.stop()
-
-    assert caught.value is error
-    assert not bootstrapper.is_bootstrapped
-    assert exporter.shutdown_calls == 1
-    if teardown_fails:
-        assert any("exporter shutdown failed" in note for note in caught.value.__notes__)
 
 
 @pytest.mark.parametrize("path", ["/health", "/health/", "/metrics", "/metrics/"])
@@ -710,37 +672,6 @@ async def test_faststream_health_check_pings_every_broker(broker: RedisBroker) -
         second_ping.assert_called_once_with(timeout=expected_timeout)
     finally:
         bootstrapper.teardown()
-
-
-def test_faststream_opentelemetry_excluded_urls_in_built_set(broker: RedisBroker) -> None:
-    bootstrap_config = dataclasses.replace(
-        build_faststream_config(broker=broker),
-        opentelemetry_excluded_urls=["/foo", "/bar"],
-    )
-    instrument = FastStreamOpenTelemetryInstrument(bootstrap_config=bootstrap_config)
-    excluded = instrument._build_excluded_urls()  # noqa: SLF001
-    assert "/foo" in excluded
-    assert "/bar" in excluded
-
-
-def test_faststream_build_excluded_urls_covers_prometheus_and_health_paths(broker: RedisBroker) -> None:
-    # Pins the genuine cross-instrument reads in _build_excluded_urls: a rename of
-    # prometheus_metrics_path / health_checks_path (or a regression in the health
-    # conditional) breaks this loudly instead of silently dropping the exclusion.
-    config_no_health_spans = dataclasses.replace(
-        build_faststream_config(broker=broker),
-        opentelemetry_generate_health_check_spans=False,
-    )
-    excluded = FastStreamOpenTelemetryInstrument(bootstrap_config=config_no_health_spans)._build_excluded_urls()  # noqa: SLF001
-    assert config_no_health_spans.prometheus_metrics_path in excluded  # always excluded
-    assert config_no_health_spans.health_checks_path in excluded  # excluded when health spans are off
-
-    config_with_health_spans = dataclasses.replace(
-        build_faststream_config(broker=broker), opentelemetry_generate_health_check_spans=True
-    )
-    excluded_with = FastStreamOpenTelemetryInstrument(bootstrap_config=config_with_health_spans)._build_excluded_urls()  # noqa: SLF001
-    assert config_with_health_spans.prometheus_metrics_path in excluded_with
-    assert config_with_health_spans.health_checks_path not in excluded_with  # kept when health spans are on
 
 
 @pytest.mark.parametrize(

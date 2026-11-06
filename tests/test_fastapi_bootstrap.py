@@ -824,3 +824,35 @@ def test_empty_observability_paths_disable_routes() -> None:
         assert client.get("/health/").status_code == status.HTTP_404_NOT_FOUND
         assert client.get("/metrics").status_code == status.HTTP_404_NOT_FOUND
         assert client.get("/").status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_fastapi_docs_url_conflict_names_canonical_setting() -> None:
+    with pytest.raises(ConfigurationError, match="swagger_path"):
+        FastAPIConfig(application_kwargs={"docs_url": "/custom"})
+
+
+def test_fastapi_shutdown_keeps_lifespan_error_when_exporter_shutdown_fails() -> None:
+    primary = ValueError("user shutdown failed")
+
+    @contextlib.asynccontextmanager
+    async def lifespan(_: fastapi.FastAPI) -> AsyncGenerator[None]:
+        yield
+        raise primary
+
+    config = FastAPIConfig(application=fastapi.FastAPI(lifespan=lifespan), opentelemetry_log_traces=True)
+    app = FastAPIBootstrapper(config).bootstrap()
+    provider = get_tracer_provider()
+    with (
+        patch.object(provider, "shutdown", side_effect=RuntimeError("exporter shutdown failed")),
+        pytest.raises(ValueError, match="user shutdown failed") as caught,
+        TestClient(app),
+    ):
+        pass
+    assert caught.value is primary
+    assert any("exporter shutdown failed" in note for note in caught.value.__notes__)
+
+
+def test_fastapi_metrics_endpoint_conflict_names_canonical_setting() -> None:
+    config = FastAPIConfig(prometheus_expose_additional_params={"endpoint": "/custom"})
+    with pytest.raises(ConfigurationError, match="prometheus_metrics_path"):
+        FastAPIBootstrapper(config).bootstrap()

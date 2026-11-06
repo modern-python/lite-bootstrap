@@ -13,11 +13,8 @@ framework-locality already exists, because all of a framework's subclasses live 
 bootstrapper file. Reconsider if the per-cell bindings start converging, or if a new framework shares
 an existing one's attach mechanism exactly.
 
-`_build_excluded_urls` likewise keeps the whole trace-exclusion policy in one method that reads
-its siblings' paths through `getattr(..., None)`. Those sibling configs are optional, so the
-defensive read is correct. A per-instrument contribution mechanism would
-spread the policy across `PrometheusConfig`, `HealthChecksConfig` and OpenTelemetry while still
-needing `opentelemetry_generate_health_check_spans`, so the coupling would not even disappear. The
-real risk, renaming `prometheus_metrics_path` and silently stopping the exclusion, is covered by a
-test pinning each sibling path in the built set. Reconsider when a user-supplied instrument needs
-paths the policy cannot know about.
+OpenTelemetry's `_build_infrastructure_excluded_paths` owns the exclusion policy for
+the metrics route and the health route. Framework bindings apply those paths alongside
+caller-supplied URL patterns. HTTP-level tests verify the resulting exclusions.
+A per-instrument contribution mechanism would distribute the same policy across
+configuration classes while retaining their dependency on the health span setting.

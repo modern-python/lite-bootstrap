@@ -246,3 +246,13 @@ def test_pyroscope_otel_http_integration() -> None:
                 mock_module.call("span_name", "GET /test-handler"),
             ]
         )
+
+
+def test_pyroscope_additional_params_override_sample_rate() -> None:
+    rate = 50
+    config = PyroscopeConfig(
+        pyroscope_endpoint="http://pyroscope:4040", pyroscope_additional_params={"sample_rate": rate}
+    )
+    with patch(_PYROSCOPE_PYROSCOPE) as sdk:
+        PyroscopeInstrument(bootstrap_config=config).bootstrap()
+    assert sdk.configure.call_args.kwargs["sample_rate"] == rate
