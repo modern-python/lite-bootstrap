@@ -40,13 +40,12 @@ from lite_bootstrap.helpers.opentelemetry_asgi import build_opentelemetry_middle
 from lite_bootstrap.instruments.healthchecks_instrument import HealthProbe
 from tests.conftest import (
     HEALTH_PROBE_CASES,
-    capture_probe_warnings,
+    HTTP_METRIC_CASES,
     emulate_package_missing,
     emulate_package_missing_with_module_reload,
-    failed_probe_names,
     in_memory_opentelemetry_metric_reader,
-    opentelemetry_recorded_http_server_metrics,
-    prometheus_recorded_path,
+    opentelemetry_http_request_count,
+    prometheus_request_count,
     unregister_prometheus_request_metrics,
 )
 
@@ -573,8 +572,8 @@ def _unregister_request_metrics() -> None:
     unregister_prometheus_request_metrics()
 
 
-def _http_metric_sets_one_request_moves(**overrides: typing.Any) -> tuple[bool, bool]:  # noqa: ANN401
-    """Return whether one application request reached OpenTelemetry and Prometheus HTTP metrics, in that order."""
+def _http_request_counts(**overrides: typing.Any) -> tuple[int, float]:  # noqa: ANN401
+    """Return the OpenTelemetry and Prometheus request counts after one request."""
     config = _make_test_config(**overrides)
     path = f"/items-{uuid.uuid4().hex}"
 
@@ -588,31 +587,16 @@ def _http_metric_sets_one_request_moves(**overrides: typing.Any) -> tuple[bool, 
     try:
         with TestClient(application.http_app()) as client:
             assert client.get(path).status_code == status.HTTP_200_OK
-        return opentelemetry_recorded_http_server_metrics(reader), prometheus_recorded_path(path)
+        return opentelemetry_http_request_count(reader), prometheus_request_count(
+            "http_requests_total", "handler", path
+        )
     finally:
         bootstrapper.teardown()
 
 
-@pytest.mark.parametrize(
-    ("overrides", "expected"),
-    [
-        pytest.param({"opentelemetry_metrics_endpoint": "localhost:4317"}, (True, False), id="both-keeps-otel"),
-        pytest.param(
-            {"opentelemetry_metrics_endpoint": "localhost:4317", "prometheus_http_metrics_enabled": True},
-            (True, True),
-            id="both-restored",
-        ),
-        pytest.param({}, (False, True), id="prometheus-alone"),
-        pytest.param(
-            {"opentelemetry_metrics_endpoint": "localhost:4317", "prometheus_metrics_path": ""},
-            (True, False),
-            id="otel-alone",
-        ),
-        pytest.param({"prometheus_http_metrics_enabled": False}, (False, False), id="prometheus-http-off"),
-    ],
-)
-def test_fastmcp_http_metrics_are_recorded_once(overrides: dict[str, typing.Any], expected: tuple[bool, bool]) -> None:
-    assert _http_metric_sets_one_request_moves(**overrides) == expected
+@pytest.mark.parametrize(("overrides", "expected"), HTTP_METRIC_CASES)
+def test_fastmcp_http_metrics_are_recorded_once(overrides: dict[str, typing.Any], expected: tuple[int, int]) -> None:
+    assert _http_request_counts(**overrides) == expected
 
 
 def test_fastmcp_prometheus_keeps_tool_metrics_and_metrics_route_while_opentelemetry_records_http_metrics() -> None:
@@ -876,18 +860,17 @@ def test_fastmcp_otel_honors_excluded_urls_from_environment(monkeypatch: pytest.
     ]
 
 
-@pytest.mark.parametrize(("probes", "expected_status", "expected_health_status", "expected_failed"), HEALTH_PROBE_CASES)
+@pytest.mark.parametrize(("probe", "expected_status", "expected_health_status"), HEALTH_PROBE_CASES)
 def test_fastmcp_health_check_runs_probes(
-    probes: dict[str, HealthProbe],
+    probe: HealthProbe,
     expected_status: int,
     expected_health_status: bool,
-    expected_failed: list[str],
 ) -> None:
-    config = _make_test_config(health_checks_probes=probes)
+    config = _make_test_config(health_checks_probes={"cache": probe})
     bootstrapper = FastMcpBootstrapper(bootstrap_config=config)
     application = bootstrapper.bootstrap()
     try:
-        with capture_probe_warnings() as probe_warnings, TestClient(application.http_app()) as test_client:
+        with TestClient(application.http_app()) as test_client:
             response = test_client.get(config.health_checks_path)
     finally:
         bootstrapper.teardown()
@@ -898,4 +881,3 @@ def test_fastmcp_health_check_runs_probes(
         "service_name": "test-mcp",
         "service_version": "1.2.3",
     }
-    assert failed_probe_names(probe_warnings) == expected_failed

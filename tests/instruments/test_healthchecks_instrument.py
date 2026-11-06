@@ -1,11 +1,11 @@
 import asyncio
-import time
 from unittest.mock import MagicMock
 
 import pytest
 
 from lite_bootstrap.instruments import healthchecks_instrument
-from lite_bootstrap.instruments.healthchecks_instrument import HealthChecksConfig, HealthChecksInstrument
+from lite_bootstrap.instruments.healthchecks_instrument import HealthChecksConfig, HealthChecksInstrument, HealthProbe
+from tests.conftest import ProbeError, failing_probe, passing_probe, raising_probe
 
 
 def test_healthchecks_instrument_configured_by_default() -> None:
@@ -52,18 +52,51 @@ def test_healthchecks_config_defaults() -> None:
 
 
 async def test_healthchecks_probes_run_concurrently() -> None:
-    interval = 0.2
+    first_started = asyncio.Event()
+    second_started = asyncio.Event()
 
-    async def slow_probe() -> bool:
-        await asyncio.sleep(interval)
+    async def first() -> bool:
+        first_started.set()
+        await second_started.wait()
+        return True
+
+    async def second() -> bool:
+        await first_started.wait()
+        second_started.set()
         return True
 
     instrument = HealthChecksInstrument(
-        bootstrap_config=HealthChecksConfig(health_checks_probes={"first": slow_probe, "second": slow_probe}),
+        bootstrap_config=HealthChecksConfig(health_checks_probes={"first": first, "second": second}),
     )
-    started = time.perf_counter()
-    assert await instrument.define_health_status()
-    assert time.perf_counter() - started < interval * 1.5
+    assert await asyncio.wait_for(instrument.define_health_status(), timeout=5)
+
+
+@pytest.mark.parametrize(
+    ("probe", "expected_message", "expected_exception"),
+    [
+        pytest.param(failing_probe, "Health probe cache failed", None, id="returns-false"),
+        pytest.param(raising_probe, "Health probe cache raised", ProbeError, id="raises"),
+    ],
+)
+async def test_failed_probe_makes_health_unhealthy_and_warns(
+    probe: HealthProbe,
+    expected_message: str,
+    expected_exception: type[Exception] | None,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    instrument = HealthChecksInstrument(
+        bootstrap_config=HealthChecksConfig(health_checks_probes={"db": passing_probe, "cache": probe}),
+    )
+
+    assert not await instrument.define_health_status()
+
+    [record] = [record for record in caplog.records if record.name == healthchecks_instrument.__name__]
+    assert record.getMessage() == expected_message
+    if expected_exception is None:
+        assert record.exc_info is None
+    else:
+        assert record.exc_info
+        assert isinstance(record.exc_info[1], expected_exception)
 
 
 async def test_healthchecks_status_is_healthy_without_probes() -> None:

@@ -29,15 +29,13 @@ from lite_bootstrap.instruments.healthchecks_instrument import HealthProbe
 from lite_bootstrap.types import UNSET
 from tests.conftest import (
     HEALTH_PROBE_CASES,
+    HTTP_METRIC_CASES,
     CustomInstrumentor,
     SentryTestTransport,
-    capture_probe_warnings,
     emulate_package_missing,
     emulate_package_missing_with_module_reload,
-    failed_probe_names,
     in_memory_opentelemetry_metric_reader,
-    opentelemetry_recorded_http_server_metrics,
-    prometheus_recorded_path,
+    opentelemetry_http_request_count,
     prometheus_request_count,
     unregister_prometheus_request_metrics,
     warning_source_files,
@@ -614,8 +612,8 @@ def test_fastapi_prometheus_excludes_infrastructure_and_user_paths() -> None:
     assert prometheus_request_count("http_requests_total", "handler", normal_path) == 1
 
 
-def _http_metric_sets_one_request_moves(config: FastAPIConfig) -> tuple[bool, bool]:
-    """Return whether one request reached OpenTelemetry's HTTP metrics and Prometheus's, in that order."""
+def _http_request_counts(config: FastAPIConfig) -> tuple[int, float]:
+    """Return the OpenTelemetry and Prometheus request counts after one request."""
     path: typing.Final = f"/items-{uuid.uuid4().hex}"
     application: typing.Final = config.app
     unregister_prometheus_request_metrics()
@@ -630,7 +628,9 @@ def _http_metric_sets_one_request_moves(config: FastAPIConfig) -> tuple[bool, bo
     try:
         with TestClient(application) as client:
             assert client.get(path).status_code == status.HTTP_200_OK
-        return opentelemetry_recorded_http_server_metrics(reader), prometheus_recorded_path(path)
+        return opentelemetry_http_request_count(reader), prometheus_request_count(
+            "http_requests_total", "handler", path
+        )
     finally:
         bootstrapper.teardown()
 
@@ -638,33 +638,21 @@ def _http_metric_sets_one_request_moves(config: FastAPIConfig) -> tuple[bool, bo
 @pytest.mark.parametrize(
     ("overrides", "expected"),
     [
-        pytest.param({"opentelemetry_metrics_endpoint": "localhost:4317"}, (True, False), id="both-keeps-otel"),
+        *HTTP_METRIC_CASES,
         pytest.param(
             {
                 "opentelemetry_metrics_endpoint": "http://localhost:4318/v1/metrics",
                 "opentelemetry_exporter_protocol": "http",
             },
-            (True, False),
+            (1, 0),
             id="both-keeps-otel-over-http",
         ),
-        pytest.param(
-            {"opentelemetry_metrics_endpoint": "localhost:4317", "prometheus_http_metrics_enabled": True},
-            (True, True),
-            id="both-restored",
-        ),
-        pytest.param({}, (False, True), id="prometheus-alone"),
-        pytest.param(
-            {"opentelemetry_metrics_endpoint": "localhost:4317", "prometheus_metrics_path": ""},
-            (True, False),
-            id="otel-alone",
-        ),
-        pytest.param({"prometheus_http_metrics_enabled": False}, (False, False), id="prometheus-http-off"),
     ],
 )
 def test_fastapi_http_metrics_are_recorded_once(
-    fastapi_config: FastAPIConfig, overrides: dict[str, typing.Any], expected: tuple[bool, bool]
+    fastapi_config: FastAPIConfig, overrides: dict[str, typing.Any], expected: tuple[int, int]
 ) -> None:
-    assert _http_metric_sets_one_request_moves(dataclasses.replace(fastapi_config, **overrides)) == expected
+    assert _http_request_counts(dataclasses.replace(fastapi_config, **overrides)) == expected
 
 
 def test_fastapi_prometheus_keeps_http_metrics_when_the_otlp_metric_exporter_is_missing(
@@ -675,7 +663,7 @@ def test_fastapi_prometheus_keeps_http_metrics_when_the_otlp_metric_exporter_is_
         patch.object(import_checker, "is_otlp_grpc_exporter_installed", new=False),
         pytest.warns(InstrumentDependencyMissingWarning, match="gRPC OTLP exporter is not installed"),
     ):
-        assert _http_metric_sets_one_request_moves(config) == (False, True)
+        assert _http_request_counts(config) == (0, 1)
 
 
 def test_fastapi_prometheus_still_serves_metrics_while_opentelemetry_records_http_metrics(
@@ -771,18 +759,17 @@ def test_fastapi_otel_honors_excluded_urls_from_environment(
     assert span_names == ["GET /custom-healthy"]
 
 
-@pytest.mark.parametrize(("probes", "expected_status", "expected_health_status", "expected_failed"), HEALTH_PROBE_CASES)
+@pytest.mark.parametrize(("probe", "expected_status", "expected_health_status"), HEALTH_PROBE_CASES)
 def test_fastapi_health_check_runs_probes(
     fastapi_config: FastAPIConfig,
-    probes: dict[str, HealthProbe],
+    probe: HealthProbe,
     expected_status: int,
     expected_health_status: bool,
-    expected_failed: list[str],
 ) -> None:
-    config = dataclasses.replace(fastapi_config, health_checks_probes=probes)
+    config = dataclasses.replace(fastapi_config, health_checks_probes={"cache": probe})
     bootstrapper = FastAPIBootstrapper(bootstrap_config=config)
     application = bootstrapper.bootstrap()
-    with capture_probe_warnings() as probe_warnings, TestClient(application) as test_client:
+    with TestClient(application) as test_client:
         response = test_client.get(config.health_checks_path)
 
     assert response.status_code == expected_status
@@ -791,7 +778,6 @@ def test_fastapi_health_check_runs_probes(
         "service_name": "microservice",
         "service_version": "2.0.0",
     }
-    assert failed_probe_names(probe_warnings) == expected_failed
 
 
 def test_built_app_title_and_version_fall_back_when_unset() -> None:

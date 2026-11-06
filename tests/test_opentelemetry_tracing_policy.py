@@ -13,7 +13,7 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 from starlette import status
 
 from lite_bootstrap import FastAPIBootstrapper, FastAPIConfig, LitestarBootstrapper, LitestarConfig
-from tests.conftest import in_memory_opentelemetry_metric_reader, opentelemetry_recorded_http_server_metrics
+from tests.conftest import in_memory_opentelemetry_metric_reader, opentelemetry_http_request_count
 
 
 @pytest.mark.parametrize("framework", ["fastapi", "litestar"])
@@ -59,7 +59,7 @@ def test_metrics_only_framework_tracing_uses_only_an_existing_external_provider(
                 response = client.get("/recording")
                 assert response.status_code == status.HTTP_200_OK
                 assert response.json() == {"recording": external_setup == "before"}
-                assert opentelemetry_recorded_http_server_metrics(reader)
+                assert opentelemetry_http_request_count(reader) == 1
             assert bool(exporter.get_finished_spans()) is (external_setup == "before")
     finally:
         bootstrapper.teardown()
