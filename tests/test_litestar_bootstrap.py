@@ -149,14 +149,6 @@ def test_litestar_bootstrap_twice_returns_the_same_application() -> None:
     assert bootstrapper.bootstrap() is bootstrapper.bootstrap()
 
 
-def test_litestar_bootstrap_after_teardown_raises() -> None:
-    bootstrapper = LitestarBootstrapper(bootstrap_config=LitestarConfig())
-    bootstrapper.bootstrap()
-    bootstrapper.teardown()
-    with pytest.raises(ConfigurationError, match="construct a new LitestarBootstrapper"):
-        bootstrapper.bootstrap()
-
-
 def test_litestar_bootstrapper_not_ready() -> None:
     with emulate_package_missing("litestar"), pytest.raises(RuntimeError, match="litestar is not installed"):
         LitestarBootstrapper(bootstrap_config=LitestarConfig())

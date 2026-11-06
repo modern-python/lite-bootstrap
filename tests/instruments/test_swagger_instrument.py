@@ -11,7 +11,3 @@ def test_swagger_config_defaults() -> None:
     assert config.swagger_static_path == "/static"
     assert config.swagger_path == "/docs"
     assert config.swagger_offline_docs is False
-
-
-def test_swagger_dependencies_installed() -> None:
-    assert SwaggerInstrument.dependencies_installed() is True

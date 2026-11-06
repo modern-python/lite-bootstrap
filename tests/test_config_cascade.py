@@ -72,9 +72,11 @@ def test_an_insecure_endpoint_warning_names_the_line_that_built_the_config(
     """
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        config_type(opentelemetry_endpoint=_REMOTE_INSECURE_ENDPOINT)
+        config_type(opentelemetry_endpoint=_REMOTE_INSECURE_ENDPOINT, opentelemetry_insecure=True)
 
-    assert [w.filename for w in caught] == [__file__]
+    assert len(caught) == 1
+    assert "unencrypted" in str(caught[0].message)
+    assert caught[0].filename == __file__
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
