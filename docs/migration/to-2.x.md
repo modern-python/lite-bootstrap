@@ -191,9 +191,12 @@ FastMCP require the complete body. Raw bodies become text. Body size limits appl
 [Sentry data collection](../introduction/configuration.md#sentry-data-collection)
 for the full default policy.
 
-Structured log events and breadcrumbs reach callbacks normalized and redacted.
-Structlog events omit frame locals to avoid leaking the original line. Update
-callbacks that relied on those locals or raw JSON messages ([#408](https://github.com/modern-python/lite-bootstrap/pull/408)).
+Structured log events and breadcrumbs are normalized and redacted before callbacks
+run. Structlog events omit frame locals, and `skip_sentry` drops recognized records
+before `before_send` or `before_breadcrumb` runs. This ordering also applies to
+`sentry_additional_params["before_send"]`, which previously replaced built-in
+processing. Update callbacks that relied on the original payload
+([#408](https://github.com/modern-python/lite-bootstrap/pull/408)).
 FastStream isolates message scopes. Set tags and breadcrumbs per message
 ([#409](https://github.com/modern-python/lite-bootstrap/pull/409)).
 
@@ -247,8 +250,9 @@ FastAPI, Litestar, and FastMCP omit per-message `receive` and `send` spans. Set
 `opentelemetry_exclude_spans=[]` to restore them
 ([#364](https://github.com/modern-python/lite-bootstrap/pull/364)).
 
-`opentelemetry_generate_health_check_spans=False` omits health requests from traces
-and OpenTelemetry HTTP metrics. Set it to `True` to restore both
+`opentelemetry_generate_health_check_spans` defaults to `False`. Set it to `True`
+to include health checks in traces and, where OpenTelemetry instruments HTTP
+requests, in HTTP metrics. On FastStream, it controls only the health-check span
 ([#366](https://github.com/modern-python/lite-bootstrap/pull/366)).
 
 ### OTLP transport security
@@ -270,15 +274,17 @@ config = FreeConfig(
 
 ### Metrics-only tracing and external providers
 
-Without a span processor, metrics-only bootstrap installs no SDK `TracerProvider`
-and records no framework spans. This also applies when the trace exporter is
-missing; its warning remains. JSON logs omit `tracing` unless an external provider
-records a span.
+Without a configured span processor, bootstrap reuses a preinstalled tracer
+provider or gives instrumentors a no-op provider. The same rule applies if the
+trace exporter is missing and no other processor is configured. The warning still
+appears. JSON logs include `tracing` only inside a recording span.
 
-Install your SDK provider and processors before bootstrap; your application owns
-its shutdown. A provider installed later cannot activate instrumentors already
-bound to a no-op provider
-([#430](https://github.com/modern-python/lite-bootstrap/pull/430)):
+Install your SDK provider and processors before bootstrap. A provider installed
+later cannot activate instrumentors bound to a no-op provider. Your application
+owns provider shutdown and must uninstrument any libraries it instrumented before
+bootstrap
+([#430](https://github.com/modern-python/lite-bootstrap/pull/430),
+[#444](https://github.com/modern-python/lite-bootstrap/pull/444)):
 
 ```python
 from opentelemetry import trace
@@ -329,10 +335,11 @@ headers, including `Content-Type`. Add `Authorization` explicitly when needed
 
 Calls to unresolved tool names no longer create `fastmcp_tool_calls_total` or
 `fastmcp_tool_call_duration_seconds` series. These calls still return errors, but
-are omitted from tool metrics to bound retained series. Registered, mounted and
-transformed tools keep their labels and success/failure counts
+are omitted from tool metrics to bound retained series. Calls to resolved tools
+still count successes and failures. Hashed app-tool aliases now share the label
+`<hash>_<resolved tool name>`. Update dashboard and alert selectors that match
+the raw requested name used in 1.16.0
 ([#433](https://github.com/modern-python/lite-bootstrap/issues/433)).
-Hashed app-tool labels use `<hash>_<resolved tool name>`; aliases share that label.
 
 ### HTTP metrics alongside OpenTelemetry
 
@@ -390,6 +397,14 @@ FastStream serves `/health` and `/health/`, and `/metrics` and `/metrics/`, dire
 Existing probes keep working. Check for custom routes using the alternate spelling
 ([#420](https://github.com/modern-python/lite-bootstrap/pull/420)).
 
+## FastStream middleware protocols
+
+`FastStreamTelemetryMiddlewareProtocol` and `FastStreamPrometheusMiddlewareProtocol`
+are now for static typing. Runtime checks with `isinstance()` or `issubclass()`
+raise `TypeError`. If you need runtime validation, define your own
+`@runtime_checkable` protocol or check the required methods directly
+([#427](https://github.com/modern-python/lite-bootstrap/pull/427)).
+
 ## Framework lifecycle and offline docs
 
 FastAPI and FastMCP teardown runs after user lifespan shutdown, preserving shutdown
@@ -397,8 +412,8 @@ spans and logs. Keep exporters open until that work finishes
 ([#412](https://github.com/modern-python/lite-bootstrap/pull/412),
 [#413](https://github.com/modern-python/lite-bootstrap/pull/413)).
 
-FastStream teardown now runs after broker shutdown and user lifespan shutdown,
-including when startup or shutdown fails. If you drive FastStream with
+FastStream's ASGI lifespan runs teardown after broker shutdown and user lifespan
+cleanup, including when startup or shutdown fails. If you drive FastStream with
 `start()` and `stop()` or use `async with application`, explicitly call
 `bootstrapper.teardown()` in an outer `finally` block
 ([#434](https://github.com/modern-python/lite-bootstrap/issues/434)).
