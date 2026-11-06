@@ -15,6 +15,7 @@ import sentry_sdk
 import uvicorn
 from fastmcp import FastMCP
 from sentry_sdk import integrations as sentry_integrations
+from sentry_sdk.integrations.dedupe import DedupeIntegration
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.httpx import HttpxIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
@@ -453,8 +454,32 @@ def test_lean_capture_skips_client_http_exceptions(sentry_mock: SentryTestTransp
     assert _error_events(sentry_mock) == []
 
 
-def test_lean_capture_reports_server_http_exceptions_as_handled(sentry_mock: SentryTestTransport) -> None:
-    assert _request(sentry_mock, "/http-503") == [status.HTTP_503_SERVICE_UNAVAILABLE]
+def _respond_503_sync(_: Request, __: Exception) -> Response:
+    return Response("custom", status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+
+@pytest.mark.parametrize(
+    ("handler", "expected_body"),
+    [
+        pytest.param(None, None, id="default"),
+        pytest.param(_respond_503, "", id="async"),
+        pytest.param(_respond_503_sync, "custom", id="sync"),
+    ],
+)
+def test_lean_capture_reports_server_http_exceptions_as_handled(
+    sentry_mock: SentryTestTransport,
+    handler: typing.Callable[[Request, Exception], Response | typing.Awaitable[Response]] | None,
+    expected_body: str | None,
+) -> None:
+    application = _bootstrap(sentry_mock, sentry_additional_params={"disabled_integrations": [DedupeIntegration]})
+    if handler is not None:
+        application.add_exception_handler(status.HTTP_503_SERVICE_UNAVAILABLE, handler)
+
+    with TestClient(application) as client:
+        response = client.get("/http-503")
+    assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    if expected_body is not None:
+        assert response.text == expected_body
 
     [event] = _error_events(sentry_mock)
     exception = event["exception"]["values"][-1]
@@ -471,6 +496,27 @@ def test_lean_capture_reports_a_handled_exception_by_its_status_code_not_the_res
         status.HTTP_503_SERVICE_UNAVAILABLE,
     ]
     assert _exception_types(sentry_mock) == ["CarriesUnavailableStatusError"]
+
+
+def test_lean_capture_skips_client_status_handlers_and_explicit_server_error_responses(
+    sentry_mock: SentryTestTransport,
+) -> None:
+    application = _bootstrap(sentry_mock)
+    application.add_exception_handler(
+        status.HTTP_404_NOT_FOUND, functools.partial(_respond_with, status.HTTP_404_NOT_FOUND)
+    )
+
+    @application.get("/explicit-503")
+    async def explicit_503() -> Response:
+        return Response(status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    with TestClient(application) as client:
+        response = client.get("/http-404")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.text == ""
+        assert client.get("/explicit-503").status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+
+    assert _error_events(sentry_mock) == []
 
 
 def test_lean_capture_reports_handled_exceptions_of_a_handler_added_after_bootstrap(
