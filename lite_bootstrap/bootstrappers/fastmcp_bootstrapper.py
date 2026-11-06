@@ -83,7 +83,7 @@ def _postprocess_http_apps(
     def http_app(*args: typing.Any, **kwargs: typing.Any) -> "StarletteWithLifespan":  # noqa: ANN401
         return postprocess(build_http_app(*args, **kwargs))
 
-    application.http_app = http_app  # ty: ignore[invalid-assignment]
+    vars(application)["http_app"] = http_app
 
     def restore() -> None:
         if previous_override is None:
@@ -259,8 +259,8 @@ class FastMcpOpenTelemetryInstrument(OpenTelemetryInstrument[FastMcpConfig]):
         setattr(http_application, _OPENTELEMETRY_INSTRUMENTED_MARKER, True)
         return http_application
 
-    def bootstrap(self) -> None:
-        super().bootstrap()
+    def _bootstrap_telemetry(self) -> None:
+        super()._bootstrap_telemetry()
         self._restore_http_app = _postprocess_http_apps(self.bootstrap_config.application, self._instrument_http_app)
 
     def teardown(self) -> None:
@@ -406,11 +406,9 @@ class FastMcpBootstrapper(BaseBootstrapper["FastMCP[typing.Any]", FastMcpConfig]
 
         @contextlib.asynccontextmanager
         async def lifespan(server: "FastMCP[typing.Any]") -> AsyncGenerator[typing.Any]:
-            try:
+            with self._teardown_after_lifecycle():
                 async with user_lifespan(server) as result:
                     yield result
-            finally:
-                self.teardown()
 
         application._lifespan = lifespan  # noqa: SLF001
 

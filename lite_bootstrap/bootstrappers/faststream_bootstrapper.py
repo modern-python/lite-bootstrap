@@ -1,9 +1,10 @@
 import asyncio
+import contextlib
 import dataclasses
 import json
 import logging
 import typing
-from collections.abc import Mapping, Sequence
+from collections.abc import AsyncGenerator, Mapping, Sequence
 from types import TracebackType
 
 from lite_bootstrap import import_checker
@@ -219,8 +220,8 @@ class FastStreamLoggingInstrument(LoggingInstrument[FastStreamConfig]):
 
 @dataclasses.dataclass(kw_only=True)
 class FastStreamOpenTelemetryInstrument(OpenTelemetryInstrument[FastStreamConfig]):
-    def bootstrap(self) -> None:
-        super().bootstrap()
+    def _bootstrap_telemetry(self) -> None:
+        super()._bootstrap_telemetry()
         config = self.bootstrap_config
         if config.opentelemetry_middleware_cls and config.application.brokers:
             for broker, middleware_cls in _middleware_targets(
@@ -280,7 +281,18 @@ class FastStreamBootstrapper(BaseBootstrapper["AsgiFastStream", FastStreamConfig
     def __init__(self, bootstrap_config: FastStreamConfig) -> None:
         super().__init__(bootstrap_config)
         application = self.bootstrap_config.application
-        self._attach_teardown_once(application, lambda: application.on_shutdown(self.teardown))
+        self._attach_teardown_once(application, lambda: self._wrap_lifespan(application))
+
+    def _wrap_lifespan(self, application: "AsgiFastStream") -> None:
+        user_lifespan = application.lifespan_context
+
+        @contextlib.asynccontextmanager
+        async def lifespan(*args: typing.Any, **kwargs: typing.Any) -> AsyncGenerator[typing.Any]:  # noqa: ANN401
+            with self._teardown_after_lifecycle():
+                async with user_lifespan(*args, **kwargs) as result:
+                    yield result
+
+        application.lifespan_context = lifespan
 
     def _prepare_application(self) -> "AsgiFastStream":
         return self.bootstrap_config.application

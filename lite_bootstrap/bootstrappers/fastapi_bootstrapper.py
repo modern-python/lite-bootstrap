@@ -2,11 +2,12 @@ import contextlib
 import dataclasses
 import time
 import typing
+import weakref
 from collections.abc import AsyncGenerator, Mapping
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
-from lite_bootstrap.exceptions import ConfigurationError
+from lite_bootstrap.exceptions import ConfigurationError, collect_teardown_errors
 from lite_bootstrap.helpers.fastapi_helpers import enable_offline_docs
 from lite_bootstrap.helpers.warn import warn_at_caller
 from lite_bootstrap.instruments.cors_instrument import CorsConfig, CorsInstrument
@@ -92,6 +93,9 @@ class FastAPIConfig(
             raise ConfigurationError(msg)
 
         if isinstance(self.application, UnsetType):
+            if "docs_url" in self.application_kwargs:
+                msg = "Use swagger_path to configure docs_url when lite-bootstrap creates the FastAPI application"
+                raise ConfigurationError(msg)
             application = fastapi.FastAPI(docs_url=self.swagger_path, **self.application_kwargs)
             # FastAPIConfig stays frozen for user-facing immutability; __post_init__ needs
             # to set application after construction, so we bypass the freeze here.
@@ -208,34 +212,70 @@ class FastAPIHealthChecksInstrument(HealthChecksInstrument[FastAPIConfig]):
 
 @dataclasses.dataclass(kw_only=True)
 class FastAPIOpenTelemetryInstrument(OpenTelemetryInstrument[FastAPIConfig]):
-    def bootstrap(self) -> None:
-        super().bootstrap()
-        FastAPIInstrumentor.instrument_app(
-            app=self.bootstrap_config.app,
-            tracer_provider=self.tracer_provider,
-            meter_provider=get_meter_provider(),
-            excluded_urls=",".join(self._build_excluded_url_patterns("FASTAPI")),
-            exclude_spans=self.bootstrap_config.opentelemetry_exclude_spans,
-        )
-        self._install_infrastructure_exclusions()
+    _owns_app_instrumentation: bool = dataclasses.field(default=False, init=False, repr=False, compare=False)
+    _restore_infrastructure_exclusions: typing.Callable[[], None] | None = dataclasses.field(
+        default=None, init=False, repr=False, compare=False
+    )
 
-    def _install_infrastructure_exclusions(self) -> None:
+    def _bootstrap_telemetry(self) -> None:
+        super()._bootstrap_telemetry()
+        app = self.bootstrap_config.app
+        if not getattr(app, "_is_instrumented_by_opentelemetry", False):
+            FastAPIInstrumentor.instrument_app(
+                app=app,
+                tracer_provider=self.tracer_provider,
+                meter_provider=get_meter_provider(),
+                excluded_urls=",".join(self._build_excluded_url_patterns("FASTAPI")),
+                exclude_spans=self.bootstrap_config.opentelemetry_exclude_spans,
+            )
+            self._owns_app_instrumentation = True
+        self._restore_infrastructure_exclusions = self._install_infrastructure_exclusions()
+
+    def _install_infrastructure_exclusions(self) -> typing.Callable[[], None]:
         app = self.bootstrap_config.app
         build_stack = app.build_middleware_stack
         excluded_paths = self._build_infrastructure_excluded_paths()
+        owned_wrappers = weakref.WeakSet[ExcludeInfrastructureTelemetry]()
+
+        def wrap(stack: "ASGIApp | None") -> None:
+            # FastAPIInstrumentor places its OTel middleware inside an outer error handler.
+            if isinstance(stack, ServerErrorMiddleware) and isinstance(stack.app, OpenTelemetryMiddleware):
+                wrapper = ExcludeInfrastructureTelemetry(stack.app, excluded_paths)
+                owned_wrappers.add(wrapper)
+                stack.app = wrapper
 
         def build_middleware_stack() -> "ASGIApp":
             stack = build_stack()
-            # FastAPIInstrumentor places its OTel middleware inside an outer error handler.
-            if isinstance(stack, ServerErrorMiddleware) and isinstance(stack.app, OpenTelemetryMiddleware):
-                stack.app = ExcludeInfrastructureTelemetry(stack.app, excluded_paths)
+            wrap(stack)
             return stack
 
-        app.build_middleware_stack = build_middleware_stack  # ty: ignore[invalid-assignment]
+        def restore() -> None:
+            if app.build_middleware_stack is build_middleware_stack:
+                vars(app)["build_middleware_stack"] = build_stack
+            stack = app.middleware_stack
+            if (
+                isinstance(stack, ServerErrorMiddleware)
+                and isinstance(stack.app, ExcludeInfrastructureTelemetry)
+                and stack.app in owned_wrappers
+            ):
+                stack.app = stack.app.app
 
-    def teardown(self) -> None:
-        FastAPIInstrumentor.uninstrument_app(self.bootstrap_config.app)
-        super().teardown()
+        vars(app)["build_middleware_stack"] = build_middleware_stack
+        wrap(app.middleware_stack)
+        return restore
+
+    def _teardown_owned_resources(self) -> None:
+        with collect_teardown_errors() as teardown_errors:
+            if self._restore_infrastructure_exclusions is not None:
+                with teardown_errors.capture("FastAPI infrastructure exclusions"):
+                    self._restore_infrastructure_exclusions()
+                self._restore_infrastructure_exclusions = None
+            if self._owns_app_instrumentation:
+                self._owns_app_instrumentation = False
+                with teardown_errors.capture("FastAPIInstrumentor"):
+                    FastAPIInstrumentor.uninstrument_app(self.bootstrap_config.app)
+            with teardown_errors.capture("OpenTelemetry"):
+                super()._teardown_owned_resources()
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -252,6 +292,9 @@ class FastAPIPrometheusInstrument(PrometheusInstrument[FastAPIConfig]):
     def bootstrap(self) -> None:
         config = self.bootstrap_config
         application = config.app
+        if "endpoint" in config.prometheus_expose_additional_params:
+            msg = "Use prometheus_metrics_path to configure the Prometheus endpoint"
+            raise ConfigurationError(msg)
         instrumentator_params = dict(config.prometheus_instrumentator_additional_params)
         instrumentator_params["excluded_handlers"] = [
             *instrumentator_params.get("excluded_handlers", []),
@@ -312,10 +355,8 @@ class FastAPIBootstrapper(BaseBootstrapper["fastapi.FastAPI", FastAPIConfig]):
 
     @contextlib.asynccontextmanager
     async def lifespan_manager(self, _: "fastapi.FastAPI") -> AsyncGenerator[dict[str, typing.Any]]:
-        try:
+        with self._teardown_after_lifecycle():
             yield {}
-        finally:
-            self.teardown()
 
     def __init__(self, bootstrap_config: FastAPIConfig) -> None:
         super().__init__(bootstrap_config)

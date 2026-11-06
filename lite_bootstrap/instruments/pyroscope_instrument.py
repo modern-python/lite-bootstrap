@@ -40,13 +40,14 @@ class PyroscopeInstrument(BaseInstrument[PyroscopeConfig]):
             raise RuntimeError(msg)
         namespace = config.opentelemetry_namespace
         tags = ({"service_namespace": namespace} if namespace else {}) | config.pyroscope_tags
-        pyroscope.configure(
-            application_name=config.opentelemetry_service_name or config.service_name_or_default,
-            server_address=config.pyroscope_endpoint,
-            sample_rate=config.pyroscope_sample_rate,
-            tags=tags,
+        params = {
+            "application_name": config.opentelemetry_service_name or config.service_name_or_default,
+            "server_address": config.pyroscope_endpoint,
+            "sample_rate": config.pyroscope_sample_rate,
+            "tags": tags,
             **config.pyroscope_additional_params,
-        )
+        }
+        pyroscope.configure(**params)
 
     def teardown(self) -> None:
         pyroscope.shutdown()

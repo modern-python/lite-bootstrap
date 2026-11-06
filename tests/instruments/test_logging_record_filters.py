@@ -391,3 +391,21 @@ def test_every_bootstrapper_installs_configured_filters(
 
     assert [record.getMessage() for record in configured_filter.seen] == ["through the bootstrapper"]
     assert target_logger.filters == []
+
+
+def test_teardown_preserves_preexisting_configured_record_filter() -> None:
+    target = logging.getLogger(__name__ + ".preexisting")
+    existing = RecordingFilter()
+    owned = RecordingFilter()
+    target.addFilter(existing)
+    try:
+        instrument = LoggingInstrument(
+            bootstrap_config=LoggingConfig(logging_record_filters={target.name: (existing, owned, owned)})
+        )
+        instrument.bootstrap()
+        assert target.filters == [existing, owned]
+        instrument.teardown()
+        assert target.filters == [existing]
+    finally:
+        target.removeFilter(existing)
+        target.removeFilter(owned)

@@ -51,6 +51,15 @@ application = bootstrapper.bootstrap()
 
 Read more about available configuration options [here](../introduction/configuration.md).
 
+## Lifecycle
+
+The ASGI lifespan runs `bootstrapper.teardown()` after broker shutdown and user lifespan
+cleanup. Tracing and logging remain active through both. Startup and shutdown failures still
+trigger teardown; cleanup failures are added as notes to the original error.
+
+When using `start()` and `stop()` directly or `async with application`, call
+`bootstrapper.teardown()` in an outer `finally` block after the application stops.
+
 ## Health and metrics routes
 
 When configured, FastStream health and Prometheus metrics routes accept requests with or without

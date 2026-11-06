@@ -812,3 +812,77 @@ def test_configured_exporter_still_records_and_exports_spans(protocol: typing.Li
         assert [span.name for span in exporter.get_finished_spans()] == ["exported"]
     finally:
         instrument.teardown()
+
+
+@pytest.mark.parametrize("wrapped", [False, True])
+def test_otel_preserves_preexisting_instrumentation(wrapped: bool) -> None:
+    external = CustomInstrumentor()
+    external.instrument()
+    try:
+        configured = InstrumentorWithParams(instrumentor=external) if wrapped else external
+        instrument = OpenTelemetryInstrument(
+            bootstrap_config=OpenTelemetryConfig(opentelemetry_instrumentors=[configured])
+        )
+        instrument.bootstrap()
+        instrument.teardown()
+        assert external.is_instrumented_by_opentelemetry
+    finally:
+        if external.is_instrumented_by_opentelemetry:
+            external.uninstrument()
+
+
+@pytest.mark.parametrize("cleanup_fails", [False, True])
+def test_otel_rolls_back_earlier_instrumentation_when_startup_fails(
+    monkeypatch: pytest.MonkeyPatch, cleanup_fails: bool
+) -> None:
+    primary = ValueError("instrumentation startup failed")
+    earlier = CustomInstrumentor()
+
+    class FailingInstrumentor(BaseInstrumentor):
+        def instrumentation_dependencies(self) -> typing.Collection[str]:
+            return []
+
+        def _uninstrument(self, **kwargs: object) -> None: ...
+
+        def _instrument(self, **_kwargs: object) -> None:
+            raise primary
+
+    logger = logging.getLogger("opentelemetry.trace")
+    monkeypatch.setattr(logger, "disabled", False)
+    instrument = OpenTelemetryInstrument(
+        bootstrap_config=OpenTelemetryConfig(
+            opentelemetry_log_traces=True,
+            opentelemetry_instrumentors=[InstrumentorWithParams(instrumentor=earlier), FailingInstrumentor()],
+        )
+    )
+    shutdown_provider = SDKTracerProvider.shutdown
+
+    def shutdown_then_fail(provider: SDKTracerProvider) -> None:
+        shutdown_provider(provider)
+        if cleanup_fails:
+            message = "provider shutdown failed"
+            raise RuntimeError(message)
+
+    with (
+        patch.object(SDKTracerProvider, "shutdown", autospec=True, side_effect=shutdown_then_fail) as shutdown,
+        pytest.raises(ValueError, match="instrumentation startup failed") as caught,
+    ):
+        instrument.bootstrap()
+
+    assert caught.value is primary
+    if cleanup_fails:
+        assert any("provider shutdown failed" in note for note in caught.value.__notes__)
+    shutdown.assert_called_once_with(trace.get_tracer_provider())
+    assert not earlier.is_instrumented_by_opentelemetry
+    assert not logger.disabled
+
+
+def test_otel_releases_exporter_when_tracer_provider_construction_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT", "invalid")
+    instrument = OpenTelemetryInstrument(bootstrap_config=OpenTelemetryConfig(opentelemetry_endpoint="localhost:4317"))
+    with (
+        patch.object(otel_module, "OTLPGrpcSpanExporter", autospec=True) as exporter,
+        pytest.raises(ValueError, match="invalid"),
+    ):
+        instrument.bootstrap()
+    exporter.return_value.shutdown.assert_called_once()

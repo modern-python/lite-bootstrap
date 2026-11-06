@@ -12,6 +12,7 @@ from unittest.mock import patch
 import fastapi
 import pytest
 import structlog
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.metrics import get_meter_provider
 from opentelemetry.sdk.metrics import MeterProvider as SDKMeterProvider
 from opentelemetry.sdk.trace import TracerProvider as SDKTracerProvider
@@ -824,3 +825,88 @@ def test_empty_observability_paths_disable_routes() -> None:
         assert client.get("/health/").status_code == status.HTTP_404_NOT_FOUND
         assert client.get("/metrics").status_code == status.HTTP_404_NOT_FOUND
         assert client.get("/").status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_fastapi_docs_url_conflict_names_canonical_setting() -> None:
+    with pytest.raises(ConfigurationError, match="swagger_path"):
+        FastAPIConfig(application_kwargs={"docs_url": "/custom"})
+
+
+def test_fastapi_shutdown_keeps_lifespan_error_when_exporter_shutdown_fails() -> None:
+    primary = ValueError("user shutdown failed")
+
+    @contextlib.asynccontextmanager
+    async def lifespan(_: fastapi.FastAPI) -> AsyncGenerator[None]:
+        yield
+        raise primary
+
+    config = FastAPIConfig(application=fastapi.FastAPI(lifespan=lifespan), opentelemetry_log_traces=True)
+    app = FastAPIBootstrapper(config).bootstrap()
+    provider = get_tracer_provider()
+    with (
+        patch.object(provider, "shutdown", side_effect=RuntimeError("exporter shutdown failed")),
+        pytest.raises(ValueError, match="user shutdown failed") as caught,
+        TestClient(app),
+    ):
+        pass
+    assert caught.value is primary
+    assert any("exporter shutdown failed" in note for note in caught.value.__notes__)
+
+
+def test_fastapi_metrics_endpoint_conflict_names_canonical_setting() -> None:
+    config = FastAPIConfig(prometheus_expose_additional_params={"endpoint": "/custom"})
+    with pytest.raises(ConfigurationError, match="prometheus_metrics_path"):
+        FastAPIBootstrapper(config).bootstrap()
+
+
+@pytest.mark.parametrize("stack_already_built", [False, True])
+def test_fastapi_excludes_infrastructure_temporarily_from_borrowed_tracing(stack_already_built: bool) -> None:
+    app = fastapi.FastAPI()
+
+    @app.get("/work")
+    async def work() -> str:
+        return "ok"
+
+    provider = SDKTracerProvider()
+    exporter = InMemorySpanExporter()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    FastAPIInstrumentor.instrument_app(app, tracer_provider=provider, exclude_spans=["receive", "send"])
+    external_builder = app.build_middleware_stack
+    client = TestClient(app)
+    if stack_already_built:
+        assert client.get("/work").status_code == status.HTTP_200_OK
+        exporter.clear()
+
+    config = FastAPIConfig(
+        application=app,
+        logging_enabled=False,
+        opentelemetry_log_traces=True,
+        prometheus_http_metrics_enabled=False,
+    )
+    bootstrapper = FastAPIBootstrapper(config)
+    try:
+        bootstrapper.bootstrap()
+        for path in (config.health_checks_path, config.prometheus_metrics_path, "/work"):
+            assert client.get(path).status_code == status.HTTP_200_OK
+        assert [span.name for span in exporter.get_finished_spans()] == ["GET /work"]
+
+        bootstrapper.teardown()
+        assert app.build_middleware_stack is external_builder
+        exporter.clear()
+        assert client.get(config.prometheus_metrics_path).status_code == status.HTTP_200_OK
+        assert [span.name for span in exporter.get_finished_spans()] == [f"GET {config.prometheus_metrics_path}"]
+    finally:
+        bootstrapper.teardown()
+        FastAPIInstrumentor.uninstrument_app(app)
+        provider.shutdown()
+
+
+def test_fastapi_instrumentation_failure_rolls_back_tracer_provider() -> None:
+    config = FastAPIConfig(logging_enabled=False, opentelemetry_log_traces=True, opentelemetry_excluded_urls=["["])
+    bootstrapper = FastAPIBootstrapper(config)
+    with (
+        patch.object(SDKTracerProvider, "shutdown", autospec=True, side_effect=SDKTracerProvider.shutdown) as shutdown,
+        pytest.raises(re.error),
+    ):
+        bootstrapper.bootstrap()
+    shutdown.assert_called_once_with(get_tracer_provider())
