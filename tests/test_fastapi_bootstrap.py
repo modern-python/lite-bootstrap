@@ -859,19 +859,46 @@ def test_fastapi_metrics_endpoint_conflict_names_canonical_setting() -> None:
         FastAPIBootstrapper(config).bootstrap()
 
 
-def test_fastapi_teardown_preserves_preexisting_app_instrumentation() -> None:
+@pytest.mark.parametrize("stack_already_built", [False, True])
+def test_fastapi_excludes_infrastructure_temporarily_from_borrowed_tracing(stack_already_built: bool) -> None:
     app = fastapi.FastAPI()
-    FastAPIInstrumentor.instrument_app(app)
-    external_stack = app.build_middleware_stack
-    bootstrapper = FastAPIBootstrapper(
-        FastAPIConfig(application=app, logging_enabled=False, opentelemetry_log_traces=True)
+
+    @app.get("/work")
+    async def work() -> str:
+        return "ok"
+
+    provider = SDKTracerProvider()
+    exporter = InMemorySpanExporter()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    FastAPIInstrumentor.instrument_app(app, tracer_provider=provider, exclude_spans=["receive", "send"])
+    external_builder = app.build_middleware_stack
+    client = TestClient(app)
+    if stack_already_built:
+        assert client.get("/work").status_code == status.HTTP_200_OK
+        exporter.clear()
+
+    config = FastAPIConfig(
+        application=app,
+        logging_enabled=False,
+        opentelemetry_log_traces=True,
+        prometheus_http_metrics_enabled=False,
     )
+    bootstrapper = FastAPIBootstrapper(config)
     try:
         bootstrapper.bootstrap()
+        for path in (config.health_checks_path, config.prometheus_metrics_path, "/work"):
+            assert client.get(path).status_code == status.HTTP_200_OK
+        assert [span.name for span in exporter.get_finished_spans()] == ["GET /work"]
+
         bootstrapper.teardown()
-        assert app.build_middleware_stack is external_stack
+        assert app.build_middleware_stack is external_builder
+        exporter.clear()
+        assert client.get(config.prometheus_metrics_path).status_code == status.HTTP_200_OK
+        assert [span.name for span in exporter.get_finished_spans()] == [f"GET {config.prometheus_metrics_path}"]
     finally:
+        bootstrapper.teardown()
         FastAPIInstrumentor.uninstrument_app(app)
+        provider.shutdown()
 
 
 def test_fastapi_instrumentation_failure_rolls_back_tracer_provider() -> None:

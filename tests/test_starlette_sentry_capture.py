@@ -911,3 +911,14 @@ def test_fastmcp_lean_capture_resolves_host_before_sibling_route(sentry_mock: Se
     [event] = _error_events(sentry_mock)
     assert event["transaction"] == "/items/{item_id}"
     assert event["transaction_info"] == {"source": "route"}
+
+
+def test_fastapi_requests_continue_after_sentry_teardown(sentry_mock: SentryTestTransport) -> None:
+    bootstrapper = FastAPIBootstrapper(_build_config(sentry_mock, logging_enabled=False))
+    client = TestClient(bootstrapper.bootstrap())
+    assert client.get("/logs-then-ok").status_code == status.HTTP_200_OK
+    bootstrapper.teardown()
+
+    assert client.get("/logs-then-ok").status_code == status.HTTP_200_OK
+    assert client.get("/mapped-503").status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    assert sentry_mock.mock_envelopes == []

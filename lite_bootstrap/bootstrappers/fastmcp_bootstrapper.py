@@ -83,7 +83,7 @@ def _postprocess_http_apps(
     def http_app(*args: typing.Any, **kwargs: typing.Any) -> "StarletteWithLifespan":  # noqa: ANN401
         return postprocess(build_http_app(*args, **kwargs))
 
-    application.http_app = http_app  # ty: ignore[invalid-assignment]
+    vars(application)["http_app"] = http_app
 
     def restore() -> None:
         if previous_override is None:

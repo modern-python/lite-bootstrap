@@ -534,3 +534,12 @@ def test_integration_capture_does_not_warn_about_lean_settings(sentry_mock: Sent
             sentry_traces_sample_rate=1.0,
             sentry_integrations=[LitestarIntegration()],
         )
+
+
+def test_litestar_handles_request_errors_after_sentry_teardown(sentry_mock: SentryTestTransport) -> None:
+    bootstrapper = LitestarBootstrapper(_build_config(sentry_mock, logging_enabled=False))
+    application = bootstrapper.bootstrap()
+    with TestClient(app=application) as client:
+        bootstrapper.teardown()
+        assert client.get("/mapped-503").status_code == status_codes.HTTP_503_SERVICE_UNAVAILABLE
+    assert sentry_mock.mock_envelopes == []

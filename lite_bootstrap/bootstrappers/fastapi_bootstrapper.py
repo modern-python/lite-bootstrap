@@ -2,6 +2,7 @@ import contextlib
 import dataclasses
 import time
 import typing
+import weakref
 from collections.abc import AsyncGenerator, Mapping
 
 from lite_bootstrap import import_checker
@@ -212,38 +213,63 @@ class FastAPIHealthChecksInstrument(HealthChecksInstrument[FastAPIConfig]):
 @dataclasses.dataclass(kw_only=True)
 class FastAPIOpenTelemetryInstrument(OpenTelemetryInstrument[FastAPIConfig]):
     _owns_app_instrumentation: bool = dataclasses.field(default=False, init=False, repr=False, compare=False)
+    _restore_infrastructure_exclusions: typing.Callable[[], None] | None = dataclasses.field(
+        default=None, init=False, repr=False, compare=False
+    )
 
     def _bootstrap_telemetry(self) -> None:
         super()._bootstrap_telemetry()
         app = self.bootstrap_config.app
-        if getattr(app, "_is_instrumented_by_opentelemetry", False):
-            return
-        FastAPIInstrumentor.instrument_app(
-            app=app,
-            tracer_provider=self.tracer_provider,
-            meter_provider=get_meter_provider(),
-            excluded_urls=",".join(self._build_excluded_url_patterns("FASTAPI")),
-            exclude_spans=self.bootstrap_config.opentelemetry_exclude_spans,
-        )
-        self._owns_app_instrumentation = True
-        self._install_infrastructure_exclusions()
+        if not getattr(app, "_is_instrumented_by_opentelemetry", False):
+            FastAPIInstrumentor.instrument_app(
+                app=app,
+                tracer_provider=self.tracer_provider,
+                meter_provider=get_meter_provider(),
+                excluded_urls=",".join(self._build_excluded_url_patterns("FASTAPI")),
+                exclude_spans=self.bootstrap_config.opentelemetry_exclude_spans,
+            )
+            self._owns_app_instrumentation = True
+        self._restore_infrastructure_exclusions = self._install_infrastructure_exclusions()
 
-    def _install_infrastructure_exclusions(self) -> None:
+    def _install_infrastructure_exclusions(self) -> typing.Callable[[], None]:
         app = self.bootstrap_config.app
         build_stack = app.build_middleware_stack
         excluded_paths = self._build_infrastructure_excluded_paths()
+        owned_wrappers = weakref.WeakSet[ExcludeInfrastructureTelemetry]()
+
+        def wrap(stack: "ASGIApp | None") -> None:
+            # FastAPIInstrumentor places its OTel middleware inside an outer error handler.
+            if isinstance(stack, ServerErrorMiddleware) and isinstance(stack.app, OpenTelemetryMiddleware):
+                wrapper = ExcludeInfrastructureTelemetry(stack.app, excluded_paths)
+                owned_wrappers.add(wrapper)
+                stack.app = wrapper
 
         def build_middleware_stack() -> "ASGIApp":
             stack = build_stack()
-            # FastAPIInstrumentor places its OTel middleware inside an outer error handler.
-            if isinstance(stack, ServerErrorMiddleware) and isinstance(stack.app, OpenTelemetryMiddleware):
-                stack.app = ExcludeInfrastructureTelemetry(stack.app, excluded_paths)
+            wrap(stack)
             return stack
 
-        app.build_middleware_stack = build_middleware_stack  # ty: ignore[invalid-assignment]
+        def restore() -> None:
+            if app.build_middleware_stack is build_middleware_stack:
+                vars(app)["build_middleware_stack"] = build_stack
+            stack = app.middleware_stack
+            if (
+                isinstance(stack, ServerErrorMiddleware)
+                and isinstance(stack.app, ExcludeInfrastructureTelemetry)
+                and stack.app in owned_wrappers
+            ):
+                stack.app = stack.app.app
+
+        vars(app)["build_middleware_stack"] = build_middleware_stack
+        wrap(app.middleware_stack)
+        return restore
 
     def _teardown_owned_resources(self) -> None:
         with collect_teardown_errors() as teardown_errors:
+            if self._restore_infrastructure_exclusions is not None:
+                with teardown_errors.capture("FastAPI infrastructure exclusions"):
+                    self._restore_infrastructure_exclusions()
+                self._restore_infrastructure_exclusions = None
             if self._owns_app_instrumentation:
                 self._owns_app_instrumentation = False
                 with teardown_errors.capture("FastAPIInstrumentor"):

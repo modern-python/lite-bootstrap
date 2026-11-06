@@ -120,7 +120,7 @@ _SENTRY_TRACE_HEADERS: typing.Final = frozenset({b"sentry-trace", b"baggage"})
 
 def should_collect_request_body(content_length: str | None) -> bool:
     client = sentry_sdk.get_client()
-    if "incoming_request" not in client.options["data_collection"]["http_bodies"]:
+    if not client.is_active() or "incoming_request" not in client.options["data_collection"]["http_bodies"]:
         return False
     try:
         size = int(content_length or "0")
@@ -140,9 +140,12 @@ def capture_request_exception(
     handled: bool,
     enrich: typing.Callable[["sentry_types.Event"], "sentry_types.Event"] = lambda event: event,
 ) -> None:
+    client = sentry_sdk.get_client()
+    if not client.is_active():
+        return
     event, hint = event_from_exception(
         exception,
-        client_options=sentry_sdk.get_client().options,
+        client_options=client.options,
         mechanism={"type": mechanism_type, "handled": handled},
     )
     sentry_sdk.capture_event(enrich(event), hint=hint)
