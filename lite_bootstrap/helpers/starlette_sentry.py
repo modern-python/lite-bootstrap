@@ -136,6 +136,9 @@ def _report_handled_server_errors(application: "ASGIApp") -> None:
     handlers: typing.Final = inner._exception_handlers  # noqa: SLF001
     for exception_class, handler in handlers.items():
         handlers[exception_class] = _reporting_server_errors(handler)
+    status_handlers: typing.Final = inner._status_handlers  # noqa: SLF001
+    for status_code, handler in status_handlers.items():
+        status_handlers[status_code] = _reporting_server_errors(handler)
 
 
 def _find_route_path(scope: "Scope", routes: "typing.Sequence[BaseRoute]") -> str | None:
