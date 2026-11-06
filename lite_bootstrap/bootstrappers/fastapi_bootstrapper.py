@@ -6,7 +6,7 @@ from collections.abc import AsyncGenerator, Mapping
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.bootstrappers.base import BaseBootstrapper
-from lite_bootstrap.exceptions import ConfigurationError
+from lite_bootstrap.exceptions import ConfigurationError, collect_teardown_errors
 from lite_bootstrap.helpers.fastapi_helpers import enable_offline_docs
 from lite_bootstrap.helpers.warn import warn_at_caller
 from lite_bootstrap.instruments.cors_instrument import CorsConfig, CorsInstrument
@@ -211,15 +211,21 @@ class FastAPIHealthChecksInstrument(HealthChecksInstrument[FastAPIConfig]):
 
 @dataclasses.dataclass(kw_only=True)
 class FastAPIOpenTelemetryInstrument(OpenTelemetryInstrument[FastAPIConfig]):
-    def bootstrap(self) -> None:
-        super().bootstrap()
+    _owns_app_instrumentation: bool = dataclasses.field(default=False, init=False, repr=False, compare=False)
+
+    def _bootstrap_telemetry(self) -> None:
+        super()._bootstrap_telemetry()
+        app = self.bootstrap_config.app
+        if getattr(app, "_is_instrumented_by_opentelemetry", False):
+            return
         FastAPIInstrumentor.instrument_app(
-            app=self.bootstrap_config.app,
+            app=app,
             tracer_provider=self.tracer_provider,
             meter_provider=get_meter_provider(),
             excluded_urls=",".join(self._build_excluded_url_patterns("FASTAPI")),
             exclude_spans=self.bootstrap_config.opentelemetry_exclude_spans,
         )
+        self._owns_app_instrumentation = True
         self._install_infrastructure_exclusions()
 
     def _install_infrastructure_exclusions(self) -> None:
@@ -236,9 +242,14 @@ class FastAPIOpenTelemetryInstrument(OpenTelemetryInstrument[FastAPIConfig]):
 
         app.build_middleware_stack = build_middleware_stack  # ty: ignore[invalid-assignment]
 
-    def teardown(self) -> None:
-        FastAPIInstrumentor.uninstrument_app(self.bootstrap_config.app)
-        super().teardown()
+    def _teardown_owned_resources(self) -> None:
+        with collect_teardown_errors() as teardown_errors:
+            if self._owns_app_instrumentation:
+                self._owns_app_instrumentation = False
+                with teardown_errors.capture("FastAPIInstrumentor"):
+                    FastAPIInstrumentor.uninstrument_app(self.bootstrap_config.app)
+            with teardown_errors.capture("OpenTelemetry"):
+                super()._teardown_owned_resources()
 
 
 @dataclasses.dataclass(kw_only=True)

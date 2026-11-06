@@ -1,14 +1,16 @@
+import contextlib
 import dataclasses
 import logging
 import os
 import typing
 import urllib.parse
+from collections.abc import Callable, Generator
 
 from lite_bootstrap import import_checker
 from lite_bootstrap.exceptions import (
     ConfigurationError,
     InstrumentDependencyMissingWarning,
-    TeardownError,
+    TeardownErrorCollector,
     collect_teardown_errors,
 )
 from lite_bootstrap.helpers.warn import warn_at_caller
@@ -55,6 +57,19 @@ if import_checker.is_otlp_http_exporter_installed:
 
 if import_checker.is_pyroscope_installed:
     import pyroscope
+
+
+@contextlib.contextmanager
+def _rollback_on_error(shutdown: Callable[[], None]) -> Generator[None]:
+    try:
+        yield
+    except BaseException as error:
+        teardown_errors = TeardownErrorCollector()
+        with teardown_errors.capture("OpenTelemetry"):
+            shutdown()
+        for name, failure in teardown_errors.errors:
+            error.add_note(f"Error rolling back {name}: {failure}")
+        raise
 
 
 def _format_span(readable_span: "ReadableSpan") -> str:
@@ -345,9 +360,10 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfigT]):
         metric_exporter = self._build_metric_exporter()
         if metric_exporter is None:
             return
-        meter_provider = MeterProvider(
-            resource=resource, metric_readers=[PeriodicExportingMetricReader(metric_exporter)]
-        )
+        with _rollback_on_error(metric_exporter.shutdown):
+            reader = PeriodicExportingMetricReader(metric_exporter)
+        with _rollback_on_error(reader.shutdown):
+            meter_provider = MeterProvider(resource=resource, metric_readers=[reader])
         self._meter_provider = meter_provider
         set_meter_provider(meter_provider)
         if get_meter_provider() is not meter_provider:
@@ -369,50 +385,43 @@ class OpenTelemetryInstrument(BaseInstrument[OpenTelemetryConfigT]):
             if instrumentor.is_instrumented_by_opentelemetry:
                 self._owned_instrumentors.append((instrumentor, params))
 
-    def _build_span_processors(self) -> "list[SpanProcessor]":
+    def _bootstrap_traces(self, resource: "resources.Resource") -> None:
         config = self.bootstrap_config
-        processors: list[SpanProcessor] = []
-        if import_checker.is_pyroscope_installed and getattr(config, "pyroscope_endpoint", None):
-            processors.append(PyroscopeSpanProcessor())
-        if config.opentelemetry_log_traces:
-            processors.append(SimpleSpanProcessor(ConsoleSpanExporter(formatter=_format_span)))
-        if config.opentelemetry_endpoint and (span_exporter := self._build_span_exporter()):
-            processors.append(BatchSpanProcessor(span_exporter))
-        return processors
-
-    def bootstrap(self) -> None:
-        try:
-            self._bootstrap_telemetry()
-        except BaseException as error:
-            try:
-                self._teardown_owned_resources()
-            except TeardownError as cleanup_error:
-                for name, failure in cleanup_error.errors:
-                    error.add_note(f"Error rolling back {name}: {failure}")
-            raise
-
-    def _bootstrap_telemetry(self) -> None:
-        config = self.bootstrap_config
-        self._silence_otel_loggers()
-        resource = self._build_resource()
-        processors = self._build_span_processors()
-        if processors:
-            tracer_provider = TracerProvider(resource=resource, sampler=config.opentelemetry_sampler)
-            self._tracer_provider = tracer_provider
-            for processor in processors:
-                tracer_provider.add_span_processor(processor)
-            set_tracer_provider(tracer_provider)
-            if get_tracer_provider() is not tracer_provider:
-                warn_at_caller(
-                    "a TracerProvider is already installed; "
-                    "the configured exporter, sampler and resource will not be used"
-                )
-            self.tracer_provider = get_tracer_provider()
-        else:
+        profile_spans = import_checker.is_pyroscope_installed and getattr(config, "pyroscope_endpoint", None)
+        exporter = self._build_span_exporter() if config.opentelemetry_endpoint else None
+        if not (profile_spans or config.opentelemetry_log_traces or exporter is not None):
             existing_provider = get_tracer_provider()
             self.tracer_provider = (
                 NoOpTracerProvider() if isinstance(existing_provider, ProxyTracerProvider) else existing_provider
             )
+            return
+
+        with _rollback_on_error(exporter.shutdown) if exporter is not None else contextlib.nullcontext():
+            tracer_provider = TracerProvider(resource=resource, sampler=config.opentelemetry_sampler)
+            self._tracer_provider = tracer_provider
+            if profile_spans:
+                tracer_provider.add_span_processor(PyroscopeSpanProcessor())
+            if config.opentelemetry_log_traces:
+                tracer_provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter(formatter=_format_span)))
+            processor = BatchSpanProcessor(exporter) if exporter is not None else None
+        if processor is not None:
+            with _rollback_on_error(processor.shutdown):
+                tracer_provider.add_span_processor(processor)
+        set_tracer_provider(tracer_provider)
+        if get_tracer_provider() is not tracer_provider:
+            warn_at_caller(
+                "a TracerProvider is already installed; the configured exporter, sampler and resource will not be used"
+            )
+        self.tracer_provider = get_tracer_provider()
+
+    def bootstrap(self) -> None:
+        with _rollback_on_error(self._teardown_owned_resources):
+            self._bootstrap_telemetry()
+
+    def _bootstrap_telemetry(self) -> None:
+        self._silence_otel_loggers()
+        resource = self._build_resource()
+        self._bootstrap_traces(resource)
         self._bootstrap_metrics(resource)
         self._apply_instrumentors(self.tracer_provider)
 

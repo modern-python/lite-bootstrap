@@ -220,8 +220,8 @@ class FastStreamLoggingInstrument(LoggingInstrument[FastStreamConfig]):
 
 @dataclasses.dataclass(kw_only=True)
 class FastStreamOpenTelemetryInstrument(OpenTelemetryInstrument[FastStreamConfig]):
-    def bootstrap(self) -> None:
-        super().bootstrap()
+    def _bootstrap_telemetry(self) -> None:
+        super()._bootstrap_telemetry()
         config = self.bootstrap_config
         if config.opentelemetry_middleware_cls and config.application.brokers:
             for broker, middleware_cls in _middleware_targets(
@@ -281,9 +281,9 @@ class FastStreamBootstrapper(BaseBootstrapper["AsgiFastStream", FastStreamConfig
     def __init__(self, bootstrap_config: FastStreamConfig) -> None:
         super().__init__(bootstrap_config)
         application = self.bootstrap_config.application
-        self._attach_teardown_once(application, lambda: self._wrap_lifecycle(application))
+        self._attach_teardown_once(application, lambda: self._wrap_lifespan(application))
 
-    def _wrap_lifecycle(self, application: "AsgiFastStream") -> None:
+    def _wrap_lifespan(self, application: "AsgiFastStream") -> None:
         user_lifespan = application.lifespan_context
 
         @contextlib.asynccontextmanager

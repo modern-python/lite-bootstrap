@@ -869,13 +869,20 @@ def test_otel_rolls_back_earlier_instrumentation_when_startup_fails(
     ):
         instrument.bootstrap()
 
-    try:
-        assert caught.value is primary
-        if cleanup_fails:
-            assert any("provider shutdown failed" in note for note in caught.value.__notes__)
-        shutdown.assert_called_once_with(trace.get_tracer_provider())
-        assert not earlier.is_instrumented_by_opentelemetry
-        assert not logger.disabled
-    finally:
-        if earlier.is_instrumented_by_opentelemetry:
-            earlier.uninstrument()
+    assert caught.value is primary
+    if cleanup_fails:
+        assert any("provider shutdown failed" in note for note in caught.value.__notes__)
+    shutdown.assert_called_once_with(trace.get_tracer_provider())
+    assert not earlier.is_instrumented_by_opentelemetry
+    assert not logger.disabled
+
+
+def test_otel_releases_exporter_when_tracer_provider_construction_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT", "invalid")
+    instrument = OpenTelemetryInstrument(bootstrap_config=OpenTelemetryConfig(opentelemetry_endpoint="localhost:4317"))
+    with (
+        patch.object(otel_module, "OTLPGrpcSpanExporter", autospec=True) as exporter,
+        pytest.raises(ValueError, match="invalid"),
+    ):
+        instrument.bootstrap()
+    exporter.return_value.shutdown.assert_called_once()

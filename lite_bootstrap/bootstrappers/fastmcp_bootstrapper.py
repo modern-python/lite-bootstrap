@@ -259,8 +259,8 @@ class FastMcpOpenTelemetryInstrument(OpenTelemetryInstrument[FastMcpConfig]):
         setattr(http_application, _OPENTELEMETRY_INSTRUMENTED_MARKER, True)
         return http_application
 
-    def bootstrap(self) -> None:
-        super().bootstrap()
+    def _bootstrap_telemetry(self) -> None:
+        super()._bootstrap_telemetry()
         self._restore_http_app = _postprocess_http_apps(self.bootstrap_config.application, self._instrument_http_app)
 
     def teardown(self) -> None:

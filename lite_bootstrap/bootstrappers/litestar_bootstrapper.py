@@ -376,8 +376,8 @@ class LitestarOpenTelemetryInstrument(OpenTelemetryInstrument[LitestarConfig]):
         }
         return sorted(anchored_patterns | set(self.bootstrap_config.opentelemetry_excluded_urls))
 
-    def bootstrap(self) -> None:
-        super().bootstrap()
+    def _bootstrap_telemetry(self) -> None:
+        super()._bootstrap_telemetry()
         application_config: typing.Final = self.bootstrap_config.application_config
         application_config.plugins.append(
             OpenTelemetryPlugin(

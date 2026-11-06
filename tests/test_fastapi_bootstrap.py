@@ -12,6 +12,7 @@ from unittest.mock import patch
 import fastapi
 import pytest
 import structlog
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.metrics import get_meter_provider
 from opentelemetry.sdk.metrics import MeterProvider as SDKMeterProvider
 from opentelemetry.sdk.trace import TracerProvider as SDKTracerProvider
@@ -856,3 +857,29 @@ def test_fastapi_metrics_endpoint_conflict_names_canonical_setting() -> None:
     config = FastAPIConfig(prometheus_expose_additional_params={"endpoint": "/custom"})
     with pytest.raises(ConfigurationError, match="prometheus_metrics_path"):
         FastAPIBootstrapper(config).bootstrap()
+
+
+def test_fastapi_teardown_preserves_preexisting_app_instrumentation() -> None:
+    app = fastapi.FastAPI()
+    FastAPIInstrumentor.instrument_app(app)
+    external_stack = app.build_middleware_stack
+    bootstrapper = FastAPIBootstrapper(
+        FastAPIConfig(application=app, logging_enabled=False, opentelemetry_log_traces=True)
+    )
+    try:
+        bootstrapper.bootstrap()
+        bootstrapper.teardown()
+        assert app.build_middleware_stack is external_stack
+    finally:
+        FastAPIInstrumentor.uninstrument_app(app)
+
+
+def test_fastapi_instrumentation_failure_rolls_back_tracer_provider() -> None:
+    config = FastAPIConfig(logging_enabled=False, opentelemetry_log_traces=True, opentelemetry_excluded_urls=["["])
+    bootstrapper = FastAPIBootstrapper(config)
+    with (
+        patch.object(SDKTracerProvider, "shutdown", autospec=True, side_effect=SDKTracerProvider.shutdown) as shutdown,
+        pytest.raises(re.error),
+    ):
+        bootstrapper.bootstrap()
+    shutdown.assert_called_once_with(get_tracer_provider())
