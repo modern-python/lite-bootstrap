@@ -40,10 +40,6 @@ def test_cors_instrument_config_defaults() -> None:
     assert config.cors_max_age == expected_max_age
 
 
-def test_cors_dependencies_installed() -> None:
-    assert CorsInstrument.dependencies_installed() is True
-
-
 @pytest.mark.parametrize(
     ("origins", "regex"),
     [

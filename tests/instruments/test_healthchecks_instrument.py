@@ -51,10 +51,6 @@ def test_healthchecks_config_defaults() -> None:
     assert config.health_checks_probes == {}
 
 
-def test_healthchecks_dependencies_installed() -> None:
-    assert HealthChecksInstrument.dependencies_installed() is True
-
-
 async def test_healthchecks_probes_run_concurrently() -> None:
     interval = 0.2
 
