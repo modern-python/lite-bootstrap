@@ -9,6 +9,12 @@ if import_checker.is_orjson_installed:
     import orjson
 
 
+class _RenderedLine(str):
+    """A line already rendered by lite-bootstrap's structlog chain."""
+
+    __slots__ = ()
+
+
 def _dumps_orjson(value: typing.Any, **kwargs: typing.Any) -> str:  # noqa: ANN401
     return orjson.dumps(value, **kwargs).decode()
 

@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from lite_bootstrap import import_checker
 from lite_bootstrap.helpers.warn import warn_at_caller
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
-from lite_bootstrap.instruments.logging_factory import StructuredLogPayload
+from lite_bootstrap.instruments.logging_factory import StructuredLogPayload, _RenderedLine
 
 
 if typing.TYPE_CHECKING:
@@ -173,6 +173,14 @@ def _scrub_structlog_extra(extra: dict[str, typing.Any]) -> dict[str, typing.Any
     return serialize({"extra": extra})["extra"]
 
 
+def _structlog_message(payload: StructuredLogPayload, record: object) -> str | None:
+    if isinstance(payload.message, str):
+        return payload.message
+    if isinstance(record, logging.LogRecord) and type(record.msg) is _RenderedLine:
+        return "[No message]"
+    return None
+
+
 def enrich_sentry_event_from_structlog_log(
     event: "sentry_types.Event", hint: "sentry_types.Hint"
 ) -> typing.Optional["sentry_types.Event"]:
@@ -193,10 +201,11 @@ def enrich_sentry_event_from_structlog_log(
         return event
     if payload.skip_sentry:
         return None
-    if not isinstance(payload.message, str):
+    message = _structlog_message(payload, record)
+    if message is None:
         return event
 
-    event["logentry"] = {**logentry, "formatted": payload.message, "message": payload.message, "params": []}
+    event["logentry"] = {**logentry, "formatted": message, "message": message, "params": []}
     if payload.extra:
         event["contexts"]["structlog"] = _scrub_structlog_extra(payload.extra)
     # Logging frames can retain the original rendered line in their locals.
@@ -239,8 +248,8 @@ def wrap_before_breadcrumb(
             if payload is not None:
                 if payload.skip_sentry:
                     return None
-                if isinstance(payload.message, str):
-                    breadcrumb["message"] = payload.message
+                if (normalized_message := _structlog_message(payload, hint["log_record"])) is not None:
+                    breadcrumb["message"] = normalized_message
                     if payload.extra:
                         breadcrumb["data"] = {**breadcrumb.get("data", {}), **_scrub_structlog_extra(payload.extra)}
         return callback(breadcrumb, hint) if callback is not None else breadcrumb

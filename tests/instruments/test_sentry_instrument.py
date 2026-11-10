@@ -668,6 +668,41 @@ def test_structlog_envelope_privacy_across_string_limit(
         sentry.teardown()
 
 
+def test_message_less_structlog_error_is_scrubbed_in_sentry_envelopes(
+    minimal_sentry_config: SentryConfig, sentry_mock: SentryTestTransport, capsys: pytest.CaptureFixture[str]
+) -> None:
+    marker = uuid.uuid4().hex
+    sentry = SentryInstrument(bootstrap_config=minimal_sentry_config)
+    logs = LoggingInstrument(bootstrap_config=LoggingConfig())
+    sentry.bootstrap()
+    logs.bootstrap()
+    try:
+        logger.error(password=marker, component="worker")
+        logger.error("later error")
+
+        first_line, second_line = map(json.loads, capsys.readouterr().out.splitlines())
+        assert "event" not in first_line
+        assert first_line["password"] == marker
+        assert first_line["component"] == "worker"
+        assert second_line["event"] == "later error"
+
+        first, second = sentry_mock.mock_envelopes
+        assert marker.encode() not in first.serialize()
+        assert marker.encode() not in second.serialize()
+        first_event = first.get_event()
+        assert first_event is not None
+        assert first_event["contexts"]["structlog"]["component"] == "worker"
+        second_event = second.get_event()
+        assert second_event is not None
+        assert second_event["logentry"]["message"] == "later error"
+        breadcrumbs = second_event["breadcrumbs"]
+        assert isinstance(breadcrumbs, dict)
+        assert any(crumb.get("data", {}).get("component") == "worker" for crumb in breadcrumbs["values"])
+    finally:
+        logs.teardown()
+        sentry.teardown()
+
+
 @pytest.mark.parametrize("template", ["plain %s", "{invalid %s", '{"unrelated":"%s"}'])
 def test_unstructured_log_keeps_sdk_truncation(
     minimal_sentry_config: SentryConfig, sentry_mock: SentryTestTransport, template: str
