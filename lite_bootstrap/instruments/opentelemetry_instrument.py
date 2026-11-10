@@ -187,10 +187,10 @@ if import_checker.is_opentelemetry_sdk_installed and import_checker.is_pyroscope
     class PyroscopeSpanProcessor(SpanProcessor):
         def on_start(self, span: "Span", parent_context: "Context | None" = None) -> None:  # noqa: ARG002
             if _is_root_span(span):  # ty: ignore[invalid-argument-type]
-                formatted_span_id = format_span_id(span.context.span_id)  # ty: ignore[unresolved-attribute]
+                formatted_span_id = format_span_id(span.context.span_id)  # ty: ignore[missing-attribute]
                 span.set_attribute(_OTEL_PROFILE_ID_KEY, formatted_span_id)
                 pyroscope.add_thread_tag(_PYROSCOPE_SPAN_ID_KEY, formatted_span_id)
-                pyroscope.add_thread_tag(_PYROSCOPE_SPAN_NAME_KEY, span.name)  # ty: ignore[unresolved-attribute]
+                pyroscope.add_thread_tag(_PYROSCOPE_SPAN_NAME_KEY, span.name)  # ty: ignore[missing-attribute]
 
         def on_end(self, span: "ReadableSpan") -> None:
             if _is_root_span(span):
