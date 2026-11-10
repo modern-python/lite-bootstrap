@@ -380,7 +380,7 @@ def test_insecure_warning_fires_exactly_when_the_grpc_exporter_sends_plaintext(
         exporter = instrument._build_span_exporter() if signal == "traces" else instrument._build_metric_exporter()  # noqa: SLF001
     assert exporter is not None
     try:
-        assert exporter._insecure is expected_plaintext  # noqa: SLF001  # ty: ignore[unresolved-attribute]
+        assert exporter._insecure is expected_plaintext  # noqa: SLF001  # ty: ignore[missing-attribute]
         assert any("unencrypted" in str(w.message) for w in caught) is expected_plaintext
     finally:
         exporter.shutdown()

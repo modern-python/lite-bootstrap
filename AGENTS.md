@@ -82,4 +82,4 @@ Pyright reports as errors (conditional imports for optional dependencies, covari
 
 Two suppressions recur and are both correct: `invalid-method-override` on a framework subclass's
 `is_configured` classmethod, which narrows its parameter type where `ty` enforces invariance, and
-`unresolved-attribute` on the optional OTel/pyroscope symbols whose guard `ty` does not follow.
+`missing-attribute` on the optional OTel/pyroscope symbols whose guard `ty` does not follow.

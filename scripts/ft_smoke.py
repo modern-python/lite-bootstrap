@@ -17,7 +17,7 @@ from lite_bootstrap.instruments.opentelemetry_instrument import OpenTelemetryCon
 
 
 def main() -> None:
-    assert sys._is_gil_enabled() is False, "expected a free-threaded interpreter"  # noqa: SLF001  # ty: ignore[unresolved-attribute]
+    assert sys._is_gil_enabled() is False, "expected a free-threaded interpreter"  # noqa: SLF001  # ty: ignore[missing-attribute]
     assert import_checker.is_orjson_installed is False, "orjson must be absent on the ft leg"
 
     formatted = _serialize_log_to_string({"event": "ft ok", "level": "info", "n": 1})

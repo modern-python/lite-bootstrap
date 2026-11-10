@@ -6,17 +6,11 @@ import typing
 from lite_bootstrap import import_checker
 from lite_bootstrap.exceptions import collect_teardown_errors
 from lite_bootstrap.instruments.base import BaseConfig, BaseInstrument
-from lite_bootstrap.instruments.logging_factory import _serialize_log_to_string
+from lite_bootstrap.instruments.logging_factory import _RenderedLine, _serialize_log_to_string
 
 
 if typing.TYPE_CHECKING:
     from structlog.typing import EventDict, WrappedLogger
-
-
-class _RenderedLine(str):
-    """A line structlog's chain already rendered, which the root handler's formatter emits as is."""
-
-    __slots__ = ()
 
 
 if import_checker.is_structlog_installed:
