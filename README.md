@@ -80,6 +80,8 @@ The following intentionally differ:
 - [PyPI](https://pypi.org/project/lite-bootstrap)
 - [License](https://github.com/modern-python/lite-bootstrap/blob/main/LICENSE)
 
+If this project saves you time, consider giving it a star on GitHub.
+
 ## Part of `modern-python`
 
 Browse the full list of templates and libraries in
