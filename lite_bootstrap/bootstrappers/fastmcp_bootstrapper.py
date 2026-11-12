@@ -2,8 +2,10 @@ import contextlib
 import dataclasses
 import functools
 import inspect
+import threading
 import time
 import typing
+from _thread import LockType
 from collections.abc import AsyncGenerator, Mapping
 
 from lite_bootstrap import import_checker
@@ -27,8 +29,10 @@ if import_checker.is_fastmcp_installed:
     from fastmcp.server.middleware import Middleware, MiddlewareContext
     from fastmcp.server.providers.addressing import parse_hashed_backend_name
     from starlette import status
+    from starlette.middleware import Middleware as StarletteMiddleware
     from starlette.requests import Request
     from starlette.responses import JSONResponse, Response
+    from starlette.types import ASGIApp
 
 if import_checker.is_fastmcp_opentelemetry_installed:
     from opentelemetry.metrics import get_meter_provider
@@ -53,8 +57,22 @@ if import_checker.is_prometheus_client_installed:
 if import_checker.is_prometheus_fastapi_instrumentator_installed:
     from prometheus_fastapi_instrumentator import Instrumentator
     from prometheus_fastapi_instrumentator import metrics as instrumentator_metrics
+    from prometheus_fastapi_instrumentator.middleware import PrometheusInstrumentatorMiddleware
 
     _DEFAULT_METRICS_PARAMETERS: typing.Final = frozenset(inspect.signature(instrumentator_metrics.default).parameters)
+
+    class _FastMcpPrometheusHttpMiddleware(PrometheusInstrumentatorMiddleware):
+        def __init__(
+            self,
+            app: "ASGIApp",
+            *,
+            inprogress_gauge: "prometheus_client.Gauge",
+            **kwargs: typing.Any,  # noqa: ANN401
+        ) -> None:
+            kwargs["should_instrument_requests_inprogress"] = False
+            super().__init__(app, **kwargs)
+            self.inprogress = inprogress_gauge
+            self.should_instrument_requests_inprogress = True
 
 
 _TOOL_CALL_STATUS_SUCCESS: typing.Final = "success"
@@ -94,9 +112,11 @@ def _postprocess_http_apps(
     return restore
 
 
-def _build_tool_call_metrics() -> tuple["prometheus_client.Counter", "prometheus_client.Histogram"]:
-    # The global registry rejects a second collector of the same name, so a later bootstrap reuses the first
-    registered_collectors: typing.Final = prometheus_client.REGISTRY._names_to_collectors  # noqa: SLF001
+def _build_tool_call_metrics(
+    registry: "prometheus_client.CollectorRegistry",
+) -> tuple["prometheus_client.Counter", "prometheus_client.Histogram"]:
+    # The registry rejects a second collector of the same name, so a later bootstrap reuses the first
+    registered_collectors: typing.Final = registry._names_to_collectors  # noqa: SLF001
     if "fastmcp_tool_calls_total" in registered_collectors:
         return (
             typing.cast("prometheus_client.Counter", registered_collectors["fastmcp_tool_calls_total"]),
@@ -104,10 +124,13 @@ def _build_tool_call_metrics() -> tuple["prometheus_client.Counter", "prometheus
         )
     return (
         prometheus_client.Counter(
-            "fastmcp_tool_calls_total", "Number of MCP tool calls by tool and outcome.", ["tool", "status"]
+            "fastmcp_tool_calls_total",
+            "Number of MCP tool calls by tool and outcome.",
+            ["tool", "status"],
+            registry=registry,
         ),
         prometheus_client.Histogram(
-            "fastmcp_tool_call_duration_seconds", "Duration of MCP tool calls by tool.", ["tool"]
+            "fastmcp_tool_call_duration_seconds", "Duration of MCP tool calls by tool.", ["tool"], registry=registry
         ),
     )
 
@@ -281,6 +304,12 @@ class FastMcpPrometheusInstrument(PrometheusInstrument[FastMcpConfig]):
     _default_metrics: typing.Callable[..., typing.Any] | None = dataclasses.field(
         default=None, init=False, repr=False, compare=False
     )
+    _inprogress_gauges: dict[tuple[str, tuple[str, ...]], "prometheus_client.Gauge"] = dataclasses.field(
+        default_factory=dict, init=False, repr=False, compare=False
+    )
+    _inprogress_gauge_lock: LockType = dataclasses.field(
+        default_factory=threading.Lock, init=False, repr=False, compare=False
+    )
 
     @staticmethod
     def dependencies_installed() -> bool:
@@ -289,9 +318,12 @@ class FastMcpPrometheusInstrument(PrometheusInstrument[FastMcpConfig]):
             and import_checker.is_prometheus_fastapi_instrumentator_installed
         )
 
-    def _instrument_http_app(self, http_application: "StarletteWithLifespan") -> "StarletteWithLifespan":
+    def _instrument_http_app(
+        self, http_application: "StarletteWithLifespan", *, registry: "prometheus_client.CollectorRegistry"
+    ) -> "StarletteWithLifespan":
         config: typing.Final = self.bootstrap_config
         instrumentator_params = dict(config.prometheus_instrumentator_additional_params)
+        instrumentator_params["registry"] = registry
         instrumentator_params["excluded_handlers"] = [
             *instrumentator_params.get("excluded_handlers", []),
             *self.infrastructure_excluded_patterns(),
@@ -305,19 +337,52 @@ class FastMcpPrometheusInstrument(PrometheusInstrument[FastMcpConfig]):
                 if name in _DEFAULT_METRICS_PARAMETERS
             }
             self._default_metrics = instrumentator_metrics.default(**default_metrics_params)
-        Instrumentator(**instrumentator_params).add(self._default_metrics).instrument(
-            http_application, **config.prometheus_instrument_additional_params
-        )
+        middleware_count = len(http_application.user_middleware)
+        instrumentator = Instrumentator(**instrumentator_params).add(self._default_metrics)
+        instrumentator.instrument(http_application, **config.prometheus_instrument_additional_params)
+        if (
+            registry is not prometheus_client.REGISTRY
+            and instrumentator.should_instrument_requests_inprogress
+            and len(http_application.user_middleware) > middleware_count
+        ):
+            # The instrumentator registers its built-in gauge globally even with a custom registry.
+            labels = ("method", "handler") if instrumentator.inprogress_labels else ()
+            gauge = self._get_inprogress_gauge(registry, instrumentator.inprogress_name, labels)
+            http_application.user_middleware[0] = StarletteMiddleware(
+                _FastMcpPrometheusHttpMiddleware,
+                inprogress_gauge=gauge,
+                **http_application.user_middleware[0].kwargs,
+            )
         return http_application
+
+    def _get_inprogress_gauge(
+        self, registry: "prometheus_client.CollectorRegistry", name: str, labels: tuple[str, ...]
+    ) -> "prometheus_client.Gauge":
+        key = (name, labels)
+        with self._inprogress_gauge_lock:
+            gauge = self._inprogress_gauges.get(key)
+            if gauge is None:
+                gauge = prometheus_client.Gauge(
+                    name,
+                    "Number of HTTP requests in progress.",
+                    labels,
+                    registry=registry,
+                    multiprocess_mode="livesum",
+                )
+                self._inprogress_gauges[key] = gauge
+            return gauge
 
     def bootstrap(self) -> None:
         config = self.bootstrap_config
+        registry = config.prometheus_instrumentator_additional_params.get("registry") or prometheus_client.REGISTRY
         if config.is_prometheus_http_metrics_on(
             opentelemetry_records_http_metrics=FastMcpOpenTelemetryInstrument.is_recording_metrics(config)
         ):
-            self._restore_http_app = _postprocess_http_apps(config.application, self._instrument_http_app)
+            self._restore_http_app = _postprocess_http_apps(
+                config.application, functools.partial(self._instrument_http_app, registry=registry)
+            )
         if config.fastmcp_prometheus_tool_metrics_enabled:
-            config.application.add_middleware(FastMcpPrometheusMiddleware(*_build_tool_call_metrics()))
+            config.application.add_middleware(FastMcpPrometheusMiddleware(*_build_tool_call_metrics(registry)))
 
         @config.application.custom_route(
             config.prometheus_metrics_path,
@@ -327,7 +392,7 @@ class FastMcpPrometheusInstrument(PrometheusInstrument[FastMcpConfig]):
         )
         async def metrics_handler(_: "Request") -> "Response":
             return Response(
-                prometheus_client.generate_latest(prometheus_client.REGISTRY),
+                prometheus_client.generate_latest(registry),
                 headers={"content-type": prometheus_client.CONTENT_TYPE_LATEST},
             )
 

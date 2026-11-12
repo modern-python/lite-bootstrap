@@ -331,6 +331,14 @@ headers, including `Content-Type`. Add `Authorization` explicitly when needed
 
 ## Prometheus
 
+### FastMCP custom registry
+
+When `prometheus_instrumentator_additional_params["registry"]` supplies a custom
+registry, FastMCP's Prometheus HTTP and tool metrics use that registry. The
+metrics endpoint exposes its collectors. Register any application collectors you
+want to expose in that same registry. FastMCP uses the global registry by default
+([#451](https://github.com/modern-python/lite-bootstrap/issues/451)).
+
 ### Unknown FastMCP tools
 
 Calls to unresolved tool names no longer create `fastmcp_tool_calls_total` or
