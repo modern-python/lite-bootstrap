@@ -21,6 +21,7 @@ from opentelemetry.sdk.trace import TracerProvider as SDKTracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import SpanKind, get_tracer_provider
+from prometheus_client.parser import text_string_to_metric_families
 from starlette import status
 from starlette.applications import Starlette
 from starlette.requests import Request
@@ -672,6 +673,99 @@ def test_fastmcp_prometheus_counts_requests_of_every_http_app() -> None:
     assert _http_requests_total(path) == expected_requests
 
 
+def _scraped_samples(text: str) -> list[tuple[str, dict[str, str], float]]:
+    return [
+        (sample.name, sample.labels, sample.value)
+        for family in text_string_to_metric_families(text)
+        for sample in family.samples
+    ]
+
+
+def test_fastmcp_prometheus_scrapes_http_and_tool_metrics_from_custom_registry() -> None:
+    registry = prometheus_client.CollectorRegistry()
+    prometheus_client.Counter("custom_requests", "Custom requests.", registry=registry).inc()
+    config = _make_test_config(prometheus_instrumentator_additional_params={"registry": registry})
+
+    @config.application.custom_route("/items", methods=["GET"])
+    async def items(_request: Request) -> Response:
+        return Response("ok")
+
+    @config.application.tool
+    def echo() -> str:
+        return "ok"
+
+    bootstrapper = FastMcpBootstrapper(bootstrap_config=config)
+    application = bootstrapper.bootstrap()
+    try:
+        first = application.http_app()
+        second = application.http_app(path="/other", stateless_http=True, json_response=True)
+        with TestClient(first) as client:
+            assert client.get("/items").is_success
+        with TestClient(second) as client:
+            assert client.get("/items").is_success
+            result = client.post(
+                "/other",
+                headers={"Accept": "application/json, text/event-stream"},
+                json={"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "echo"}},
+            )
+            assert result.is_success
+            assert result.json()["result"]["content"] == [{"type": "text", "text": "ok"}]
+            scrape = client.get("/metrics")
+    finally:
+        bootstrapper.teardown()
+
+    assert scrape.is_success
+    samples = _scraped_samples(scrape.text)
+    assert ("http_requests_total", {"handler": "/items", "method": "GET", "status": "2xx"}, 2) in samples
+    assert ("fastmcp_tool_calls_total", {"status": "success", "tool": "echo"}, 1) in samples
+    assert ("fastmcp_tool_call_duration_seconds_count", {"tool": "echo"}, 1) in samples
+    assert ("custom_requests_total", {}, 1) in samples
+
+
+@pytest.mark.parametrize("change_gauge_options", [False, True])
+def test_fastmcp_prometheus_scrapes_inprogress_gauge_from_custom_registry(change_gauge_options: bool) -> None:
+    registry = prometheus_client.CollectorRegistry()
+    gauge_name = f"test_inprogress_{uuid.uuid4().hex}"
+    second_gauge_name = f"{gauge_name}_second"
+    labels = {"method": "GET", "handler": "/items"}
+    config = _make_test_config(
+        prometheus_instrumentator_additional_params={
+            "registry": registry,
+            "should_instrument_requests_inprogress": True,
+            "inprogress_name": gauge_name,
+            "inprogress_labels": True,
+        },
+    )
+
+    @config.application.custom_route("/items", methods=["GET"])
+    async def items(_request: Request) -> Response:
+        assert 1 in (registry.get_sample_value(gauge_name, labels), registry.get_sample_value(second_gauge_name))
+        return Response("ok")
+
+    bootstrapper = FastMcpBootstrapper(bootstrap_config=config)
+    application = bootstrapper.bootstrap()
+    try:
+        first = application.http_app()
+        if change_gauge_options:
+            config.prometheus_instrumentator_additional_params.update(
+                inprogress_name=second_gauge_name, inprogress_labels=False
+            )
+        second = application.http_app(path="/other")
+        with TestClient(first) as first_client, TestClient(second) as second_client:
+            assert first_client.get("/items").is_success
+            assert second_client.get("/items").is_success
+            scrape = second_client.get("/metrics")
+    finally:
+        bootstrapper.teardown()
+
+    assert scrape.is_success
+    samples = _scraped_samples(scrape.text)
+    assert (gauge_name, labels, 0) in samples
+    if change_gauge_options:
+        assert (second_gauge_name, {}, 0) in samples
+    assert prometheus_client.REGISTRY.get_sample_value(gauge_name, labels) is None
+
+
 def test_fastmcp_prometheus_teardown_restores_http_app() -> None:
     bootstrapper = FastMcpBootstrapper(bootstrap_config=_make_test_config())
     application = bootstrapper.bootstrap()
@@ -720,13 +814,14 @@ async def test_fastmcp_prometheus_hashed_proxy_aliases_share_metric_samples() ->
         bootstrap_config=_make_test_config(application=create_proxy(remote), logging_enabled=False)
     )
     application = bootstrapper.bootstrap()
-    metric_label = hashed_backend_name("metrics", tool_name)
+    call_name = hashed_backend_name("metrics", tool_name)
+    metric_label = f"{tool_hash}_{tool_name}"
     try:
         async with Client(application) as client:
-            await client.call_tool(metric_label)
+            await client.call_tool(call_name)
             samples_after_first_call = _retained_tool_metric_samples()
             for index in range(100):
-                result = await client.call_tool(f"{tool_hash}_alias_{index}")
+                result = await client.call_tool(f"{call_name.removesuffix(tool_name)}alias_{index}")
                 assert result.data == "ok"
             assert _retained_tool_metric_samples() == samples_after_first_call
     finally:
@@ -774,15 +869,18 @@ async def test_fastmcp_prometheus_counts_tool_calls(tool_source: str) -> None:
         )
         echo_name = f"renamed_{echo_name}"
         failing_name = f"renamed_{failing_name}"
-    elif tool_source == "hashed":
-        echo_name = hashed_backend_name("metrics", echo_name)
-        failing_name = hashed_backend_name("metrics", failing_name)
+    echo_call_name, failing_call_name = echo_name, failing_name
+    if tool_source == "hashed":
+        echo_call_name = hashed_backend_name("metrics", echo_name)
+        failing_call_name = hashed_backend_name("metrics", failing_name)
+        echo_name = f"{hash_tool('metrics', echo_name)}_{echo_name}"
+        failing_name = f"{hash_tool('metrics', failing_name)}_{failing_name}"
     try:
         async with Client(application) as client:
-            await client.call_tool(echo_name, {"text": "hi"})
-            await client.call_tool(echo_name, {"text": "hi"})
+            await client.call_tool(echo_call_name, {"text": "hi"})
+            await client.call_tool(echo_call_name, {"text": "hi"})
             with pytest.raises(ToolError):
-                await client.call_tool(failing_name, {})
+                await client.call_tool(failing_call_name, {})
     finally:
         bootstrapper.teardown()
 
