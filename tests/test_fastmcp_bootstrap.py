@@ -814,13 +814,14 @@ async def test_fastmcp_prometheus_hashed_proxy_aliases_share_metric_samples() ->
         bootstrap_config=_make_test_config(application=create_proxy(remote), logging_enabled=False)
     )
     application = bootstrapper.bootstrap()
-    metric_label = hashed_backend_name("metrics", tool_name)
+    call_name = hashed_backend_name("metrics", tool_name)
+    metric_label = f"{tool_hash}_{tool_name}"
     try:
         async with Client(application) as client:
-            await client.call_tool(metric_label)
+            await client.call_tool(call_name)
             samples_after_first_call = _retained_tool_metric_samples()
             for index in range(100):
-                result = await client.call_tool(f"{tool_hash}_alias_{index}")
+                result = await client.call_tool(f"{call_name.removesuffix(tool_name)}alias_{index}")
                 assert result.data == "ok"
             assert _retained_tool_metric_samples() == samples_after_first_call
     finally:
@@ -868,15 +869,18 @@ async def test_fastmcp_prometheus_counts_tool_calls(tool_source: str) -> None:
         )
         echo_name = f"renamed_{echo_name}"
         failing_name = f"renamed_{failing_name}"
-    elif tool_source == "hashed":
-        echo_name = hashed_backend_name("metrics", echo_name)
-        failing_name = hashed_backend_name("metrics", failing_name)
+    echo_call_name, failing_call_name = echo_name, failing_name
+    if tool_source == "hashed":
+        echo_call_name = hashed_backend_name("metrics", echo_name)
+        failing_call_name = hashed_backend_name("metrics", failing_name)
+        echo_name = f"{hash_tool('metrics', echo_name)}_{echo_name}"
+        failing_name = f"{hash_tool('metrics', failing_name)}_{failing_name}"
     try:
         async with Client(application) as client:
-            await client.call_tool(echo_name, {"text": "hi"})
-            await client.call_tool(echo_name, {"text": "hi"})
+            await client.call_tool(echo_call_name, {"text": "hi"})
+            await client.call_tool(echo_call_name, {"text": "hi"})
             with pytest.raises(ToolError):
-                await client.call_tool(failing_name, {})
+                await client.call_tool(failing_call_name, {})
     finally:
         bootstrapper.teardown()
 
