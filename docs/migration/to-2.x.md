@@ -197,6 +197,26 @@ before `before_send` or `before_breadcrumb` runs. This ordering also applies to
 `sentry_additional_params["before_send"]`, which previously replaced built-in
 processing. Update callbacks that relied on the original payload
 ([#408](https://github.com/modern-python/lite-bootstrap/pull/408)).
+
+If you configure structlog yourself, use `SentryJSONRenderer` as the final processor
+before a stdlib logger to redact records with a missing or non-string message:
+
+```python
+import structlog
+from lite_bootstrap.instruments.logging_instrument import SentryJSONRenderer
+
+structlog.configure(
+    processors=[SentryJSONRenderer()],
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+)
+```
+
+It preserves JSON output and marks the string in memory. Lite-bootstrap's logging
+instrument already uses it. Unmarked JSON without a string `event` stays unchanged;
+its contents alone cannot distinguish structlog from unrelated stdlib JSON
+([#450](https://github.com/modern-python/lite-bootstrap/issues/450)).
+
 FastStream isolates message scopes. Set tags and breadcrumbs per message
 ([#409](https://github.com/modern-python/lite-bootstrap/pull/409)).
 

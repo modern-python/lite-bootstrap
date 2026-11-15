@@ -16,6 +16,16 @@ if typing.TYPE_CHECKING:
 if import_checker.is_structlog_installed:
     import structlog
 
+    class SentryJSONRenderer(structlog.processors.JSONRenderer):
+        """Render JSON with provenance for Sentry redaction, including message-less records.
+
+        Use as the final processor before a stdlib logger, with a serializer that
+        returns str. Accepts JSONRenderer's options; the marker adds no JSON fields.
+        """
+
+        def __call__(self, logger: "WrappedLogger", name: str, event_dict: "EventDict") -> str:
+            return _RenderedLine(super().__call__(logger, name, event_dict))
+
     class _RenderedLinePassthroughFormatter(structlog.stdlib.ProcessorFormatter):
         """Render stdlib records through the foreign chain, and emit structlog's rendered lines verbatim."""
 
@@ -54,6 +64,7 @@ else:  # pragma: no cover - only without opentelemetry, i.e. neither the [otl] n
 __all__ = [
     "LoggingConfig",
     "LoggingInstrument",
+    "SentryJSONRenderer",
     "tracer_injection",
 ]
 
@@ -137,15 +148,15 @@ class LoggingInstrument(BaseInstrument[LoggingConfigT]):
             *self.structlog_pre_chain_processors,
             *self.bootstrap_config.logging_extra_processors,
         ]
-        render_json = structlog.processors.JSONRenderer(serializer=_serialize_log_to_string)
+        render_json = SentryJSONRenderer(serializer=_serialize_log_to_string)
 
         def render_for_stdlib(
             logger: "WrappedLogger", method: str, event_dict: "EventDict"
-        ) -> tuple[tuple[_RenderedLine], dict[str, typing.Any]]:
+        ) -> tuple[tuple[str], dict[str, typing.Any]]:
             exc_info = event_dict.get("exc_info")
             for processor in processors:
                 event_dict = processor(logger, method, event_dict)
-            line = _RenderedLine(render_json(logger, method, event_dict))
+            line = render_json(logger, method, event_dict)
             return (line,), {"exc_info": exc_info}
 
         return [

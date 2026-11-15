@@ -9,6 +9,12 @@ recognises it by `startswith("{")`. An explicit marker key would pollute user-vi
 every logging user to serve one consumer, and a neutral third module both instruments import would
 abstract a sharing that does not exist.
 
+For message-less records, JSON content alone cannot establish provenance. The
+logging instrument now uses `SentryJSONRenderer`, which returns a private `str`
+subclass without changing the JSON. Independent structlog configurations can opt
+into that renderer too. Sentry recognizes the marked `LogRecord.msg` even when
+`event` is absent or non-string; unmarked JSON in those cases stays unchanged.
+
 The trap worth knowing before "fixing" it: structlog's own idiomatic
 `ProcessorFormatter.wrap_for_formatter` is incompatible with this seam. It defers rendering to
 handler-flush time, so `record.msg` is an `EventDict`, `sentry_sdk` builds `logentry.formatted` from
