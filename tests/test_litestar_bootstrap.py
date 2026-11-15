@@ -8,7 +8,7 @@ import sys
 import typing
 import uuid
 import warnings
-from collections.abc import Generator
+from collections.abc import AsyncGenerator, Generator
 
 import litestar
 import pytest
@@ -26,7 +26,7 @@ from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace import TracerProvider as SDKTracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-from opentelemetry.trace import SpanKind, get_tracer_provider
+from opentelemetry.trace import SpanKind, get_tracer, get_tracer_provider
 
 from lite_bootstrap import LitestarBootstrapper, LitestarConfig, import_checker
 from lite_bootstrap.bootstrappers import litestar_bootstrapper
@@ -111,6 +111,65 @@ def test_second_litestar_bootstrapper_on_same_config_warns_not_stacks(litestar_c
     assert len(config_a.application_config.on_shutdown) == on_shutdown_after_first, (
         "second bootstrapper must not stack another on_shutdown teardown"
     )
+
+
+@pytest.mark.parametrize("shutdown_failure", [None, "lifespan", "hook"])
+def test_litestar_exports_shutdown_spans_from_hooks_added_after_construction(shutdown_failure: str | None) -> None:
+    events: list[str] = []
+    tracer = get_tracer(__name__)
+
+    def early_shutdown() -> None:
+        with tracer.start_as_current_span("early-shutdown"):
+            events.append("early-shutdown")
+
+    async def late_shutdown(app: litestar.Litestar) -> None:
+        assert app.state.started
+        with tracer.start_as_current_span("late-shutdown"):
+            events.append("late-shutdown")
+            if shutdown_failure == "hook":
+                msg = "user shutdown failed"
+                raise RuntimeError(msg)
+
+    @contextlib.asynccontextmanager
+    async def lifespan(app: litestar.Litestar) -> AsyncGenerator[None]:
+        app.state.started = True
+        events.append("lifespan-startup")
+        yield
+        with tracer.start_as_current_span("lifespan-shutdown"):
+            events.append("lifespan-shutdown")
+            if shutdown_failure == "lifespan":
+                msg = "user shutdown failed"
+                raise RuntimeError(msg)
+
+    application_config = AppConfig(on_shutdown=[early_shutdown], lifespan=[lifespan])
+    bootstrapper = LitestarBootstrapper(
+        bootstrap_config=LitestarConfig(
+            application_config=application_config, logging_enabled=False, opentelemetry_log_traces=True
+        )
+    )
+    application_config.on_shutdown.append(late_shutdown)
+    application = bootstrapper.bootstrap()
+    exporter = InMemorySpanExporter()
+    provider = typing.cast("SDKTracerProvider", get_tracer_provider())
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    expected_error = (
+        pytest.RaisesGroup(pytest.RaisesExc(RuntimeError, match="user shutdown failed"), allow_unwrapped=True)
+        if shutdown_failure
+        else contextlib.nullcontext()
+    )
+    try:
+        with expected_error, TestClient(application):
+            assert events == ["lifespan-startup"]
+        assert not bootstrapper.is_bootstrapped
+    finally:
+        bootstrapper.teardown()
+
+    assert events == ["lifespan-startup", "lifespan-shutdown", "early-shutdown", "late-shutdown"]
+    assert [span.name for span in exporter.get_finished_spans()] == [
+        "lifespan-shutdown",
+        "early-shutdown",
+        "late-shutdown",
+    ]
 
 
 def test_litestar_bootstrap(litestar_config: LitestarConfig) -> None:
