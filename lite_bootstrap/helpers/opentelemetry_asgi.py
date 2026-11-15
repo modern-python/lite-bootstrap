@@ -14,12 +14,13 @@ if typing.TYPE_CHECKING:
 class ExcludeInfrastructureTelemetry:
     def __init__(self, app: "OpenTelemetryMiddleware", excluded_paths: set[str]) -> None:
         self.app = app
-        self.excluded_paths = tuple(path for value in excluded_paths if (path := value.rstrip("/")))
+        normalized_paths = {value.rstrip("/") for value in excluded_paths}
+        self.excluded_paths = normalized_paths | {f"{path}/" for path in normalized_paths}
 
     async def __call__(self, scope: "Scope", receive: "Receive", send: "Send") -> None:
         if scope["type"] in ("http", "websocket"):
             path = get_route_path(scope)
-            if any(path == excluded or path.startswith(excluded + "/") for excluded in self.excluded_paths):
+            if path in self.excluded_paths:
                 await self.app.app(scope, receive, send)
                 return
         await self.app(scope, receive, send)

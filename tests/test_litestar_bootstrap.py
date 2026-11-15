@@ -651,6 +651,38 @@ def _server_spans(exporter: InMemorySpanExporter) -> list[ReadableSpan]:
     return [span for span in exporter.get_finished_spans() if span.kind == SpanKind.SERVER]
 
 
+@pytest.mark.parametrize("root_path", ["", "/api"])
+@pytest.mark.parametrize(("health_path", "metrics_path"), [("/health", "/metrics"), ("/", "/metrics/")])
+def test_litestar_otel_excludes_only_exact_infrastructure_endpoints(
+    health_path: str, metrics_path: str, root_path: str
+) -> None:
+    @litestar.get(["/health/details", "/metrics/report", "/items/42", "/items/abc"])
+    async def work() -> str:
+        return "ok"
+
+    config = LitestarConfig(
+        application_config=AppConfig(route_handlers=[work]),
+        logging_enabled=False,
+        opentelemetry_log_traces=True,
+        health_checks_path=health_path,
+        prometheus_metrics_path=metrics_path,
+        opentelemetry_excluded_urls=[r"/items/\d+$"],
+    )
+    application, exporter = _bootstrap_with_span_exporter(config)
+    paths = sorted({health_path, metrics_path, f"{health_path.rstrip('/')}/", f"{metrics_path.rstrip('/')}/"})
+    paths.extend(["/health/details", "/metrics/report", "/items/42", "/items/abc"])
+
+    with TestClient(app=application, root_path=root_path) as client:
+        for path in paths:
+            assert client.get(path).status_code == status_codes.HTTP_200_OK
+
+    assert sorted(span.name for span in _server_spans(exporter)) == [
+        "GET /health/details",
+        "GET /items/abc",
+        "GET /metrics/report",
+    ]
+
+
 def test_litestar_prometheus_excludes_infrastructure_and_user_paths() -> None:
     suffix = uuid.uuid4().hex
     normal_path = f"/health-{suffix}/report"

@@ -320,6 +320,14 @@ alternatives into entries, use `\x2c` for a literal comma, and rewrite bounded
 repetitions such as `a{1,3}` as `aa?a?`. Litestar accepts commas
 ([#417](https://github.com/modern-python/lite-bootstrap/pull/417)).
 
+### Health and metrics trace exclusions
+
+Generated OpenTelemetry exclusions match the configured health and metrics
+endpoints with or without a trailing slash, including a health endpoint at `/`.
+Routes such as `/health/details` and `/metrics/report` now produce spans. Proxy
+prefixes are respected and user-supplied exclusion regexes keep their behavior
+([#453](https://github.com/modern-python/lite-bootstrap/issues/453)).
+
 ## CORS methods on FastAPI and Litestar
 
 `cors_allowed_methods` defaults to `["*"]`. Configuring origins without a method
