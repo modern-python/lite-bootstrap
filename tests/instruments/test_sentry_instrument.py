@@ -10,6 +10,7 @@ from unittest.mock import patch
 import pytest
 import sentry_sdk
 import structlog
+from sentry_sdk.envelope import Envelope
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument, SentryJSONRenderer
@@ -781,6 +782,63 @@ def test_independent_structlog_renderer_scrubs_only_its_own_records(
     finally:
         target.removeHandler(handler)
         handler.close()
+        sentry.teardown()
+
+
+@pytest.mark.parametrize("capture_sentry_logs", [False, True], ids=["enable-logs", "capture-sentry-logs"])
+def test_opt_in_sentry_logs_leave_rendered_json_to_the_caller(
+    minimal_sentry_config: SentryConfig,
+    sentry_mock: SentryTestTransport,
+    capsys: pytest.CaptureFixture[str],
+    *,
+    capture_sentry_logs: bool,
+) -> None:
+    marker = uuid.uuid4().hex
+    captured_logs: list[tuple[sentry_types.Log, sentry_types.Hint]] = []
+
+    def before_send_log(log: "sentry_types.Log", hint: "sentry_types.Hint") -> "sentry_types.Log":
+        captured_logs.append((copy.deepcopy(log), hint.copy()))
+        return log
+
+    config = dataclasses.replace(
+        minimal_sentry_config,
+        sentry_integrations=[
+            LoggingIntegration(capture_sentry_logs=True) if capture_sentry_logs else LoggingIntegration()
+        ],
+        sentry_additional_params={
+            **minimal_sentry_config.sentry_additional_params,
+            "enable_logs": not capture_sentry_logs,
+            "before_send_log": before_send_log,
+        },
+    )
+    sentry = SentryInstrument(bootstrap_config=config)
+    logs = LoggingInstrument(bootstrap_config=LoggingConfig())
+    sentry.bootstrap()
+    logs.bootstrap()
+    try:
+        logger.error(password=marker, component="worker")
+        logger.error("suppressed", password=marker, skip_sentry=True)
+        first_line, skipped_line = capsys.readouterr().out.splitlines()
+        assert json.loads(first_line)["password"] == marker
+        assert json.loads(skipped_line)["skip_sentry"] is True
+        (issue,) = sentry_mock.mock_envelopes
+        assert marker.encode() not in issue.serialize()
+        std_logger.error(first_line)
+        sentry_sdk.flush()
+
+        assert [log["body"] for log, _ in captured_logs] == [first_line, skipped_line, first_line]
+        assert all(type(log["body"]) is str and hint == {} for log, hint in captured_logs)
+        assert all(log["attributes"]["sentry.origin"] == "auto.log.stdlib" for log, _ in captured_logs)
+        entries = [
+            entry
+            for envelope in sentry_mock.mock_envelopes
+            for item in Envelope.deserialize(envelope.serialize()).items
+            if item.type == "log"
+            for entry in json.loads(item.get_bytes())["items"]
+        ]
+        assert [entry["body"] for entry in entries] == [first_line, skipped_line, first_line]
+    finally:
+        logs.teardown()
         sentry.teardown()
 
 

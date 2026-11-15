@@ -15,6 +15,16 @@ subclass without changing the JSON. Independent structlog configurations can opt
 into that renderer too. Sentry recognizes the marked `LogRecord.msg` even when
 `event` is absent or non-string; unmarked JSON in those cases stays unchanged.
 
+This recognition covers issue events and breadcrumbs. Opt-in Sentry Logs stays
+caller-managed: sentry-sdk 2.70.0 and 2.73.0 pass `before_send_log` an empty hint and
+a plain string body, losing the original `LogRecord.msg` marker. Both structlog and
+stdlib records carry `sentry.origin="auto.log.stdlib"`. Automatic recognition would
+therefore rewrite indistinguishable stdlib JSON or require a global logging patch.
+Keep the hook unchanged and document the limit in the migration guide
+([#452](https://github.com/modern-python/lite-bootstrap/issues/452),
+[SDK handler](https://github.com/getsentry/sentry-python/blob/2.70.0/sentry_sdk/integrations/logging.py),
+[SDK hook](https://github.com/getsentry/sentry-python/blob/2.73.0/sentry_sdk/client.py)).
+
 The trap worth knowing before "fixing" it: structlog's own idiomatic
 `ProcessorFormatter.wrap_for_formatter` is incompatible with this seam. It defers rendering to
 handler-flush time, so `record.msg` is an `EventDict`, `sentry_sdk` builds `logentry.formatted` from
