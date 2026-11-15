@@ -361,18 +361,10 @@ class LitestarOpenTelemetryInstrument(OpenTelemetryInstrument[LitestarConfig]):
         return OpenTelemetryInstrument.dependencies_installed() and import_checker.is_litestar_opentelemetry_installed
 
     def _build_excluded_path_patterns(self) -> list[str]:
-        """Anchored patterns for the derived paths, plus the caller's own entries verbatim.
-
-        The trailing slash is stripped and matched optionally, so ``/custom-health/`` excludes the
-        path with or without it. Anchoring is needed because Litestar searches its ``exclude``
-        patterns unanchored: a bare ``/custom-health`` would also silence ``/custom-healthy``.
-        Caller-supplied entries stay untouched because they are regexes.
-        """
+        """Match derived endpoints with an optional trailing slash, preserving the caller's regexes."""
         anchored_patterns: typing.Final = {
-            rf"^{re.escape(normalized_path)}(?:/|$)"
+            rf"^{re.escape(excluded_path.rstrip('/'))}/?$"
             for excluded_path in self._build_infrastructure_excluded_paths()
-            # A bare "/" would anchor to every URL, so it is dropped along with empty values.
-            if (normalized_path := excluded_path.rstrip("/"))
         }
         return sorted(anchored_patterns | set(self.bootstrap_config.opentelemetry_excluded_urls))
 

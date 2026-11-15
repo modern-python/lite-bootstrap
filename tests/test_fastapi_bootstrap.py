@@ -706,7 +706,8 @@ def _server_span_names_for(
     try:
         with TestClient(bootstrapped_application, root_path=root_path) as client:
             for path in paths:
-                client.get(path, headers={"host": host}, follow_redirects=False)
+                response = client.get(path, headers={"host": host}, follow_redirects=False)
+                assert response.is_success or response.is_redirect
     finally:
         bootstrapper.teardown()
     return [span.name for span in exporter.get_finished_spans() if span.kind == SpanKind.SERVER]
@@ -732,6 +733,38 @@ def test_fastapi_otel_leaves_the_health_check_untraced_by_default() -> None:
     )
 
     assert _server_span_names_for(config, ["/custom-health/", "/custom-healthy"]) == ["GET /custom-healthy"]
+
+
+@pytest.mark.parametrize("root_path", ["", "/api"])
+@pytest.mark.parametrize(("health_path", "metrics_path"), [("/health", "/metrics"), ("/", "/metrics/")])
+def test_fastapi_otel_excludes_only_exact_infrastructure_endpoints(
+    health_path: str, metrics_path: str, root_path: str
+) -> None:
+    config = FastAPIConfig(
+        logging_enabled=False,
+        opentelemetry_log_traces=True,
+        health_checks_path=health_path,
+        prometheus_metrics_path=metrics_path,
+        opentelemetry_excluded_urls=[r"/items/\d+$"],
+    )
+
+    @config.app.get("/health/details")
+    @config.app.get("/health//")
+    @config.app.get("/metrics/report")
+    @config.app.get("/items/42")
+    @config.app.get("/items/abc")
+    async def work() -> str:
+        return "ok"
+
+    paths = sorted({health_path, metrics_path, f"{health_path.rstrip('/')}/", f"{metrics_path.rstrip('/')}/"})
+    paths.extend(["/health//", "/health/details", "/metrics/report", "/items/42", "/items/abc"])
+
+    assert sorted(_server_span_names_for(config, [f"{root_path}{path}" for path in paths], root_path=root_path)) == [
+        "GET /health//",
+        "GET /health/details",
+        "GET /items/abc",
+        "GET /metrics/report",
+    ]
 
 
 def test_fastapi_otel_host_header_cannot_exclude_a_work_request(fastapi_config: FastAPIConfig) -> None:
