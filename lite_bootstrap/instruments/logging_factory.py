@@ -10,7 +10,7 @@ if import_checker.is_orjson_installed:
 
 
 class _RenderedLine(str):
-    """A line already rendered by lite-bootstrap's structlog chain."""
+    """A rendered JSON line marked for Sentry normalization before stdlib logging."""
 
     __slots__ = ()
 

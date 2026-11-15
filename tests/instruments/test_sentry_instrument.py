@@ -2,6 +2,7 @@ import copy
 import dataclasses
 import json
 import logging
+import sys
 import typing
 import uuid
 from unittest.mock import patch
@@ -11,7 +12,7 @@ import sentry_sdk
 import structlog
 from sentry_sdk.integrations.logging import LoggingIntegration
 
-from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument
+from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument, SentryJSONRenderer
 from lite_bootstrap.instruments.sentry_instrument import enrich_sentry_event_from_structlog_log
 from tests.conftest import LoggingMock, SentryTestTransport
 
@@ -700,6 +701,86 @@ def test_message_less_structlog_error_is_scrubbed_in_sentry_envelopes(
         assert any(crumb.get("data", {}).get("component") == "worker" for crumb in breadcrumbs["values"])
     finally:
         logs.teardown()
+        sentry.teardown()
+
+
+@pytest.mark.parametrize("message", [None, 42])
+def test_independent_structlog_renderer_scrubs_only_its_own_records(
+    minimal_sentry_config: SentryConfig,
+    sentry_mock: SentryTestTransport,
+    capsys: pytest.CaptureFixture[str],
+    message: int | None,
+) -> None:
+    marker = uuid.uuid4().hex
+    observed: list[sentry_types.Event] = []
+    observed_breadcrumbs: list[sentry_types.Breadcrumb] = []
+
+    def before_breadcrumb(
+        breadcrumb: "sentry_types.Breadcrumb", _: "sentry_types.BreadcrumbHint"
+    ) -> "sentry_types.Breadcrumb":
+        observed_breadcrumbs.append(copy.deepcopy(breadcrumb))
+        return breadcrumb
+
+    def before_send(event: "sentry_types.Event", _: "sentry_types.Hint") -> "sentry_types.Event":
+        observed.append(copy.deepcopy(event))
+        return event
+
+    sentry = SentryInstrument(
+        bootstrap_config=dataclasses.replace(
+            minimal_sentry_config,
+            sentry_before_send=before_send,
+            sentry_additional_params={
+                **minimal_sentry_config.sentry_additional_params,
+                "before_breadcrumb": before_breadcrumb,
+            },
+        )
+    )
+    target = logging.getLogger("independent-structlog")
+    handler = logging.StreamHandler(sys.stdout)
+    external = structlog.wrap_logger(
+        target,
+        processors=[SentryJSONRenderer()],
+        wrapper_class=structlog.stdlib.BoundLogger,
+    )
+    target.addHandler(handler)
+    sentry.bootstrap()
+    try:
+        external.error(message, password=marker, component="worker")
+        external.error(password=marker, skip_sentry=True)
+        external.error("later error")
+
+        first_line, skipped_line, _ = capsys.readouterr().out.splitlines()
+        expected_line: dict[str, typing.Any] = {"password": marker, "component": "worker"}
+        if message is not None:
+            expected_line["event"] = message
+        assert json.loads(first_line) == expected_line
+        assert json.loads(skipped_line)["skip_sentry"] is True
+        first, second = sentry_mock.mock_envelopes
+        assert marker.encode() not in first.serialize()
+        assert marker.encode() not in second.serialize()
+        assert all(marker not in json.dumps(event) for event in observed)
+        assert all(marker not in json.dumps(crumb, default=str) for crumb in observed_breadcrumbs)
+        assert all("skip_sentry" not in json.dumps(crumb, default=str) for crumb in observed_breadcrumbs)
+        assert observed[0]["logentry"]["formatted"] == "[No message]"
+        assert observed[0]["contexts"]["structlog"]["component"] == "worker"
+        breadcrumbs = observed[1]["breadcrumbs"]
+        assert isinstance(breadcrumbs, dict)
+        assert any(crumb.get("data", {}).get("component") == "worker" for crumb in breadcrumbs["values"])
+
+        target.error(first_line)
+        stdlib_event = sentry_mock.mock_envelopes[-1].get_event()
+        assert stdlib_event is not None
+        assert stdlib_event["logentry"]["formatted"] == first_line
+        assert "structlog" not in stdlib_event["contexts"]
+        target.error("after stdlib JSON")
+        later_event = sentry_mock.mock_envelopes[-1].get_event()
+        assert later_event is not None
+        later_breadcrumbs = later_event["breadcrumbs"]
+        assert isinstance(later_breadcrumbs, dict)
+        assert any(crumb.get("message") == first_line for crumb in later_breadcrumbs["values"])
+    finally:
+        target.removeHandler(handler)
+        handler.close()
         sentry.teardown()
 
 
