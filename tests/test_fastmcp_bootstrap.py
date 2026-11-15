@@ -1,8 +1,11 @@
+import asyncio
 import contextlib
+import threading
 import typing
 import uuid
 import warnings
 from collections.abc import AsyncGenerator, Generator
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import MagicMock
 
 import prometheus_client
@@ -722,24 +725,33 @@ def test_fastmcp_prometheus_scrapes_http_and_tool_metrics_from_custom_registry()
     assert ("custom_requests_total", {}, 1) in samples
 
 
+@pytest.mark.parametrize("custom_registry", [False, True])
 @pytest.mark.parametrize("change_gauge_options", [False, True])
-def test_fastmcp_prometheus_scrapes_inprogress_gauge_from_custom_registry(change_gauge_options: bool) -> None:
-    registry = prometheus_client.CollectorRegistry()
-    gauge_name = f"test_inprogress_{uuid.uuid4().hex}"
+def test_fastmcp_prometheus_shares_inprogress_gauge_across_http_apps(
+    change_gauge_options: bool, custom_registry: bool
+) -> None:
+    registry = prometheus_client.CollectorRegistry() if custom_registry else prometheus_client.REGISTRY
+    gauge_name = "http_requests_inprogress"
     second_gauge_name = f"{gauge_name}_second"
     labels = {"method": "GET", "handler": "/items"}
     config = _make_test_config(
         prometheus_instrumentator_additional_params={
-            "registry": registry,
             "should_instrument_requests_inprogress": True,
             "inprogress_name": gauge_name,
             "inprogress_labels": True,
         },
     )
 
+    if custom_registry:
+        config.prometheus_instrumentator_additional_params["registry"] = registry
+
+    entered = threading.Barrier(3, timeout=10)
+    release = threading.Event()
+
     @config.application.custom_route("/items", methods=["GET"])
     async def items(_request: Request) -> Response:
-        assert 1 in (registry.get_sample_value(gauge_name, labels), registry.get_sample_value(second_gauge_name))
+        await asyncio.to_thread(entered.wait)
+        assert await asyncio.to_thread(release.wait, timeout=10)
         return Response("ok")
 
     bootstrapper = FastMcpBootstrapper(bootstrap_config=config)
@@ -751,9 +763,24 @@ def test_fastmcp_prometheus_scrapes_inprogress_gauge_from_custom_registry(change
                 inprogress_name=second_gauge_name, inprogress_labels=False
             )
         second = application.http_app(path="/other")
-        with TestClient(first) as first_client, TestClient(second) as second_client:
-            assert first_client.get("/items").is_success
-            assert second_client.get("/items").is_success
+        with (
+            TestClient(first) as first_client,
+            TestClient(second) as second_client,
+            ThreadPoolExecutor(max_workers=2) as executor,
+        ):
+            first_request = executor.submit(first_client.get, "/items")
+            second_request = executor.submit(second_client.get, "/items")
+            try:
+                entered.wait()
+                active = _scraped_samples(second_client.get("/metrics").text)
+                expected_inprogress = 1 if change_gauge_options else 2
+                assert (gauge_name, labels, expected_inprogress) in active
+                if change_gauge_options:
+                    assert (second_gauge_name, {}, 1) in active
+            finally:
+                release.set()
+            assert first_request.result().is_success
+            assert second_request.result().is_success
             scrape = second_client.get("/metrics")
     finally:
         bootstrapper.teardown()
@@ -763,7 +790,8 @@ def test_fastmcp_prometheus_scrapes_inprogress_gauge_from_custom_registry(change
     assert (gauge_name, labels, 0) in samples
     if change_gauge_options:
         assert (second_gauge_name, {}, 0) in samples
-    assert prometheus_client.REGISTRY.get_sample_value(gauge_name, labels) is None
+    if custom_registry:
+        assert prometheus_client.REGISTRY.get_sample_value(gauge_name, labels) is None
 
 
 def test_fastmcp_prometheus_teardown_restores_http_app() -> None:

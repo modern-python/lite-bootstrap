@@ -341,11 +341,10 @@ class FastMcpPrometheusInstrument(PrometheusInstrument[FastMcpConfig]):
         instrumentator = Instrumentator(**instrumentator_params).add(self._default_metrics)
         instrumentator.instrument(http_application, **config.prometheus_instrument_additional_params)
         if (
-            registry is not prometheus_client.REGISTRY
-            and instrumentator.should_instrument_requests_inprogress
+            instrumentator.should_instrument_requests_inprogress
             and len(http_application.user_middleware) > middleware_count
         ):
-            # The instrumentator registers its built-in gauge globally even with a custom registry.
+            # Upstream creates a global gauge per app; share one in the configured registry instead.
             labels = ("method", "handler") if instrumentator.inprogress_labels else ()
             gauge = self._get_inprogress_gauge(registry, instrumentator.inprogress_name, labels)
             http_application.user_middleware[0] = StarletteMiddleware(
