@@ -49,6 +49,17 @@ Before 2.0, Sentry was the second most expensive instrument in the stack, and it
 entirely from sentry-sdk's framework integration. Since 2.0, lite-bootstrap replaces that integration on
 Litestar, FastAPI and FastMCP while Sentry tracing is off; see [Performance](performance.md).
 
+### Sentry shutdown
+
+Teardown closes the client initialized by the instrument with a two-second flush
+timeout. A replacement global client stays untouched. If closing raises, teardown
+still clears the owned global binding and propagates the error.
+
+With the SDK's optional `AsyncHttpTransport`, save the initialized client and await
+`client.close_async(timeout=2)` before lite-bootstrap's teardown runs. Synchronous
+teardown cannot await the async transport's flush and connection-pool cleanup. Use
+the default synchronous transport for shutdown managed entirely by lite-bootstrap.
+
 ### Sentry logging integration
 
 lite-bootstrap supports sentry-sdk 2.70 and later 2.x releases. sentry-sdk 3.0 is not supported

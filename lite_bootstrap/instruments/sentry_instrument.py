@@ -264,6 +264,9 @@ SentryConfigT = typing.TypeVar("SentryConfigT", bound=SentryConfig)
 class SentryInstrument(BaseInstrument[SentryConfigT]):
     not_configured_reason = "sentry_dsn is empty"
     missing_dependency_message = "sentry_sdk is not installed"
+    _client: "sentry_sdk.client.BaseClient | None" = dataclasses.field(
+        default=None, init=False, repr=False, compare=False
+    )
 
     @classmethod
     def is_configured(cls, bootstrap_config: "SentryConfig") -> bool:
@@ -316,17 +319,18 @@ class SentryInstrument(BaseInstrument[SentryConfigT]):
 
     def bootstrap(self) -> None:
         sentry_sdk.init(**self._build_init_params())
+        self._client = sentry_sdk.get_global_scope().client
         tags: dict[str, str] = self.bootstrap_config.sentry_tags or {}
         sentry_sdk.set_tags(tags)
 
     def teardown(self) -> None:
-        """Flush pending events and reset the SDK to a no-op state.
-
-        Clear the global client to disable capture even when SENTRY_DSN is set. This
-        cleans up after a bootstrap so the same process can be torn down and re-tested
-        without leaking the previous DSN/transport into subsequent code.
-        """
+        """Close the owned client and disable its global capture."""
+        if self._client is None:
+            return
+        client, self._client = self._client, None
         try:
-            sentry_sdk.flush(timeout=2)
+            client.close(timeout=2)
         finally:
-            sentry_sdk.get_global_scope().set_client(None)
+            scope = sentry_sdk.get_global_scope()
+            if scope.client is client:
+                scope.set_client(None)

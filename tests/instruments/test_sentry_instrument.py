@@ -12,6 +12,7 @@ import sentry_sdk
 import structlog
 from sentry_sdk.envelope import Envelope
 from sentry_sdk.integrations.logging import LoggingIntegration
+from sentry_sdk.transport import AsyncHttpTransport
 
 from lite_bootstrap.instruments.logging_instrument import LoggingConfig, LoggingInstrument, SentryJSONRenderer
 from lite_bootstrap.instruments.sentry_instrument import enrich_sentry_event_from_structlog_log
@@ -94,6 +95,73 @@ def test_sentry_instrument_empty_dsn() -> None:
     SentryInstrument(bootstrap_config=SentryConfig(sentry_dsn="")).bootstrap()
 
 
+def test_sentry_teardown_closes_owned_client(
+    minimal_sentry_config: SentryConfig, sentry_mock: SentryTestTransport
+) -> None:
+    instrument = SentryInstrument(bootstrap_config=minimal_sentry_config)
+    instrument.bootstrap()
+    client = sentry_sdk.get_client()
+    try:
+        with (
+            patch.object(sentry_mock, "flush", wraps=sentry_mock.flush) as flush,
+            patch.object(sentry_mock, "kill", wraps=sentry_mock.kill) as kill,
+        ):
+            instrument.teardown()
+        expected_timeout = 2
+        assert flush.call_args.kwargs["timeout"] == expected_timeout
+        kill.assert_called_once()
+        assert client.transport is None
+    finally:
+        client.close()
+
+
+@pytest.mark.parametrize("cleanup_raises", [False, True])
+def test_sentry_teardown_preserves_replacement_client(
+    minimal_sentry_config: SentryConfig, sentry_mock: SentryTestTransport, *, cleanup_raises: bool
+) -> None:
+    instrument = SentryInstrument(bootstrap_config=minimal_sentry_config)
+    instrument.bootstrap()
+    owned = sentry_sdk.get_client()
+    replacement_transport = SentryTestTransport()
+    sentry_sdk.init(dsn=minimal_sentry_config.sentry_dsn, transport=replacement_transport)
+    replacement = sentry_sdk.get_client()
+    try:
+        with patch.object(
+            owned, "close", wraps=owned.close, side_effect=RuntimeError("close boom") if cleanup_raises else None
+        ):
+            if cleanup_raises:
+                with pytest.raises(RuntimeError, match="close boom"):
+                    instrument.teardown()
+            else:
+                instrument.teardown()
+                assert owned.transport is None
+        instrument.teardown()
+        assert sentry_sdk.get_global_scope().client is replacement
+        assert replacement.transport is replacement_transport
+        sentry_sdk.capture_message("replacement still works")
+        assert replacement_transport.mock_envelopes
+        assert not sentry_mock.mock_envelopes
+    finally:
+        owned.close()
+        replacement.close()
+        sentry_sdk.get_global_scope().set_client(None)
+
+
+async def test_sentry_async_transport_can_be_closed_before_teardown(minimal_sentry_config: SentryConfig) -> None:
+    config = dataclasses.replace(minimal_sentry_config, sentry_additional_params={"transport": AsyncHttpTransport})
+    instrument = SentryInstrument(bootstrap_config=config)
+    instrument.bootstrap()
+    client = sentry_sdk.get_client()
+    try:
+        assert isinstance(client.transport, AsyncHttpTransport)
+        await client.close_async(timeout=2)
+        instrument.teardown()
+        assert client.transport is None
+        assert not sentry_sdk.get_client().is_active()
+    finally:
+        await client.close_async(timeout=2)
+
+
 class TestSentryEnrichEventFromStructlog:
     """enrich_* owns the Sentry-event-shape guards and the orchestration branches.
 
@@ -146,23 +214,31 @@ class TestSentryEnrichEventFromStructlog:
         assert enrich_sentry_event_from_structlog_log(event_before, {}) == event_after
 
 
-def test_sentry_teardown_disables_sdk_when_flush_raises(
-    minimal_sentry_config: SentryConfig, sentry_mock: SentryTestTransport, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("operation", ["flush", "kill"])
+def test_sentry_teardown_disables_sdk_when_cleanup_raises(
+    minimal_sentry_config: SentryConfig,
+    sentry_mock: SentryTestTransport,
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
 ) -> None:
     monkeypatch.setenv("SENTRY_DSN", "https://synthetic@example.invalid/1")
     monkeypatch.setattr("sentry_sdk.client.make_transport", lambda options: sentry_mock if options["dsn"] else None)
     instrument = SentryInstrument(bootstrap_config=minimal_sentry_config)
     instrument.bootstrap()
+    client = sentry_sdk.get_client()
 
-    with (
-        patch("sentry_sdk.flush", side_effect=RuntimeError("flush boom")),
-        pytest.raises(RuntimeError, match="flush boom"),
-    ):
-        instrument.teardown()
+    try:
+        with (
+            patch.object(sentry_mock, operation, side_effect=RuntimeError("cleanup boom")),
+            pytest.raises(RuntimeError, match="cleanup boom"),
+        ):
+            instrument.teardown()
 
-    assert not sentry_sdk.get_client().is_active()
-    assert sentry_sdk.capture_message("after teardown") is None
-    assert sentry_mock.mock_envelopes == []
+        assert not sentry_sdk.get_client().is_active()
+        assert sentry_sdk.capture_message("after teardown") is None
+        assert sentry_mock.mock_envelopes == []
+    finally:
+        client.close()
 
 
 def installed_logging_integration() -> LoggingIntegration:
