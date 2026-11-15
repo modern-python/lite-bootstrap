@@ -72,6 +72,12 @@ Two ways to opt out of the appended integration: supply your own `LoggingIntegra
 `sentry_default_integrations=False`, which suppresses it along with every other default integration.
 Under either, `sentry_logging_breadcrumb_level` is ignored and lite-bootstrap warns.
 
+Built-in redaction and `skip_sentry` apply to issue events and breadcrumbs, not opt-in
+Sentry Logs. A custom `LoggingIntegration` can send raw JSON and suppressed records
+through Logs. Keep Logs disabled or handle redaction and suppression in
+`sentry_additional_params["before_send_log"]`, which is passed unchanged. See the
+[Sentry Logs contract](../migration/to-2.x.md#opt-in-sentry-logs).
+
 ### Sentry auto-enabling integrations
 
 sentry-sdk enables an integration for every installed package it has one for: the web frameworks,

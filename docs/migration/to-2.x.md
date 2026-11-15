@@ -220,6 +220,20 @@ its contents alone cannot distinguish structlog from unrelated stdlib JSON
 FastStream isolates message scopes. Set tags and breadcrumbs per message
 ([#409](https://github.com/modern-python/lite-bootstrap/pull/409)).
 
+### Opt-in Sentry Logs
+
+Built-in redaction and `skip_sentry` cover issue events and breadcrumbs only.
+Sentry Logs is disabled by default. If you opt in through a custom
+`LoggingIntegration`, Logs can contain raw rendered JSON, including sensitive fields
+and records marked `skip_sentry=True`. `SentryJSONRenderer` does not protect this
+channel ([#452](https://github.com/modern-python/lite-bootstrap/issues/452)).
+
+Keep Logs disabled or supply application-specific redaction and suppression through
+`sentry_additional_params["before_send_log"]`; lite-bootstrap passes that callback
+unchanged. `before_send` and `before_breadcrumb` do not process Logs. The Logs hook
+receives a plain string body without the original `LogRecord`, so it cannot reliably
+distinguish structlog from identical stdlib JSON.
+
 ### Sessions and breadcrumbs
 
 Session tracking defaults to off; HTTP crash-free session/user rates stop.
