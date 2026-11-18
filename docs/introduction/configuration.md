@@ -275,6 +275,25 @@ bootstrap. For metrics-only requests without external tracing, spans do not reco
 and JSON logs omit `tracing`; there are no `span_id` or `trace_id` values to inject.
 Metrics collection is unchanged.
 
+### Startup failure and recovery
+
+A failed `bootstrap()` cleans up started instruments and cannot be retried on the
+same bootstrapper. Cleanup does not undo every change to the application.
+
+If startup fails after lite-bootstrap installs a global `TracerProvider` or
+`MeterProvider`, restart the process before bootstrapping again. OpenTelemetry
+allows each global provider to be set only once. Rollback shuts down the owned
+provider but leaves it globally registered; a replacement bootstrapper cannot
+replace it, so its configured exporters will not be used. For example, a custom
+`opentelemetry_instrumentors` entry that raises during setup can leave tracing in
+this state.
+
+A failure before provider registration does not itself require a restart for
+OpenTelemetry. Local no-op tracing leaves the global tracer slot untouched;
+an existing external tracer provider is preserved. Any
+retry still needs a new bootstrapper and, where applicable, a new application.
+The same global-provider limitation applies after normal teardown.
+
 ### Metrics
 
 Left unset, no `MeterProvider` is installed and the metrics signal stays off. Set it, and the
