@@ -502,10 +502,11 @@ class LitestarBootstrapper(BaseBootstrapper["litestar.Litestar", LitestarConfig]
         # An Empty value reaches layer resolution and 500s every body-reading handler.
         if application_config.request_max_body_size is Empty:
             application_config.request_max_body_size = _LITESTAR_DEFAULT_REQUEST_MAX_BODY_SIZE
-        application_config.on_shutdown.append(self.teardown)
 
     def is_ready(self) -> bool:
         return import_checker.is_litestar_installed
 
     def _prepare_application(self) -> "litestar.Litestar":
-        return litestar.Litestar.from_config(self.bootstrap_config.application_config)
+        application = litestar.Litestar.from_config(self.bootstrap_config.application_config)
+        application.on_shutdown.append(self.teardown)
+        return application
